@@ -9,6 +9,7 @@ import type { Item } from "../types";
 import { saveItems } from "../lib/storage";
 
 const COLUMN_MAP: Record<string, keyof Item> = {
+  // 旧フォーマット
   "管理番号": "id",
   "ブランド": "brand",
   "コラボ": "collab",
@@ -27,6 +28,18 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "仕入店": "shop",
   "カテゴリ": "category",
   "バイヤー": "buyer",
+  // 実際のExcelフォーマット (agreed_appraisal_items_search)
+  "ブランド名": "brand",
+  "コラボブランド": "collab",
+  "モデル名": "model",
+  "商品特徴": "feature",
+  "アイテム名": "item",
+  "100イキ": "cost",
+  "税抜売価": "price",
+  "税込売価": "price",
+  "状態ランク": "rank",
+  "仕入店舗": "shop",
+  "元振り先": "shop",
 };
 
 interface Props {
@@ -90,9 +103,13 @@ export default function EmptyState({ onItemsLoaded }: Props) {
         });
 
         const items: Item[] = [];
-        rows.forEach((row: Record<string, unknown>) => {
-          const id = String(row[idx.id ?? ""] ?? "").trim();
-          if (!id) return;
+        rows.forEach((row: Record<string, unknown>, rowIndex: number) => {
+          // IDは管理番号列があればそれを使い、なければ行番号で生成
+          const rawId = idx.id ? String(row[idx.id] ?? "").trim() : "";
+          const id = rawId || `#${String(rowIndex + 1).padStart(3, "0")}`;
+          // ブランド名が空の行はスキップ
+          const brand = String(row[idx.brand ?? ""] ?? "").trim();
+          if (!brand) return;
 
           let date = "";
           const rawDate = row[idx.date ?? ""];
@@ -111,7 +128,7 @@ export default function EmptyState({ onItemsLoaded }: Props) {
 
           items.push({
             id,
-            brand: String(row[idx.brand ?? ""] ?? ""),
+            brand,
             collab: String(row[idx.collab ?? ""] ?? ""),
             season: String(row[idx.season ?? ""] ?? ""),
             model: String(row[idx.model ?? ""] ?? ""),
@@ -132,7 +149,7 @@ export default function EmptyState({ onItemsLoaded }: Props) {
         });
 
         if (items.length === 0) {
-          setError("管理番号が空のデータしか見つかりませんでした");
+          setError("データが見つかりませんでした。ブランド名列が空か、列名が対応していない可能性があります。");
           return;
         }
 

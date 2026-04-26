@@ -14,6 +14,7 @@ interface Props {
 }
 
 const COLUMN_MAP: Record<string, keyof Item> = {
+  // 旧フォーマット
   "管理番号": "id",
   "ブランド": "brand",
   "コラボ": "collab",
@@ -32,6 +33,18 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "仕入店": "shop",
   "カテゴリ": "category",
   "バイヤー": "buyer",
+  // 実際のExcelフォーマット (agreed_appraisal_items_search)
+  "ブランド名": "brand",
+  "コラボブランド": "collab",
+  "モデル名": "model",
+  "商品特徴": "feature",
+  "アイテム名": "item",
+  "100イキ": "cost",
+  "税抜売価": "price",
+  "税込売価": "price",
+  "状態ランク": "rank",
+  "仕入店舗": "shop",
+  "元振り先": "shop",
 };
 
 export default function ImportTab({ items, onItemsChange }: Props) {
@@ -65,9 +78,13 @@ export default function ImportTab({ items, onItemsChange }: Props) {
         let added = 0, skipped = 0;
         const newItems = [...items];
 
-        rows.forEach((row: Record<string, unknown>) => {
-          const id = String(row[idx.id ?? ""] ?? "").trim();
-          if (!id) { skipped++; return; }
+        rows.forEach((row: Record<string, unknown>, rowIndex: number) => {
+          // ブランド名が空の行はスキップ
+          const brand = String(row[idx.brand ?? ""] ?? "").trim();
+          if (!brand) { skipped++; return; }
+          // IDは管理番号列があればそれを使い、なければ行番号で生成
+          const rawId = idx.id ? String(row[idx.id] ?? "").trim() : "";
+          const id = rawId || `#${String(items.length + rowIndex + 1).padStart(3, "0")}`;
           if (existingIds.has(id)) { skipped++; return; }
 
           let date = "";
@@ -81,7 +98,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
 
           newItems.push({
             id,
-            brand: String(row[idx.brand ?? ""] ?? ""),
+            brand,
             collab: String(row[idx.collab ?? ""] ?? ""),
             season: String(row[idx.season ?? ""] ?? ""),
             model: String(row[idx.model ?? ""] ?? ""),
