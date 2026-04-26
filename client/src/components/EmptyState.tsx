@@ -40,20 +40,45 @@ export default function EmptyState({ onItemsLoaded }: Props) {
   const [error, setError] = useState("");
 
   function processFile(file: File) {
+    if (!file || loading) return; // prevent double-drop
     setLoading(true);
     setError("");
+
     const reader = new FileReader();
+
+    reader.onerror = () => {
+      console.error("FileReader error");
+      setError("ファイルの読み込みに失敗しました");
+      setLoading(false);
+    };
+
     reader.onload = (e) => {
       try {
         const XLSX = getXLSX();
-        const data = new Uint8Array(e.target!.result as ArrayBuffer);
+        if (!XLSX) {
+          setError("XLSXライブラリが読み込まれていません。ページを再読み込みしてください。");
+          return;
+        }
+
+        const result = e.target?.result;
+        if (!result) {
+          setError("ファイルの内容を読み取れませんでした");
+          return;
+        }
+
+        const data = new Uint8Array(result as ArrayBuffer);
         const wb = XLSX.read(data, { type: "array" });
+
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          setError("Excelシートが見つかりませんでした");
+          return;
+        }
+
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
 
         if (rows.length === 0) {
-          setError("データが見つかりませんでした");
-          setLoading(false);
+          setError("データが見つかりませんでした（シートが空です）");
           return;
         }
 
@@ -70,11 +95,17 @@ export default function EmptyState({ onItemsLoaded }: Props) {
           if (!id) return;
 
           let date = "";
-          if (row[idx.date ?? ""]) {
+          const rawDate = row[idx.date ?? ""];
+          if (rawDate) {
             try {
-              date = new Date(row[idx.date ?? ""] as string).toISOString().slice(0, 10);
+              const d = new Date(rawDate as string);
+              if (!isNaN(d.getTime())) {
+                date = d.toISOString().slice(0, 10);
+              } else {
+                date = String(rawDate).slice(0, 10);
+              }
             } catch {
-              date = String(row[idx.date ?? ""] ?? "").slice(0, 10);
+              date = String(rawDate).slice(0, 10);
             }
           }
 
@@ -100,26 +131,66 @@ export default function EmptyState({ onItemsLoaded }: Props) {
           });
         });
 
-        saveItems(items);
+        if (items.length === 0) {
+          setError("管理番号が空のデータしか見つかりませんでした");
+          return;
+        }
+
+        try {
+          saveItems(items);
+        } catch {
+          // localStorage quota exceeded — proceed anyway
+        }
+
+        // Must call setLoading(false) before onItemsLoaded to avoid state conflict
+        setLoading(false);
         onItemsLoaded(items);
       } catch (err: unknown) {
-        setError(`エラー: ${err instanceof Error ? err.message : String(err)}`);
+        console.error("processFile error:", err);
+        setError(`読み込みエラー: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        // Always ensure loading is cleared
         setLoading(false);
       }
     };
+
     reader.readAsArrayBuffer(file);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
+    e.stopPropagation();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
+
+    // Use getAsFile() for better cross-browser compatibility
+    let file: File | null = null;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      const item = e.dataTransfer.items[0];
+      if (item.kind === "file") {
+        file = item.getAsFile();
+      }
+    } else if (e.dataTransfer.files.length > 0) {
+      file = e.dataTransfer.files[0];
+    }
+
     if (file) processFile(file);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) processFile(file);
+    e.target.value = "";
   }
 
   return (
@@ -152,14 +223,13 @@ export default function EmptyState({ onItemsLoaded }: Props) {
 
           {/* Drop zone */}
           <div
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
+            className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-200 ${
               dragging
                 ? "border-[#1a1a1a] bg-[#f5f3f0] scale-[1.01]"
-                : "border-[#d0d0d0] bg-white hover:border-[#888] hover:bg-[#fafaf8]"
+                : "border-[#d0d0d0] bg-white"
             }`}
           >
             {loading ? (
@@ -173,10 +243,10 @@ export default function EmptyState({ onItemsLoaded }: Props) {
                 <p className="text-sm font-bold text-[#1a1a1a] mb-1">
                   ここにファイルをドロップ
                 </p>
-                <p className="text-[11px] text-[#888]">
-                  または タップしてファイルを選択
+                <p className="text-[11px] text-[#888] mb-4">
+                  または下のボタンからファイルを選択
                 </p>
-                <div className="mt-4 inline-flex gap-2">
+                <div className="inline-flex gap-2">
                   {[".xlsx", ".xls"].map((ext) => (
                     <span
                       key={ext}
@@ -190,13 +260,21 @@ export default function EmptyState({ onItemsLoaded }: Props) {
             )}
           </div>
 
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
+          {/* File select button */}
+          {!loading && (
+            <label className="mt-3 block">
+              <span className="block w-full bg-[#1a1a1a] text-white rounded-xl py-3.5 text-sm font-bold text-center cursor-pointer hover:bg-[#333] transition-colors">
+                ファイルを選択する
+              </span>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileSelect}
+                className="sr-only"
+              />
+            </label>
+          )}
 
           {error && (
             <p className="mt-3 text-xs text-red-500 font-bold text-center">{error}</p>
