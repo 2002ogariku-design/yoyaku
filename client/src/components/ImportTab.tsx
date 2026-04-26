@@ -1,11 +1,12 @@
 /**
  * Design: RINKAN Black × Gold minimal brand tone
  * Excel import using xlsx library
+ * Reset → clears all data and returns to empty state
  */
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import type { Item } from "../types";
-import { saveItems } from "../lib/storage";
+import { saveItems, resetItems } from "../lib/storage";
 
 interface Props {
   items: Item[];
@@ -130,12 +131,10 @@ export default function ImportTab({ items, onItemsChange }: Props) {
   }
 
   function handleReset() {
-    if (!confirm("すべてのデータをリセットして初期データに戻しますか？")) return;
-    import("../lib/storage").then(({ resetItems }) => {
-      const reset = resetItems();
-      onItemsChange(reset);
-      setResult({ type: "success", msg: "✅ データをリセットしました" });
-    });
+    if (!confirm("すべてのデータを削除して最初からやり直しますか？\nこの操作は取り消せません。")) return;
+    const empty = resetItems();
+    onItemsChange(empty);
+    setResult(null);
   }
 
   return (
@@ -191,13 +190,13 @@ export default function ImportTab({ items, onItemsChange }: Props) {
           データ管理
         </div>
         <p className="text-xs text-[#888] mb-3">
-          現在のデータをリセットして最初からやり直す場合に使用
+          すべてのデータを削除してファイル読み込み画面に戻ります
         </p>
         <button
           onClick={handleReset}
           className="w-full border border-red-300 text-red-500 rounded-xl py-3 text-xs font-bold hover:bg-red-50 transition-colors"
         >
-          データをリセット
+          データをリセット（最初からやり直す）
         </button>
         <p className="text-[10px] text-[#bbb] mt-2 text-center">
           現在 {items.length.toLocaleString()} 件のデータが保存されています

@@ -1,12 +1,12 @@
 /**
  * RINKAN 買取管理ツール
  * Design: Black (#1a1a1a) × Warm Off-White (#f0efed) × Gold Accent (#c8a96e)
- * Font: system-ui / -apple-system (no external fonts)
- * Layout: sticky header + sticky tab bar + scrollable content
+ * Empty state → Excel drop → main app
  */
 import { useState, useEffect } from "react";
 import type { Item } from "../types";
 import { loadItems } from "../lib/storage";
+import EmptyState from "../components/EmptyState";
 import InventoryTab from "../components/InventoryTab";
 import AnalyticsTab from "../components/AnalyticsTab";
 import StoryTab from "../components/StoryTab";
@@ -23,11 +23,19 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("inventory");
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<Item[] | null>(null); // null = loading
 
   useEffect(() => {
     setItems(loadItems());
   }, []);
+
+  // Still loading from localStorage
+  if (items === null) return null;
+
+  // No data yet → show welcome/drop screen
+  if (items.length === 0) {
+    return <EmptyState onItemsLoaded={setItems} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#f0efed]">
@@ -42,7 +50,7 @@ export default function Home() {
           </div>
         </div>
         <div className="text-[10px] text-[#c8a96e] font-bold tracking-widest">
-          {items.length > 0 && `${items.length}件`}
+          {items.length.toLocaleString()}件
         </div>
       </header>
 
