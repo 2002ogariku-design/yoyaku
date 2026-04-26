@@ -11,6 +11,7 @@ import InventoryTab from "../components/InventoryTab";
 import AnalyticsTab from "../components/AnalyticsTab";
 import StoryTab from "../components/StoryTab";
 import ImportTab from "../components/ImportTab";
+import HelpModal from "../components/HelpModal";
 
 type Tab = "inventory" | "analytics" | "story" | "import";
 
@@ -24,6 +25,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("inventory");
   const [items, setItems] = useState<Item[] | null>(null); // null = loading
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     setItems(loadItems());
@@ -49,10 +51,19 @@ export default function Home() {
             買取管理 &amp; ストーリー作成ツール
           </div>
         </div>
-        <div className="text-[10px] text-[#c8a96e] font-bold tracking-widest">
-          {items.length.toLocaleString()}件
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-[#c8a96e] font-bold tracking-widest">
+            {items.length.toLocaleString()}件
+          </span>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="text-[10px] text-white/60 hover:text-white border border-white/20 hover:border-white/50 rounded px-2 py-1 tracking-widest transition-colors"
+          >
+            使い方
+          </button>
         </div>
       </header>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {/* Tab bar */}
       <nav className="flex bg-white border-b border-[#e0e0e0] sticky top-[57px] z-40">

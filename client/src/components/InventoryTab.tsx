@@ -276,6 +276,7 @@ export default function InventoryTab({ items }: Props) {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterRank, setFilterRank] = useState("");
   const [filterShop, setFilterShop] = useState("");
+  const [filterBuyer, setFilterBuyer] = useState("");
   const [page, setPage] = useState(1);
   const [storyItem, setStoryItem] = useState<Item | null>(null);
 
@@ -289,6 +290,10 @@ export default function InventoryTab({ items }: Props) {
   );
   const shops = useMemo(
     () => Array.from(new Set(items.map((i) => i.shop).filter(Boolean))).sort(),
+  [items]
+  );
+  const buyers = useMemo(
+    () => Array.from(new Set(items.map((i) => i.buyer).filter(Boolean))).sort(),
     [items]
   );
 
@@ -308,9 +313,10 @@ export default function InventoryTab({ items }: Props) {
       if (filterCategory && i.item !== filterCategory) return false;
       if (filterRank && i.rank !== filterRank) return false;
       if (filterShop && i.shop !== filterShop) return false;
+      if (filterBuyer && i.buyer !== filterBuyer) return false;
       return true;
     });
-  }, [items, query, filterBrand, filterCategory, filterRank, filterShop]);
+  }, [items, query, filterBrand, filterCategory, filterRank, filterShop, filterBuyer]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
@@ -352,6 +358,7 @@ export default function InventoryTab({ items }: Props) {
             { value: filterCategory, set: (v: string) => { setFilterCategory(v); setPage(1); }, options: categories, placeholder: "すべてのアイテム" },
             { value: filterRank, set: (v: string) => { setFilterRank(v); setPage(1); }, options: ["S", "A", "B", "C", "D"], placeholder: "すべてのランク" },
             { value: filterShop, set: (v: string) => { setFilterShop(v); setPage(1); }, options: shops, placeholder: "すべての仕入店" },
+            { value: filterBuyer, set: (v: string) => { setFilterBuyer(v); setPage(1); }, options: buyers, placeholder: "すべてのバイヤー" },
           ].map((f) => (
             <select
               key={f.placeholder}
