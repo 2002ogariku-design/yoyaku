@@ -134,16 +134,22 @@ export default function StoryTab() {
     ctx.fillText("販売価格", W / 2, cy);
     cy += LH + g6;
 
-    // Price (税込売価をそのまま中央に表示)
-    ctx.textAlign = "center";
+    // 価格の右下に小さく「税込」を横並び表示
     ctx.textBaseline = "top";
     ctx.fillStyle = "#1a1a1a";
     ctx.font = "700 96px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    ctx.fillText(ps, W / 2, cy);
-    cy += PRH + 8;
+    const priceW = ctx.measureText(ps).width;
+    ctx.font = "400 30px -apple-system,'Helvetica Neue',Arial,sans-serif";
+    const taxW = ctx.measureText("税込").width;
+    const totalW = priceW + 10 + taxW;
+    const startX = (W - totalW) / 2;
+    ctx.fillStyle = "#1a1a1a";
+    ctx.font = "700 96px -apple-system,'Helvetica Neue',Arial,sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(ps, startX, cy);
     ctx.fillStyle = "#888";
-    ctx.font = "400 28px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    ctx.fillText("（税込）", W / 2, cy);
+    ctx.font = "400 30px -apple-system,'Helvetica Neue',Arial,sans-serif";
+    ctx.fillText("税込", startX + priceW + 10, cy + PRH - 34);
 
     const dataUrl = cv.toDataURL("image/png");
     setSaveHref(dataUrl);
