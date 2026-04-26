@@ -40,7 +40,7 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "商品特徴": "feature",
   "アイテム名": "item",
   "100イキ": "cost",
-  "税抜売価": "price",
+  // "税抜売価" はマッピングしない（税込売価を使用）
   "税込売価": "price",
   "状態ランク": "rank",
   "仕入店舗": "shop",
@@ -105,7 +105,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
             feature: String(row[idx.feature ?? ""] ?? ""),
             item: String(row[idx.item ?? ""] ?? ""),
             cost: Number(row[idx.cost ?? ""]) || 0,
-            price: Number(row[idx.price ?? ""]) || 0,
+            price: Math.round(Number(row[idx.price ?? ""]) || 0),
             size: String(row[idx.size ?? ""] ?? ""),
             color: String(row[idx.color ?? ""] ?? ""),
             rank: String(row[idx.rank ?? ""] ?? ""),

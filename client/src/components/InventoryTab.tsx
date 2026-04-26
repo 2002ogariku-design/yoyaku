@@ -49,7 +49,8 @@ function StoryModal({ item, onClose }: StoryModalProps) {
     }
 
     const brandUpper = brand.trim().toUpperCase();
-    const ps = "¥" + Math.round(base * 1.1).toLocaleString("ja-JP");
+    // priceは既に税込売価なのでそのまま表示（×1.1しない）
+    const ps = "¥" + base.toLocaleString("ja-JP");
     const cv = canvasRef.current!;
     const ctx = cv.getContext("2d")!;
     const W = 1080, H = 1920;
@@ -132,19 +133,11 @@ function StoryModal({ item, onClose }: StoryModalProps) {
     ctx.fillText("販売価格", W / 2, cy);
     cy += LH + g6;
 
-    ctx.font = "700 96px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    const prw = ctx.measureText(ps).width;
-    ctx.font = "800 30px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    const tw = ctx.measureText("税込").width;
-    const gp = 14, tot = prw + gp + tw, sx = (W - tot) / 2;
-    ctx.textAlign = "left";
+    ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = "#1a1a1a";
     ctx.font = "700 96px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    ctx.fillText(ps, sx, cy);
-    ctx.fillStyle = "#888";
-    ctx.font = "800 30px -apple-system,'Helvetica Neue',Arial,sans-serif";
-    ctx.fillText("税込", sx + prw + gp, cy + PRH - 30);
+    ctx.fillText(ps, W / 2, cy);
 
     const dataUrl = cv.toDataURL("image/png");
     setSaveHref(dataUrl);
@@ -369,7 +362,7 @@ export default function InventoryTab({ items }: Props) {
           <table className="w-full text-xs" style={{ minWidth: 760 }}>
             <thead>
               <tr>
-                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "ランク", "売価(税抜)", "仕入店舗", "検索", "ストーリー"].map((h) => (
+                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "ランク", "売価(税込)", "仕入店舗", "検索", "ストーリー"].map((h) => (
                   <th
                     key={h}
                     className="bg-[#1a1a1a] text-white px-3 py-2.5 text-left text-[10px] tracking-wide whitespace-nowrap"
