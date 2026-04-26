@@ -140,6 +140,10 @@ export default function StoryTab() {
     ctx.fillStyle = "#1a1a1a";
     ctx.font = "700 96px -apple-system,'Helvetica Neue',Arial,sans-serif";
     ctx.fillText(ps, W / 2, cy);
+    cy += PRH + 8;
+    ctx.fillStyle = "#888";
+    ctx.font = "400 28px -apple-system,'Helvetica Neue',Arial,sans-serif";
+    ctx.fillText("（税込）", W / 2, cy);
 
     const dataUrl = cv.toDataURL("image/png");
     setSaveHref(dataUrl);
@@ -186,7 +190,7 @@ export default function StoryTab() {
           </div>
           <div>
             <label className="block text-[10px] font-bold tracking-widest text-[#888] uppercase mb-1.5">
-              販売価格（税抜）
+              販売価格（税込）
             </label>
             <input
               type="number"
