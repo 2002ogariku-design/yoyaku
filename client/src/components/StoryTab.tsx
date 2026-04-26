@@ -4,6 +4,7 @@
  * Canvas: 1080×1920 (9:16)
  */
 import { useRef, useState } from "react";
+import { toBrandEnglish } from "../lib/brandMap";
 
 export default function StoryTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -26,7 +27,7 @@ export default function StoryTab() {
       return;
     }
 
-    const brandUpper = brand.trim().toUpperCase();
+    const brandUpper = toBrandEnglish(brand.trim());
     // 入力値は税込売価なのでそのまま表示（×1.1しない）
     const ps = "¥" + base.toLocaleString("ja-JP");
     const cv = canvasRef.current!;

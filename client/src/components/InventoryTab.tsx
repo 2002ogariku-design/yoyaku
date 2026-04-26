@@ -6,6 +6,7 @@
  */
 import { useState, useMemo, useRef } from "react";
 import type { Item } from "../types";
+import { toBrandEnglish } from "../lib/brandMap";
 
 interface Props {
   items: Item[];
@@ -48,7 +49,7 @@ function StoryModal({ item, onClose }: StoryModalProps) {
       return;
     }
 
-    const brandUpper = brand.trim().toUpperCase();
+    const brandUpper = toBrandEnglish(brand.trim());
     // priceは既に税込売価なのでそのまま表示（×1.1しない）
     const ps = "¥" + base.toLocaleString("ja-JP");
     const cv = canvasRef.current!;
