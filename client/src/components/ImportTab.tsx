@@ -1,10 +1,10 @@
 /**
  * Design: RINKAN Black × Gold minimal brand tone
- * Excel import using xlsx library
+ * Excel import using CDN xlsx (window.XLSX) — keeps bundle small
  * Reset → clears all data and returns to empty state
  */
 import { useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import { getXLSX } from "../lib/xlsx-shim";
 import type { Item } from "../types";
 import { saveItems, resetItems } from "../lib/storage";
 
@@ -43,6 +43,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
+        const XLSX = getXLSX();
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
@@ -64,7 +65,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
         let added = 0, skipped = 0;
         const newItems = [...items];
 
-        rows.forEach((row) => {
+        rows.forEach((row: Record<string, unknown>) => {
           const id = String(row[idx.id ?? ""] ?? "").trim();
           if (!id) { skipped++; return; }
           if (existingIds.has(id)) { skipped++; return; }

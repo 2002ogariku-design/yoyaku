@@ -1,10 +1,10 @@
 /**
  * Design: RINKAN Black × Gold minimal brand tone
  * Empty state shown when no data is loaded yet.
- * Guides user to drop an Excel file to get started.
+ * xlsx loaded via CDN (window.XLSX) to keep bundle small.
  */
 import { useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import { getXLSX } from "../lib/xlsx-shim";
 import type { Item } from "../types";
 import { saveItems } from "../lib/storage";
 
@@ -45,6 +45,7 @@ export default function EmptyState({ onItemsLoaded }: Props) {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
+        const XLSX = getXLSX();
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
@@ -64,7 +65,7 @@ export default function EmptyState({ onItemsLoaded }: Props) {
         });
 
         const items: Item[] = [];
-        rows.forEach((row) => {
+        rows.forEach((row: Record<string, unknown>) => {
           const id = String(row[idx.id ?? ""] ?? "").trim();
           if (!id) return;
 
