@@ -40,7 +40,6 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "商品特徴": "feature",
   "アイテム名": "item",
   "100イキ": "cost",
-  // "税抜売価" はマッピングしない（税込売価を使用）
   "税込売価": "price",
   "状態ランク": "rank",
   "仕入店舗": "shop",
@@ -69,8 +68,15 @@ export default function ImportTab({ items, onItemsChange }: Props) {
 
         const headers = Object.keys(rows[0]);
         const idx: Partial<Record<keyof Item, string>> = {};
+        // 税抜売価列を別途記録（税込売価がない場合のフォールバック用）
+        let priceExclHeader: string | null = null;
         headers.forEach((h) => {
-          const key = COLUMN_MAP[h.trim()];
+          const trimmed = h.trim();
+          if (trimmed === "税抜売価") {
+            priceExclHeader = h;
+            return;
+          }
+          const key = COLUMN_MAP[trimmed];
           if (key) idx[key] = h;
         });
 
@@ -105,7 +111,16 @@ export default function ImportTab({ items, onItemsChange }: Props) {
             feature: String(row[idx.feature ?? ""] ?? ""),
             item: String(row[idx.item ?? ""] ?? ""),
             cost: Number(row[idx.cost ?? ""]) || 0,
-            price: Math.round(Number(row[idx.price ?? ""]) || 0),
+            price: (() => {
+              // 税込売価列があればそのまま使用、なければ税抜売価×1.1で計算
+              const taxInc = Number(row[idx.price ?? ""]);
+              if (taxInc && taxInc > 0) return Math.round(taxInc);
+              if (priceExclHeader) {
+                const taxExcl = Number(row[priceExclHeader]);
+                if (taxExcl && taxExcl > 0) return Math.round(taxExcl * 1.1);
+              }
+              return 0;
+            })(),
             size: String(row[idx.size ?? ""] ?? ""),
             color: String(row[idx.color ?? ""] ?? ""),
             rank: String(row[idx.rank ?? ""] ?? ""),
