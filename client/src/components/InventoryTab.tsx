@@ -381,7 +381,7 @@ export default function InventoryTab({ items }: Props) {
           <table className="w-full text-xs" style={{ minWidth: 760 }}>
             <thead>
               <tr>
-                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "検索", "ストーリー"].map((h) => (
+                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "付属品", "検索", "ストーリー"].map((h) => (
                   <th
                     key={h}
                     className="bg-[#1a1a1a] text-white px-3 py-2.5 text-left text-[10px] tracking-wide whitespace-nowrap"
@@ -452,6 +452,17 @@ export default function InventoryTab({ items }: Props) {
                     {/* Buyer */}
                     <td className="px-3 py-2.5 text-[#888] whitespace-nowrap text-[10px] max-w-[100px]">
                       <div className="truncate">{item.buyer || "-"}</div>
+                    </td>
+
+                    {/* Accessories */}
+                    <td className="px-3 py-2.5 whitespace-nowrap text-[10px]">
+                      {item.accessories && item.accessories !== "なし" && item.accessories !== "" ? (
+                        <span className="inline-flex items-center gap-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded px-2 py-0.5 font-medium">
+                          ✓ {item.accessories}
+                        </span>
+                      ) : (
+                        <span className="text-[#bbb]">-</span>
+                      )}
                     </td>
 
                     {/* Google Search */}
