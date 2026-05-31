@@ -53,7 +53,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[#c8a96e] font-bold tracking-widest">
-            {items.length.toLocaleString()}件
+            {items.length.toLocaleString()}点
           </span>
           <button
             onClick={() => setHelpOpen(true)}

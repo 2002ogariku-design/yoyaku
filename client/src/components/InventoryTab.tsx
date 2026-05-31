@@ -381,7 +381,7 @@ export default function InventoryTab({ items }: Props) {
           <table className="w-full text-xs" style={{ minWidth: 760 }}>
             <thead>
               <tr>
-                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "カラー", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "付属品", "検索", "ストーリー"].map((h) => (
+                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "カラー", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "バイヤーコメント", "付属品", "検索", "ストーリー"].map((h) => (
                   <th
                     key={h}
                     className="bg-[#1a1a1a] text-white px-3 py-2.5 text-left text-[10px] tracking-wide whitespace-nowrap"
@@ -459,6 +459,11 @@ export default function InventoryTab({ items }: Props) {
                       <div className="truncate">{item.buyer || "-"}</div>
                     </td>
 
+                    {/* Buyer Comment */}
+                    <td className="px-3 py-2.5 text-[#888] whitespace-nowrap text-[10px] max-w-[150px]">
+                      <div className="truncate">{item.buyerComment || "-"}</div>
+                    </td>
+
                     {/* Accessories */}
                     <td className="px-3 py-2.5 whitespace-nowrap text-[10px]">
                       {item.accessories && item.accessories !== "なし" && item.accessories !== "" ? (
@@ -508,7 +513,7 @@ export default function InventoryTab({ items }: Props) {
             ← 前
           </button>
           <span className="text-xs text-[#888]">
-            {currentPage} / {totalPages}（{filtered.length}件）
+            {currentPage} / {totalPages}（{filtered.length}点）
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

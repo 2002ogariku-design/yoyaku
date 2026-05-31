@@ -81,24 +81,24 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function AnalyticsTab({ items }: Props) {
-  const prices = useMemo(() => items.map((i) => i.price).filter((p) => p > 0), [items]);
-  const totalPrice = useMemo(() => prices.reduce((a, b) => a + b, 0), [prices]);
-  const avgPrice = prices.length > 0 ? totalPrice / prices.length : 0;
-  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-  const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-  const medianPrice = useMemo(() => {
-    if (prices.length === 0) return 0;
-    const sorted = [...prices].sort((a, b) => a - b);
+  const costs = useMemo(() => items.map((i) => i.cost).filter((c) => c > 0), [items]);
+  const totalCost = useMemo(() => costs.reduce((a, b) => a + b, 0), [costs]);
+  const avgCost = costs.length > 0 ? totalCost / costs.length : 0;
+  const maxCost = costs.length > 0 ? Math.max(...costs) : 0;
+  const minCost = costs.length > 0 ? Math.min(...costs) : 0;
+  const medianCost = useMemo(() => {
+    if (costs.length === 0) return 0;
+    const sorted = [...costs].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  }, [prices]);
+  }, [costs]);
 
   const brandStats = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
     items.forEach((i) => {
       if (!i.brand) return;
       const s = map.get(i.brand) || { count: 0, total: 0 };
-      s.count++; s.total += i.price || 0;
+      s.count++; s.total += i.cost || 0;
       map.set(i.brand, s);
     });
     return Array.from(map.entries())
@@ -111,7 +111,7 @@ export default function AnalyticsTab({ items }: Props) {
     items.forEach((i) => {
       const key = i.item || "不明";
       const s = map.get(key) || { count: 0, total: 0 };
-      s.count++; s.total += i.price || 0;
+      s.count++; s.total += i.cost || 0;
       map.set(key, s);
     });
     return Array.from(map.entries())
@@ -124,7 +124,7 @@ export default function AnalyticsTab({ items }: Props) {
     items.forEach((i) => {
       const key = i.rank || "不明";
       const s = map.get(key) || { count: 0, total: 0 };
-      s.count++; s.total += i.price || 0;
+      s.count++; s.total += i.cost || 0;
       map.set(key, s);
     });
     return Array.from(map.entries())
@@ -137,7 +137,7 @@ export default function AnalyticsTab({ items }: Props) {
     items.forEach((i) => {
       const key = i.shop || "不明";
       const s = map.get(key) || { count: 0, total: 0 };
-      s.count++; s.total += i.price || 0;
+      s.count++; s.total += i.cost || 0;
       map.set(key, s);
     });
     return Array.from(map.entries())
@@ -150,7 +150,7 @@ export default function AnalyticsTab({ items }: Props) {
     items.forEach((i) => {
       const key = i.buyer || "不明";
       const s = map.get(key) || { count: 0, total: 0 };
-      s.count++; s.total += i.price || 0;
+      s.count++; s.total += i.cost || 0;
       map.set(key, s);
     });
     return Array.from(map.entries())
@@ -169,7 +169,7 @@ export default function AnalyticsTab({ items }: Props) {
     ];
     return ranges.map((r) => {
       const inRange = items.filter((i) => i.price >= r.min && i.price <= r.max);
-      const total = inRange.reduce((a, b) => a + (b.price || 0), 0);
+      const total = inRange.reduce((a, b) => a + (b.cost || 0), 0);
       return {
         label: r.label,
         count: inRange.length,
@@ -188,12 +188,12 @@ export default function AnalyticsTab({ items }: Props) {
       <div>
         <SectionHeader title="サマリー" />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <SummaryCard label="総件数" value={items.length.toLocaleString() + " 件"} />
-          <SummaryCard label="総売価（税込）" value={fmtK(totalPrice)} sub={fmt(totalPrice)} />
-          <SummaryCard label="平均売価" value={fmtK(avgPrice)} sub={fmt(avgPrice)} />
-          <SummaryCard label="中央値売価" value={fmtK(medianPrice)} sub={fmt(medianPrice)} />
-          <SummaryCard label="最高売価" value={fmtK(maxPrice)} sub={fmt(maxPrice)} />
-          <SummaryCard label="最低売価" value={fmtK(minPrice)} sub={fmt(minPrice)} />
+          <SummaryCard label="総点数" value={items.length.toLocaleString() + " 点"} />
+          <SummaryCard label="総仕入額" value={fmtK(totalCost)} sub={fmt(totalCost)} />
+          <SummaryCard label="平均仕入額" value={fmtK(avgCost)} sub={fmt(avgCost)} />
+          <SummaryCard label="中央値仕入額" value={fmtK(medianCost)} sub={fmt(medianCost)} />
+          <SummaryCard label="最高仕入額" value={fmtK(maxCost)} sub={fmt(maxCost)} />
+          <SummaryCard label="最低仕入額" value={fmtK(minCost)} sub={fmt(minCost)} />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
           <SummaryCard label="ブランド数" value={new Set(items.map(i => i.brand).filter(Boolean)).size + " ブランド"} />
@@ -207,22 +207,22 @@ export default function AnalyticsTab({ items }: Props) {
       <div>
         <SectionHeader title="ブランド別" />
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
-          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">件数 TOP 10</p>
+          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">点数 TOP 10</p>
           <ResponsiveContainer width="100%" height={260}>
             <ReBarChart data={top10Brands} margin={{ top: 0, right: 10, left: 0, bottom: 70 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="brand" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="件数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" name="点数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
             </ReBarChart>
           </ResponsiveContainer>
         </div>
         <DetailTable
-          headers={["ブランド", "件数", "構成比", "売価合計", "平均売価"]}
+          headers={["ブランド", "点数", "構成比", "仕入金額合計", "平均仕入額"]}
           rows={brandStats.map((s) => [
             s.brand,
-            s.count + " 件",
+            s.count + " 点",
             (items.length > 0 ? (s.count / items.length * 100).toFixed(1) : "0") + "%",
             fmt(s.total),
             fmt(s.avg),
@@ -235,7 +235,7 @@ export default function AnalyticsTab({ items }: Props) {
         <SectionHeader title="カテゴリ別" />
         <div className="grid sm:grid-cols-2 gap-4 mb-4">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">件数分布</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">点数分布</p>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
@@ -251,28 +251,28 @@ export default function AnalyticsTab({ items }: Props) {
                 >
                   {categoryStats.slice(0, 8).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: any) => v + " 件"} />
+                <Tooltip formatter={(v: any) => v + " 点"} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">売価合計</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">仕入金額合計</p>
             <ResponsiveContainer width="100%" height={220}>
               <ReBarChart data={categoryStats.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => fmtK(v)} />
                 <YAxis type="category" dataKey="item" tick={{ fontSize: 9 }} width={70} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="total" name="売価合計" fill="#c8a96e" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="total" name="仕入金額合計" fill="#c8a96e" radius={[0, 3, 3, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
         </div>
         <DetailTable
-          headers={["カテゴリ", "件数", "構成比", "売価合計", "平均売価"]}
+          headers={["カテゴリ", "点数", "構成比", "仕入金額合計", "平均仕入額"]}
           rows={categoryStats.map((s) => [
             s.item,
-            s.count + " 件",
+            s.count + " 点",
             (items.length > 0 ? (s.count / items.length * 100).toFixed(1) : "0") + "%",
             fmt(s.total),
             fmt(s.avg),
@@ -285,35 +285,35 @@ export default function AnalyticsTab({ items }: Props) {
         <SectionHeader title="ランク別" />
         <div className="grid sm:grid-cols-2 gap-4 mb-4">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">件数分布</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">点数分布</p>
             <ResponsiveContainer width="100%" height={200}>
               <ReBarChart data={rankStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="rank" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" name="件数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="count" name="点数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">平均売価</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">平均仕入額</p>
             <ResponsiveContainer width="100%" height={200}>
               <ReBarChart data={rankStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="rank" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtK(v)} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="avg" name="平均売価" fill="#c8a96e" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="avg" name="平均仕入額" fill="#c8a96e" radius={[3, 3, 0, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
         </div>
         <DetailTable
-          headers={["ランク", "件数", "構成比", "売価合計", "平均売価"]}
+          headers={["ランク", "点数", "構成比", "仕入金額合計", "平均仕入額"]}
           rows={rankStats.map((s) => [
             s.rank,
-            s.count + " 件",
+            s.count + " 点",
             (items.length > 0 ? (s.count / items.length * 100).toFixed(1) : "0") + "%",
             fmt(s.total),
             fmt(s.avg),
@@ -332,15 +332,15 @@ export default function AnalyticsTab({ items }: Props) {
               <XAxis type="number" tick={{ fontSize: 9 }} />
               <YAxis type="category" dataKey="shop" tick={{ fontSize: 9 }} width={110} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="件数" fill="#1a1a1a" radius={[0, 3, 3, 0]} />
+              <Bar dataKey="count" name="点数" fill="#1a1a1a" radius={[0, 3, 3, 0]} />
             </ReBarChart>
           </ResponsiveContainer>
         </div>
         <DetailTable
-          headers={["仕入店舗", "件数", "構成比", "売価合計", "平均売価"]}
+          headers={["仕入店舗", "点数", "構成比", "仕入金額合計", "平均仕入額"]}
           rows={shopStats.map((s) => [
             s.shop,
-            s.count + " 件",
+            s.count + " 点",
             (items.length > 0 ? (s.count / items.length * 100).toFixed(1) : "0") + "%",
             fmt(s.total),
             fmt(s.avg),
@@ -360,28 +360,28 @@ export default function AnalyticsTab({ items }: Props) {
                 <XAxis type="number" tick={{ fontSize: 9 }} />
                 <YAxis type="category" dataKey="buyer" tick={{ fontSize: 9 }} width={80} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" name="件数" fill="#1a1a1a" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="count" name="点数" fill="#1a1a1a" radius={[0, 3, 3, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">売価合計</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">仕入金額合計</p>
             <ResponsiveContainer width="100%" height={Math.max(160, buyerStats.length * 36)}>
               <ReBarChart data={buyerStats} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => fmtK(v)} />
                 <YAxis type="category" dataKey="buyer" tick={{ fontSize: 9 }} width={80} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="total" name="売価合計" fill="#c8a96e" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="total" name="仕入金額合計" fill="#c8a96e" radius={[0, 3, 3, 0]} />
               </ReBarChart>
             </ResponsiveContainer>
           </div>
         </div>
         <DetailTable
-          headers={["バイヤー", "件数", "構成比", "売価合計", "平均売価"]}
+          headers={["バイヤー", "点数", "構成比", "仕入金額合計", "平均仕入額"]}
           rows={buyerStats.map((s) => [
             s.buyer,
-            s.count + " 件",
+            s.count + " 点",
             (items.length > 0 ? (s.count / items.length * 100).toFixed(1) : "0") + "%",
             fmt(s.total),
             fmt(s.avg),
@@ -393,22 +393,22 @@ export default function AnalyticsTab({ items }: Props) {
       <div>
         <SectionHeader title="売価帯分布" />
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
-          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">価格レンジごとの件数</p>
+          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">価格レンジごとの点数</p>
           <ResponsiveContainer width="100%" height={220}>
             <ReBarChart data={priceRangeStats} margin={{ bottom: 50 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-25} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="件数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" name="点数" fill="#1a1a1a" radius={[3, 3, 0, 0]} />
             </ReBarChart>
           </ResponsiveContainer>
         </div>
         <DetailTable
-          headers={["売価帯", "件数", "構成比", "売価合計"]}
+          headers={["売価帯", "点数", "構成比", "仕入金額合計"]}
           rows={priceRangeStats.map((s) => [
             s.label,
-            s.count + " 件",
+            s.count + " 点",
             s.pct + "%",
             fmt(s.total),
           ])}

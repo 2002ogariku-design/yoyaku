@@ -17,4 +17,5 @@ export interface Item {
   shop: string;
   category: string;
   buyer: string;
+  buyerComment: string;
 }

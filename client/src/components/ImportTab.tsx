@@ -33,6 +33,7 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "仕入店": "shop",
   "カテゴリ": "category",
   "バイヤー": "buyer",
+  "バイヤーコメント": "buyerComment",
   // 実際のExcelフォーマット (agreed_appraisal_items_search)
   "ブランド名": "brand",
   "コラボブランド": "collab",
@@ -130,6 +131,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
             shop: String(row[idx.shop ?? ""] ?? ""),
             category: String(row[idx.category ?? ""] ?? ""),
             buyer: String(row[idx.buyer ?? ""] ?? ""),
+            buyerComment: String(row[idx.buyerComment ?? ""] ?? ""),
           });
           existingIds.add(id);
           added++;
@@ -139,7 +141,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
         onItemsChange(newItems);
         setResult({
           type: "success",
-          msg: `✅ ${added}件追加しました（重複 ${skipped}件スキップ）`,
+          msg: `✅ ${added}点追加しました（重複 ${skipped}点スキップ）`,
         });
       } catch (err: unknown) {
         setResult({
@@ -232,7 +234,7 @@ export default function ImportTab({ items, onItemsChange }: Props) {
           データをリセット（最初からやり直す）
         </button>
         <p className="text-[10px] text-[#bbb] mt-2 text-center">
-          現在 {items.length.toLocaleString()} 件のデータが保存されています
+          現在 {items.length.toLocaleString()} 点のデータが保存されています
         </p>
       </div>
     </div>

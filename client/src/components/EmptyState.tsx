@@ -28,6 +28,7 @@ const COLUMN_MAP: Record<string, keyof Item> = {
   "仕入店": "shop",
   "カテゴリ": "category",
   "バイヤー": "buyer",
+  "バイヤーコメント": "buyerComment",
   // 実際のExcelフォーマット (agreed_appraisal_items_search)
   "ブランド名": "brand",
   "コラボブランド": "collab",
@@ -160,6 +161,7 @@ export default function EmptyState({ onItemsLoaded }: Props) {
             shop: String(row[idx.shop ?? ""] ?? ""),
             category: String(row[idx.category ?? ""] ?? ""),
             buyer: String(row[idx.buyer ?? ""] ?? ""),
+            buyerComment: String(row[idx.buyerComment ?? ""] ?? ""),
           });
         });
 
