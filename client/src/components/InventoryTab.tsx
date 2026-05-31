@@ -430,6 +430,11 @@ export default function InventoryTab({ items }: Props) {
                       {item.size || "-"}
                     </td>
 
+                    {/* Color */}
+                    <td className="px-3 py-2.5 text-[#888] whitespace-nowrap text-[10px] max-w-[120px]">
+                      <div className="truncate">{item.color || "-"}</div>
+                    </td>
+
                     {/* Rank */}
                     <td className="px-3 py-2.5">
                       <span
