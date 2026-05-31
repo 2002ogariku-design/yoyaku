@@ -381,7 +381,7 @@ export default function InventoryTab({ items }: Props) {
           <table className="w-full text-xs" style={{ minWidth: 760 }}>
             <thead>
               <tr>
-                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "付属品", "検索", "ストーリー"].map((h) => (
+                {["ブランド", "商品名 / 特徴", "アイテム", "サイズ", "カラー", "ランク", "売価(税込)", "仕入店舗", "バイヤー", "付属品", "検索", "ストーリー"].map((h) => (
                   <th
                     key={h}
                     className="bg-[#1a1a1a] text-white px-3 py-2.5 text-left text-[10px] tracking-wide whitespace-nowrap"
