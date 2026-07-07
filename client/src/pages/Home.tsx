@@ -55,13 +55,17 @@ export default function Home() {
     // 共有セッションからロード
     const loadSharedSession = async () => {
       try {
-        const response = await fetch(`/api/trpc/shared.getSession?input=${JSON.stringify({ sessionId })}`);
-        const data = await response.json();
-        if (data.result?.data?.items) {
-          setItems(data.result.data.items);
+        const utils = trpc.useUtils();
+        const result = await utils.shared.getSession.fetch({ sessionId });
+        if (result?.items) {
+          setItems(result.items);
+          console.log("[Home] Loaded shared session:", sessionId, result.items.length, "items");
+        } else {
+          console.log("[Home] Session not found:", sessionId);
+          setItems([]);
         }
-      } catch (error) {
-        console.error("Failed to load shared session:", error);
+      } catch (error: unknown) {
+        console.error("[Home] Failed to load shared session:", error);
         setItems([]);
       }
     };
@@ -71,10 +75,11 @@ export default function Home() {
     // リアルタイム同期を開始
     const newSync = new SharedSessionSync(sessionId);
     newSync.connect().catch(error => {
-      console.error("Failed to connect to sync:", error);
+      console.error("[Home] Failed to connect to sync:", error);
     });
 
     newSync.onUpdate((updatedItems) => {
+      console.log("[Home] Received update from sync:", updatedItems.length, "items");
       setItems(updatedItems);
     });
 
@@ -85,22 +90,24 @@ export default function Home() {
     };
   }, [sessionId]);
 
+  // tRPCミューテーション
+  const createSessionMutation = trpc.shared.createSession.useMutation();
+  const updateSessionMutation = trpc.shared.updateSession.useMutation();
+
   // アイテムが変更されたときの処理
   const handleItemsChange = (newItems: Item[]) => {
     setItems(newItems);
 
     if (sessionId && sync && sync.isConnected()) {
       // 共有セッションを更新
+      console.log("[Home] Broadcasting update to sync:", newItems.length, "items");
       sync.broadcastUpdate(newItems);
       
       // サーバーにも送信
-      fetch("/api/trpc/shared.updateSession", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          input: { sessionId, items: newItems },
-        }),
-      }).catch(error => console.error("Failed to update session:", error));
+      updateSessionMutation.mutate({
+        sessionId,
+        items: newItems,
+      });
     } else {
       // ローカルストレージに保存
       saveItems(newItems);
@@ -108,28 +115,23 @@ export default function Home() {
   };
 
   // 共有URLを生成
-  const generateShareUrl = () => {
+  const generateShareUrl = async () => {
     if (!items) return;
 
-    // サーバーに新しいセッションを作成
-    fetch("/api/trpc/shared.createSession", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        input: { items },
-      }),
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.result?.data?.sessionId) {
-          const newSessionId = data.result.data.sessionId;
-          const url = `${window.location.origin}?session=${newSessionId}`;
-          setShareUrl(url);
-          setSessionId(newSessionId);
-          setLocation(`?session=${newSessionId}`);
-        }
-      })
-      .catch(error => console.error("Failed to create session:", error));
+    try {
+      // サーバーに新しいセッションを作成
+      const result = await createSessionMutation.mutateAsync({ items });
+      if (result?.sessionId) {
+        const newSessionId = result.sessionId;
+        const url = `${window.location.origin}?session=${newSessionId}`;
+        console.log("[Home] Created share session:", newSessionId);
+        setShareUrl(url);
+        setSessionId(newSessionId);
+        setLocation(`?session=${newSessionId}`);
+      }
+    } catch (error: unknown) {
+      console.error("[Home] Failed to create session:", error);
+    }
   };
 
   // Still loading from localStorage

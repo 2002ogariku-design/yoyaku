@@ -4,101 +4,87 @@ type UpdateCallback = (items: Item[]) => void;
 
 export class SharedSessionSync {
   private sessionId: string;
-  private ws: WebSocket | null = null;
   private updateCallbacks: Set<UpdateCallback> = new Set();
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 3000;
   private pollInterval: NodeJS.Timeout | null = null;
+  private lastItems: Item[] = [];
+  private isPolling = false;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}`;
-        
-        this.ws = new WebSocket(wsUrl);
-
-        this.ws.onopen = () => {
-          console.log("[SharedSessionSync] Connected");
-          this.reconnectAttempts = 0;
-          
-          // セッションIDを登録
-          this.ws!.send(JSON.stringify({
-            type: "register",
-            sessionId: this.sessionId,
-          }));
-          
-          resolve();
-        };
-
-        this.ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            
-            if (message.type === "update") {
-              console.log("[SharedSessionSync] Received update:", message.data);
-              this.updateCallbacks.forEach(cb => cb(message.data));
-            }
-          } catch (error) {
-            console.error("[SharedSessionSync] Failed to parse message:", error);
-          }
-        };
-
-        this.ws.onerror = (error) => {
-          console.error("[SharedSessionSync] WebSocket error:", error);
-          reject(error);
-        };
-
-        this.ws.onclose = () => {
-          console.log("[SharedSessionSync] Disconnected");
-          this.attemptReconnect();
-        };
-      } catch (error) {
-        reject(error);
-      }
+    return new Promise((resolve) => {
+      console.log("[SharedSessionSync] Starting polling for session:", this.sessionId);
+      this.startPolling();
+      resolve();
     });
   }
 
-  private attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`[SharedSessionSync] Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+  private startPolling() {
+    if (this.isPolling) return;
+    
+    this.isPolling = true;
+    console.log("[SharedSessionSync] Polling started");
+
+    // 初回ポーリング
+    this.poll();
+
+    // 2秒ごとにポーリング
+    this.pollInterval = setInterval(() => {
+      this.poll();
+    }, 2000);
+  }
+
+  private async poll() {
+    try {
+      const response = await fetch(`/api/trpc/shared.getSession?input=${encodeURIComponent(JSON.stringify({ sessionId: this.sessionId }))}`);
+      const data = await response.json();
       
-      setTimeout(() => {
-        this.connect().catch(error => {
-          console.error("[SharedSessionSync] Reconnection failed:", error);
-        });
-      }, this.reconnectDelay);
-    } else {
-      console.error("[SharedSessionSync] Max reconnection attempts reached");
-      // フォールバック：ポーリングを開始
-      this.startPolling();
+      if (data.result?.data?.items) {
+        const newItems = data.result.data.items;
+        // アイテムが変更されたか確認
+        const itemsChanged = this.hasItemsChanged(newItems);
+        if (itemsChanged) {
+          console.log("[SharedSessionSync] Items changed, notifying listeners");
+          this.lastItems = JSON.parse(JSON.stringify(newItems));
+          this.updateCallbacks.forEach(cb => cb(newItems));
+        }
+      }
+    } catch (error) {
+      console.error("[SharedSessionSync] Polling error:", error);
     }
   }
 
-  private startPolling() {
-    if (this.pollInterval) return;
-    
-    console.log("[SharedSessionSync] Starting polling fallback");
-    this.pollInterval = setInterval(() => {
-      // ここでサーバーからデータをポーリング
-      // 実装は後で
-    }, 5000);
+  private hasItemsChanged(newItems: Item[]): boolean {
+    if (newItems.length !== this.lastItems.length) {
+      return true;
+    }
+
+    for (let i = 0; i < newItems.length; i++) {
+      if (JSON.stringify(newItems[i]) !== JSON.stringify(this.lastItems[i])) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   broadcastUpdate(items: Item[]): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: "update",
-        sessionId: this.sessionId,
-        data: items,
-      }));
-    }
+    console.log("[SharedSessionSync] Broadcasting update:", items.length, "items");
+    this.lastItems = JSON.parse(JSON.stringify(items));
+    
+    // サーバーに更新を送信
+    fetch("/api/trpc/shared.updateSession", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        input: {
+          sessionId: this.sessionId,
+          items,
+        },
+      }),
+    }).catch(error => console.error("[SharedSessionSync] Failed to broadcast:", error));
   }
 
   onUpdate(callback: UpdateCallback): () => void {
@@ -107,17 +93,15 @@ export class SharedSessionSync {
   }
 
   disconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    this.isPolling = false;
+    console.log("[SharedSessionSync] Polling stopped");
   }
 
   isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.isPolling;
   }
 }
