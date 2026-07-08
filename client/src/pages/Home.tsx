@@ -4,11 +4,10 @@
  * Empty state → Excel drop → main app
  */
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import type { Item } from "../types";
 import { loadItems, saveItems } from "../lib/storage";
-import { SharedSessionSync } from "../lib/realtimeSync";
-import { trpc } from "@/lib/trpc";
+import { GitHubSync } from "../lib/githubSync";
+import { useAuth } from "@/_core/hooks/useAuth";
 import EmptyState from "../components/EmptyState";
 import InventoryTab from "../components/InventoryTab";
 import AnalyticsTab from "../components/AnalyticsTab";
@@ -26,111 +25,68 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function Home() {
-  const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("inventory");
   const [items, setItems] = useState<Item[] | null>(null); // null = loading
   const [helpOpen, setHelpOpen] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sync, setSync] = useState<SharedSessionSync | null>(null);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [githubSync, setGithubSync] = useState<GitHubSync | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"syncing" | "synced" | "error">("syncing");
 
-  // URLからセッションIDを取得
+  // ユーザーがログインしたときにGitHub同期を初期化
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("session");
-    
-    if (id) {
-      setSessionId(id);
-    }
-  }, []);
-
-  // セッションIDが変わったときの処理
-  useEffect(() => {
-    if (!sessionId) {
+    if (!user) {
       // ローカルストレージからロード
       setItems(loadItems());
       return;
     }
 
-    // 共有セッションからロード
-    const loadSharedSession = async () => {
+    const initializeGitHubSync = async () => {
       try {
-        const utils = trpc.useUtils();
-        const result = await utils.shared.getSession.fetch({ sessionId });
-        if (result?.items) {
-          setItems(result.items);
-          console.log("[Home] Loaded shared session:", sessionId, result.items.length, "items");
-        } else {
-          console.log("[Home] Session not found:", sessionId);
-          setItems([]);
-        }
-      } catch (error: unknown) {
-        console.error("[Home] Failed to load shared session:", error);
-        setItems([]);
+        console.log("[Home] Initializing GitHub sync for user:", user.id);
+        const sync = new GitHubSync(String(user.id));
+
+        // GitHubからデータをロード
+        const loadedItems = await sync.loadFromGitHub();
+        setItems(loadedItems.length > 0 ? loadedItems : loadItems());
+        setSyncStatus("synced");
+
+        // リアルタイム同期を開始
+        sync.onUpdate((updatedItems) => {
+          console.log("[Home] GitHub sync update received:", updatedItems.length, "items");
+          setItems(updatedItems);
+        });
+
+        sync.startPolling();
+        setGithubSync(sync);
+      } catch (error) {
+        console.error("[Home] Failed to initialize GitHub sync:", error);
+        setSyncStatus("error");
+        setItems(loadItems());
       }
     };
 
-    loadSharedSession();
-
-    // リアルタイム同期を開始
-    const newSync = new SharedSessionSync(sessionId);
-    newSync.connect().catch(error => {
-      console.error("[Home] Failed to connect to sync:", error);
-    });
-
-    newSync.onUpdate((updatedItems) => {
-      console.log("[Home] Received update from sync:", updatedItems.length, "items");
-      setItems(updatedItems);
-    });
-
-    setSync(newSync);
+    initializeGitHubSync();
 
     return () => {
-      newSync.disconnect();
+      if (githubSync) {
+        githubSync.stopPolling();
+      }
     };
-  }, [sessionId]);
-
-  // tRPCミューテーション
-  const createSessionMutation = trpc.shared.createSession.useMutation();
-  const updateSessionMutation = trpc.shared.updateSession.useMutation();
+  }, [user]);
 
   // アイテムが変更されたときの処理
   const handleItemsChange = (newItems: Item[]) => {
     setItems(newItems);
 
-    if (sessionId && sync && sync.isConnected()) {
-      // 共有セッションを更新
-      console.log("[Home] Broadcasting update to sync:", newItems.length, "items");
-      sync.broadcastUpdate(newItems);
-      
-      // サーバーにも送信
-      updateSessionMutation.mutate({
-        sessionId,
-        items: newItems,
+    if (user && githubSync) {
+      // GitHubに保存
+      setSyncStatus("syncing");
+      githubSync.saveToGitHub(newItems).then((success) => {
+        setSyncStatus(success ? "synced" : "error");
       });
     } else {
       // ローカルストレージに保存
       saveItems(newItems);
-    }
-  };
-
-  // 共有URLを生成
-  const generateShareUrl = async () => {
-    if (!items) return;
-
-    try {
-      // サーバーに新しいセッションを作成
-      const result = await createSessionMutation.mutateAsync({ items });
-      if (result?.sessionId) {
-        const newSessionId = result.sessionId;
-        const url = `${window.location.origin}?session=${newSessionId}`;
-        console.log("[Home] Created share session:", newSessionId);
-        setShareUrl(url);
-        setSessionId(newSessionId);
-        setLocation(`?session=${newSessionId}`);
-      }
-    } catch (error: unknown) {
-      console.error("[Home] Failed to create session:", error);
     }
   };
 
@@ -157,16 +113,17 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[#c8a96e] font-bold tracking-widest">
             {items.length.toLocaleString()}点
-            {sessionId && <span className="ml-2 text-[#888]">(共有中)</span>}
           </span>
-          {!sessionId && (
-            <button
-              onClick={generateShareUrl}
-              className="text-[10px] text-white/60 hover:text-white border border-white/20 hover:border-white/50 rounded px-2 py-1 tracking-widest transition-colors"
-              title="このデータを他の人と共有するURLを生成"
-            >
-              共有
-            </button>
+          {user && (
+            <span className={`text-[10px] font-bold tracking-widest px-2 py-1 rounded ${
+              syncStatus === "synced" ? "text-green-600 bg-green-100" :
+              syncStatus === "syncing" ? "text-yellow-600 bg-yellow-100" :
+              "text-red-600 bg-red-100"
+            }`}>
+              {syncStatus === "synced" ? "✓ 同期済み" :
+               syncStatus === "syncing" ? "⟳ 同期中" :
+               "✕ エラー"}
+            </span>
           )}
           <button
             onClick={() => setHelpOpen(true)}
@@ -177,38 +134,6 @@ export default function Home() {
         </div>
       </header>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-
-      {/* Share URL Modal */}
-      {shareUrl && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold mb-4">共有URL</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              このURLを他の人に送ると、リアルタイムでデータが共有されます：
-            </p>
-            <div className="bg-gray-100 p-3 rounded mb-4 break-all text-xs font-mono">
-              {shareUrl}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(shareUrl);
-                  alert("URLをコピーしました");
-                }}
-                className="flex-1 bg-[#1a1a1a] text-white px-4 py-2 rounded text-sm font-bold hover:bg-[#333] transition-colors"
-              >
-                URLをコピー
-              </button>
-              <button
-                onClick={() => setShareUrl(null)}
-                className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300 transition-colors"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tab bar */}
       <nav className="flex bg-white border-b border-[#e0e0e0] sticky top-[57px] z-40">

@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import * as github from "./github";
 import { nanoid } from "nanoid";
 
 // 共有セッションを管理するマップ
@@ -45,24 +46,24 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         id: z.string(),
-        brand: z.string().optional(),
-        collab: z.string().optional(),
-        season: z.string().optional(),
-        model: z.string().optional(),
-        feature: z.string().optional(),
-        item: z.string().optional(),
+        brand: z.string().default(""),
+        collab: z.string().default(""),
+        season: z.string().default(""),
+        model: z.string().default(""),
+        feature: z.string().default(""),
+        item: z.string().default(""),
         cost: z.number().default(0),
         price: z.number().default(0),
-        size: z.string().optional(),
-        color: z.string().optional(),
-        rank: z.string().optional(),
-        accessories: z.string().optional(),
-        number: z.string().optional(),
-        date: z.string().optional(),
-        shop: z.string().optional(),
-        category: z.string().optional(),
-        buyer: z.string().optional(),
-        buyerComment: z.string().optional(),
+        size: z.string().default(""),
+        color: z.string().default(""),
+        rank: z.string().default(""),
+        accessories: z.string().default(""),
+        number: z.string().default(""),
+        date: z.string().default(""),
+        shop: z.string().default(""),
+        category: z.string().default(""),
+        buyer: z.string().default(""),
+        buyerComment: z.string().default(""),
       }))
       .mutation(async ({ ctx, input }) => db.createItem(ctx.user.id, input)),
     update: protectedProcedure
@@ -85,24 +86,24 @@ export const appRouter = router({
       .input(z.object({
         items: z.array(z.object({
           id: z.string(),
-          brand: z.string().optional(),
-          collab: z.string().optional(),
-          season: z.string().optional(),
-          model: z.string().optional(),
-          feature: z.string().optional(),
-          item: z.string().optional(),
+          brand: z.string().default(""),
+          collab: z.string().default(""),
+          season: z.string().default(""),
+          model: z.string().default(""),
+          feature: z.string().default(""),
+          item: z.string().default(""),
           cost: z.number().default(0),
           price: z.number().default(0),
-          size: z.string().optional(),
-          color: z.string().optional(),
-          rank: z.string().optional(),
-          accessories: z.string().optional(),
-          number: z.string().optional(),
-          date: z.string().optional(),
-          shop: z.string().optional(),
-          category: z.string().optional(),
-          buyer: z.string().optional(),
-          buyerComment: z.string().optional(),
+          size: z.string().default(""),
+          color: z.string().default(""),
+          rank: z.string().default(""),
+          accessories: z.string().default(""),
+          number: z.string().default(""),
+          date: z.string().default(""),
+          shop: z.string().default(""),
+          category: z.string().default(""),
+          buyer: z.string().default(""),
+          buyerComment: z.string().default(""),
         })),
       }))
       .mutation(({ input }) => {
@@ -134,24 +135,24 @@ export const appRouter = router({
         sessionId: z.string(),
         items: z.array(z.object({
           id: z.string(),
-          brand: z.string().optional(),
-          collab: z.string().optional(),
-          season: z.string().optional(),
-          model: z.string().optional(),
-          feature: z.string().optional(),
-          item: z.string().optional(),
+          brand: z.string().default(""),
+          collab: z.string().default(""),
+          season: z.string().default(""),
+          model: z.string().default(""),
+          feature: z.string().default(""),
+          item: z.string().default(""),
           cost: z.number().default(0),
           price: z.number().default(0),
-          size: z.string().optional(),
-          color: z.string().optional(),
-          rank: z.string().optional(),
-          accessories: z.string().optional(),
-          number: z.string().optional(),
-          date: z.string().optional(),
-          shop: z.string().optional(),
-          category: z.string().optional(),
-          buyer: z.string().optional(),
-          buyerComment: z.string().optional(),
+          size: z.string().default(""),
+          color: z.string().default(""),
+          rank: z.string().default(""),
+          accessories: z.string().default(""),
+          number: z.string().default(""),
+          date: z.string().default(""),
+          shop: z.string().default(""),
+          category: z.string().default(""),
+          buyer: z.string().default(""),
+          buyerComment: z.string().default(""),
         })),
       }))
       .mutation(({ input }) => {
@@ -163,6 +164,53 @@ export const appRouter = router({
         session.updatedAt = Date.now();
         console.log(`[SharedSession] Updated session: ${input.sessionId}`);
         return { success: true };
+      }),
+  }),
+
+  // GitHub同期機能
+  githubSync: router({
+    // GitHubからデータをロード
+    load: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const items = await github.loadItemsFromGitHub(String(ctx.user.id));
+        return { items: items || [] };
+      }),
+
+    // GitHubにデータを保存
+    save: protectedProcedure
+      .input(z.object({
+        items: z.array(z.object({
+          id: z.string(),
+          brand: z.string().default(""),
+          collab: z.string().default(""),
+          season: z.string().default(""),
+          model: z.string().default(""),
+          feature: z.string().default(""),
+          item: z.string().default(""),
+          cost: z.number().default(0),
+          price: z.number().default(0),
+          size: z.string().default(""),
+          color: z.string().default(""),
+          rank: z.string().default(""),
+          accessories: z.string().default(""),
+          number: z.string().default(""),
+          date: z.string().default(""),
+          shop: z.string().default(""),
+          category: z.string().default(""),
+          buyer: z.string().default(""),
+          buyerComment: z.string().default(""),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const success = await github.saveItemsToGitHub(String(ctx.user.id), input.items);
+        return { success };
+      }),
+
+    // GitHubのデータを削除
+    delete: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const success = await github.deleteItemsFromGitHub(String(ctx.user.id));
+        return { success };
       }),
   }),
 });
