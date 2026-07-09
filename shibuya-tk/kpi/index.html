@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a1a2e">
+<title>個人タスク集計ツール｜渋谷店</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --panel2:#f0f2f5; --line:#e4e7ed;
+  --text:#1a1a2e; --text-dim:#6b7280; --text-light:#9ca3af;
+  --blue:#2563eb; --blue-dim:#3b82f6; --blue-bg:#eff6ff;
+  --purple:#7c3aed; --purple-bg:#f5f3ff;
+  --pink:#db2777; --pink-bg:#fdf2f8;
+  --green:#059669; --green-bg:#ecfdf5;
+  --amber:#d97706; --amber-bg:#fffbeb;
+  --red:#dc2626; --red-bg:#fef2f2;
+  --font:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh;}
+.wrap{max-width:1100px; margin:0 auto; padding:20px 16px 80px;}
+
+/* header */
+.page-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;}
+.page-header .left .store{font-size:11px; font-weight:700; letter-spacing:.15em; color:var(--blue); text-transform:uppercase;}
+.page-header .left h1{font-size:22px; font-weight:800; color:var(--text); margin-top:2px;}
+.page-header .left .sub{font-size:12px; color:var(--text-dim); margin-top:2px;}
+.name-btn{display:flex; align-items:center; gap:8px; background:var(--panel); border:1.5px solid var(--line); border-radius:20px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer; color:var(--text);}
+.name-btn:hover{border-color:var(--blue);}
+
+/* cards */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.card-title{font-size:13px; font-weight:700; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+.card-title .icon{font-size:15px;}
+.section-label{font-size:11px; font-weight:700; letter-spacing:.08em; padding:6px 10px; border-radius:6px; margin-bottom:10px; display:inline-block;}
+.sl-store{background:var(--panel2); color:var(--text-dim);}
+.sl-insta{background:var(--pink-bg); color:var(--pink);}
+.sl-official{background:var(--blue-bg); color:var(--blue);}
+.section-divider{border:none; border-top:1px solid var(--line); margin:16px 0;}
+
+/* form */
+.form-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:4px;}
+@media(max-width:680px){.form-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:420px){.form-grid{grid-template-columns:1fr;}}
+.field label{display:block; font-size:11px; font-weight:700; color:var(--text-dim); margin-bottom:5px; letter-spacing:.03em;}
+.field input{
+  width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);
+  background:var(--bg); color:var(--text); font-size:16px; font-family:var(--font);
+  transition:border-color .15s;
+}
+.field input:focus{outline:none; border-color:var(--blue); background:#fff;}
+.field input[type=date]{font-size:14px;}
+.field input[type=number]{font-family:monospace;}
+.field.pink input:focus{border-color:var(--pink);}
+.field.blue input:focus{border-color:var(--blue);}
+.save-row{display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;}
+.save-tick{font-size:12px; color:var(--green); font-weight:700; opacity:0; transition:opacity .4s;}
+
+/* buttons */
+.btn{border-radius:8px; padding:9px 16px; font-size:13px; cursor:pointer; border:1.5px solid var(--line); background:var(--panel2); color:var(--text); font-weight:700; transition:all .15s;}
+.btn:hover{border-color:var(--blue); color:var(--blue);}
+.btn.primary{background:var(--blue); color:#fff; border-color:var(--blue);}
+.btn.primary:hover{background:#1d4ed8;}
+.btn.sm{padding:6px 12px; font-size:12px;}
+
+/* today table */
+.table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+table{width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;}
+th{padding:7px 10px; text-align:left; font-size:10.5px; font-weight:700; color:var(--text-dim); border-bottom:2px solid var(--line); background:var(--panel2);}
+th.pink{color:var(--pink);}
+th.blue{color:var(--blue);}
+td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+td.num{font-family:monospace; text-align:right;}
+td.staff{font-weight:700;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafafa;}
+
+/* totals */
+.totals-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+.total-chip{display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:8px; font-size:12px;}
+.total-chip.store{background:var(--panel2); color:var(--text-dim);}
+.total-chip.insta{background:var(--pink-bg); color:var(--pink);}
+.total-chip.official{background:var(--blue-bg); color:var(--blue);}
+.total-chip b{font-size:14px; color:var(--text);}
+
+/* charts */
+.chart-tabs{display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--line);}
+.chart-tab{padding:8px 16px; font-size:12.5px; font-weight:700; cursor:pointer; color:var(--text-dim); border-bottom:2px solid transparent; margin-bottom:-2px;}
+.chart-tab.active{color:var(--blue); border-bottom-color:var(--blue);}
+.chart-tab.pink.active{color:var(--pink); border-bottom-color:var(--pink);}
+.chart-tab.purple.active{color:var(--purple); border-bottom-color:var(--purple);}
+.chart-panel{display:none;}
+.chart-panel.active{display:block;}
+.chart-toolbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;}
+.chart-toolbar select{padding:7px 10px; border-radius:7px; border:1.5px solid var(--line); background:var(--bg); color:var(--text); font-size:12.5px;}
+.spacer{flex:1;}
+
+/* error */
+#errorBanner{display:none; background:var(--red-bg); border:1px solid var(--red); color:var(--red); border-radius:8px; padding:12px; margin-bottom:14px; font-size:12.5px; line-height:1.6;}
+
+/* modal */
+.modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; align-items:center; justify-content:center;}
+.modal-box{background:#fff; border-radius:14px; padding:22px; max-width:340px; width:90%;}
+.modal-title{font-size:15px; font-weight:800; margin-bottom:12px;}
+.modal-select{width:100%; padding:10px; border-radius:8px; border:1.5px solid var(--line); font-size:14px; background:var(--bg); margin-bottom:14px;}
+.modal-actions{display:flex; gap:8px; justify-content:flex-end;}
+
+@media(max-width:500px){
+  .page-header{flex-direction:column; align-items:flex-start;}
+  .chart-tabs{overflow-x:auto; white-space:nowrap;}
+  .chart-tab{padding:7px 12px; font-size:12px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Name modal -->
+<div class="modal-overlay" id="nameModalOverlay" style="align-items:center;justify-content:center;">
+  <div class="modal-box">
+    <div class="modal-title">👤 あなたの名前を選んでください</div>
+    <select class="modal-select" id="nameSelectInput"></select>
+    <div class="modal-actions">
+      <button class="btn" id="nameModalCancelBtn">キャンセル</button>
+      <button class="btn primary" id="nameModalSaveBtn">決定</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="page-header">
+  <div class="left">
+    <div class="store">RINKAN 渋谷店</div>
+    <h1>個人タスク集計ツール</h1>
+    <div class="sub" id="todayLabel">読み込み中...</div>
+  </div>
+  <button class="name-btn" id="staffNameBadge">👤 名前を設定</button>
+</div>
+
+<div id="errorBanner"></div>
+
+<!-- Input form -->
+<div class="card">
+  <div class="card-title"><span class="icon">✏️</span>今日の自分の数字を入力</div>
+  <div class="form-grid" style="margin-bottom:12px;">
+    <div class="field"><label>📅 日付</label><input type="date" id="inputDate"></div>
+  </div>
+
+  <div class="section-label sl-store">店頭タスク</div>
+  <div class="form-grid">
+    <div class="field"><label>アプローチ数</label><input type="number" min="0" id="inputApproach" placeholder="0"></div>
+    <div class="field"><label>接客人数</label><input type="number" min="0" id="inputService" placeholder="0"></div>
+    <div class="field"><label>新入荷取り置き数</label><input type="number" min="0" id="inputHold" placeholder="0"></div>
+    <div class="field"><label>古物取得数</label><input type="number" min="0" id="inputKobutsu" placeholder="0"></div>
+    <div class="field"><label>連絡先取得数</label><input type="number" min="0" id="inputContact" placeholder="0"></div>
+    <div class="field"><label>買取概算回答数</label><input type="number" min="0" id="inputKaitori" placeholder="0"></div>
+  </div>
+
+  <hr class="section-divider">
+  <div class="section-label sl-insta">📸 個人インスタ</div>
+  <div class="form-grid">
+    <div class="field pink"><label>当日DM件数</label><input type="number" min="0" id="inputInstaDM" placeholder="0"></div>
+    <div class="field pink"><label>販売問い合わせ件数</label><input type="number" min="0" id="inputInstaInquirySales" placeholder="0"></div>
+    <div class="field pink"><label>買取問い合わせ件数</label><input type="number" min="0" id="inputInstaInquiryBuy" placeholder="0"></div>
+    <div class="field pink"><label>販売 客数</label><input type="number" min="0" id="inputInstaSaleClients" placeholder="0"></div>
+    <div class="field pink"><label>販売 点数</label><input type="number" min="0" id="inputInstaSaleItems" placeholder="0"></div>
+    <div class="field pink"><label>販売 金額（円）</label><input type="number" min="0" id="inputInstaSaleAmount" placeholder="0"></div>
+    <div class="field pink"><label>買取 客数</label><input type="number" min="0" id="inputInstaBuyClients" placeholder="0"></div>
+    <div class="field pink"><label>買取 点数</label><input type="number" min="0" id="inputInstaBuyItems" placeholder="0"></div>
+  </div>
+
+  <hr class="section-divider">
+  <div class="section-label sl-official">🏢 公式インスタ</div>
+  <div class="form-grid">
+    <div class="field blue"><label>当日DM件数</label><input type="number" min="0" id="inputOffInstaDM" placeholder="0"></div>
+    <div class="field blue"><label>販売問い合わせ件数</label><input type="number" min="0" id="inputOffInstaInquirySales" placeholder="0"></div>
+    <div class="field blue"><label>買取問い合わせ件数</label><input type="number" min="0" id="inputOffInstaInquiryBuy" placeholder="0"></div>
+    <div class="field blue"><label>販売 客数</label><input type="number" min="0" id="inputOffInstaSaleClients" placeholder="0"></div>
+    <div class="field blue"><label>販売 点数</label><input type="number" min="0" id="inputOffInstaSaleItems" placeholder="0"></div>
+    <div class="field blue"><label>販売 金額（円）</label><input type="number" min="0" id="inputOffInstaSaleAmount" placeholder="0"></div>
+    <div class="field blue"><label>買取 客数</label><input type="number" min="0" id="inputOffInstaBuyClients" placeholder="0"></div>
+    <div class="field blue"><label>買取 点数</label><input type="number" min="0" id="inputOffInstaBuyItems" placeholder="0"></div>
+  </div>
+
+  <div class="save-row">
+    <button class="btn primary" id="submitBtn">保存する</button>
+    <span class="save-tick" id="saveStatus">✓ 保存しました</span>
+  </div>
+  <p style="font-size:11px;color:var(--text-light);margin-top:10px;">同じ日付・同じ名前で再保存すると上書きされます（入力し直しOK）</p>
+</div>
+
+<!-- Today status -->
+<div class="card">
+  <div class="card-title"><span class="icon">📊</span><span id="todayTitle">本日の入力状況</span>
+    <button class="btn sm" id="refreshBtn" style="margin-left:auto;">🔄 更新</button>
+  </div>
+  <div class="totals-grid" id="todayTotals"></div>
+  <div class="table-wrap">
+    <table id="todayTable">
+      <thead>
+        <tr>
+          <th rowspan="2">担当者</th>
+          <th colspan="6">店頭タスク</th>
+          <th colspan="8" class="pink">📸 個人インスタ</th>
+          <th colspan="8" class="blue">🏢 公式インスタ</th>
+        </tr>
+        <tr>
+          <th>アプローチ</th><th>接客</th><th>新入荷取置</th><th>古物取得</th><th>連絡先</th><th>買取概算</th>
+          <th class="pink">DM</th><th class="pink">販売問合</th><th class="pink">買取問合</th>
+          <th class="pink">販売客</th><th class="pink">販売点</th><th class="pink">販売金額</th><th class="pink">買取客</th><th class="pink">買取点</th>
+          <th class="blue">DM</th><th class="blue">販売問合</th><th class="blue">買取問合</th>
+          <th class="blue">販売客</th><th class="blue">販売点</th><th class="blue">販売金額</th><th class="blue">買取客</th><th class="blue">買取点</th>
+        </tr>
+      </thead>
+      <tbody id="todayTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="card">
+  <div class="card-title"><span class="icon">📈</span>推移グラフ</div>
+  <div class="chart-tabs">
+    <div class="chart-tab active" onclick="switchChartTab('store')">店頭タスク</div>
+    <div class="chart-tab pink" onclick="switchChartTab('insta')">📸 個人インスタ</div>
+    <div class="chart-tab purple" onclick="switchChartTab('official')">🏢 公式インスタ</div>
+  </div>
+
+  <!-- store -->
+  <div class="chart-panel active" id="panel-store">
+    <div class="chart-toolbar">
+      <select id="storeMetricSelect">
+        <option value="approach">アプローチ数</option>
+        <option value="service">接客人数</option>
+        <option value="hold">新入荷取り置き数</option>
+        <option value="kobutsu">古物取得数</option>
+        <option value="contact">連絡先取得数</option>
+        <option value="kaitori">買取概算回答数</option>
+      </select>
+      <select id="storeRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
+      <select id="storeMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+    </div>
+    <canvas id="storeTrendChart" height="110"></canvas>
+  </div>
+
+  <!-- insta -->
+  <div class="chart-panel" id="panel-insta">
+    <div class="chart-toolbar">
+      <select id="instaMetricSelect">
+        <option value="instaDM">DM件数</option>
+        <option value="instaInquirySales">販売問い合わせ</option>
+        <option value="instaInquiryBuy">買取問い合わせ</option>
+        <option value="instaSaleClients">販売 客数</option>
+        <option value="instaSaleItems">販売 点数</option>
+        <option value="instaSaleAmount">販売 金額</option>
+        <option value="instaBuyClients">買取 客数</option>
+        <option value="instaBuyItems">買取 点数</option>
+      </select>
+      <select id="instaRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
+      <select id="instaMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+    </div>
+    <canvas id="instaTrendChart" height="110"></canvas>
+  </div>
+
+  <!-- official -->
+  <div class="chart-panel" id="panel-official">
+    <div class="chart-toolbar">
+      <select id="offMetricSelect">
+        <option value="offInstaDM">DM件数</option>
+        <option value="offInstaInquirySales">販売問い合わせ</option>
+        <option value="offInstaInquiryBuy">買取問い合わせ</option>
+        <option value="offInstaSaleClients">販売 客数</option>
+        <option value="offInstaSaleItems">販売 点数</option>
+        <option value="offInstaSaleAmount">販売 金額</option>
+        <option value="offInstaBuyClients">買取 客数</option>
+        <option value="offInstaBuyItems">買取 点数</option>
+      </select>
+      <select id="offRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
+      <select id="offMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+    </div>
+    <canvas id="offTrendChart" height="110"></canvas>
+  </div>
+</div>
+
+<!-- Ranking -->
+<div class="card">
+  <div class="card-title"><span class="icon">🏆</span>期間合計ランキング</div>
+  <div class="chart-toolbar">
+    <select id="rankMetricSelect">
+      <optgroup label="店頭タスク">
+        <option value="approach">アプローチ数</option><option value="service">接客人数</option>
+        <option value="hold">新入荷取置</option><option value="kobutsu">古物取得</option>
+        <option value="contact">連絡先取得</option><option value="kaitori">買取概算</option>
+      </optgroup>
+      <optgroup label="📸 個人インスタ">
+        <option value="instaDM">個人DM</option><option value="instaInquirySales">個人販売問合</option>
+        <option value="instaSaleAmount">個人販売金額</option><option value="instaBuyClients">個人買取客数</option>
+      </optgroup>
+      <optgroup label="🏢 公式インスタ">
+        <option value="offInstaDM">公式DM</option><option value="offInstaInquirySales">公式販売問合</option>
+        <option value="offInstaSaleAmount">公式販売金額</option><option value="offInstaBuyClients">公式買取客数</option>
+      </optgroup>
+    </select>
+    <select id="rankRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
+  </div>
+  <canvas id="rankChart" height="120"></canvas>
+</div>
+
+</div><!-- /wrap -->
+<script>
+const GH_OWNER="2002ogariku-design", GH_REPO="yoyaku";
+const GH_PATH="shibuya-tk/kpi-data.json";
+const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+const GH_TOKEN_KEY="tk-gh-token", STAFFNAME_KEY="tk-staffname";
+
+const STAFF_ROSTER=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"];
+const AMOUNT_KEYS=new Set(["instaSaleAmount","offInstaSaleAmount"]);
+const CHART_COLORS=["#2563eb","#db2777","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#65a30d"];
+
+function getGhToken(){
+  let t=null; try{t=localStorage.getItem(GH_TOKEN_KEY);}catch(e){}
+  if(!t){t=window.prompt("共有用のアクセスキーを入力してください");if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}}
+  return t;
+}
+function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
+function setStaffName(n){try{localStorage.setItem(STAFFNAME_KEY,n);}catch(e){}}
+function updateStaffBadge(){document.getElementById("staffNameBadge").textContent=getStaffName()?`👤 ${getStaffName()}`:"👤 名前を設定";}
+function showError(msg){const el=document.getElementById("errorBanner");el.style.display="block";el.textContent=msg;}
+function clearError(){document.getElementById("errorBanner").style.display="none";}
+function escapeHtml(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function fmtAmt(k,v){return AMOUNT_KEYS.has(k)?`¥${Number(v||0).toLocaleString("ja-JP")}`:String(v||0);}
+function utf8ToB64(str){return btoa(unescape(encodeURIComponent(str)));}
+function b64ToUtf8(b64){return decodeURIComponent(escape(atob(b64.replace(/\n/g,""))));}
+
+// name modal
+function openNameModal(force){
+  const sel=document.getElementById("nameSelectInput");
+  sel.innerHTML=STAFF_ROSTER.map(n=>`<option value="${n}">${n}</option>`).join("");
+  const cur=getStaffName(); if(cur&&STAFF_ROSTER.includes(cur)) sel.value=cur;
+  document.getElementById("nameModalCancelBtn").style.display=force?"none":"";
+  document.getElementById("nameModalOverlay").style.display="flex";
+}
+function closeNameModal(){document.getElementById("nameModalOverlay").style.display="none";}
+function ensureStaffModal(force){
+  return new Promise(resolve=>{
+    if(getStaffName()&&!force){resolve(getStaffName());return;}
+    openNameModal(force);
+    const btn=document.getElementById("nameModalSaveBtn");
+    const h=()=>{
+      const v=document.getElementById("nameSelectInput").value;
+      setStaffName(v); updateStaffBadge(); closeNameModal();
+      document.getElementById("nameModalCancelBtn").style.display="";
+      btn.removeEventListener("click",h); resolve(v);
+    };
+    btn.addEventListener("click",h);
+  });
+}
+
+// GH helpers
+let ghSha=null;
+let records=[];
+
+async function ghGet(){
+  const token=getGhToken(); if(!token) return [];
+  const res=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+  if(res.status===404){ghSha=null;return [];}
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const data=await res.json(); ghSha=data.sha;
+  const text=b64ToUtf8(data.content); return text?JSON.parse(text):[];
+}
+
+async function ghSet(arr){
+  const token=getGhToken(); if(!token) throw new Error("アクセスキー未設定");
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const head=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+      if(head.ok){ghSha=(await head.json()).sha;}else if(head.status===404){ghSha=null;}
+    }catch(e){}
+    const body={message:"update kpi "+new Date().toISOString(),content:utf8ToB64(JSON.stringify(arr))};
+    if(ghSha) body.sha=ghSha;
+    const res=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(res.ok){const d=await res.json();ghSha=d.content.sha;return;}
+    if(res.status===409&&attempt<2){await new Promise(r=>setTimeout(r,400+attempt*300));continue;}
+    throw new Error(`保存失敗 HTTP ${res.status}`);
+  }
+}
+
+async function loadRecords(){
+  try{records=await ghGet()||[];}
+  catch(e){showError("データ読み込み失敗："+e.message);records=[];}
+}
+
+// get all field ids
+const FIELD_IDS=[
+  "inputApproach","inputService","inputHold","inputKobutsu","inputContact","inputKaitori",
+  "inputInstaDM","inputInstaInquirySales","inputInstaInquiryBuy","inputInstaSaleClients","inputInstaSaleItems","inputInstaSaleAmount","inputInstaBuyClients","inputInstaBuyItems",
+  "inputOffInstaDM","inputOffInstaInquirySales","inputOffInstaInquiryBuy","inputOffInstaSaleClients","inputOffInstaSaleItems","inputOffInstaSaleAmount","inputOffInstaBuyClients","inputOffInstaBuyItems"
+];
+const FIELD_KEYS=[
+  "approach","service","hold","kobutsu","contact","kaitori",
+  "instaDM","instaInquirySales","instaInquiryBuy","instaSaleClients","instaSaleItems","instaSaleAmount","instaBuyClients","instaBuyItems",
+  "offInstaDM","offInstaInquirySales","offInstaInquiryBuy","offInstaSaleClients","offInstaSaleItems","offInstaSaleAmount","offInstaBuyClients","offInstaBuyItems"
+];
+
+async function saveTodayEntry(){
+  const name=await ensureStaffModal(false); if(!name) return;
+  const date=document.getElementById("inputDate").value||todayStr();
+  const entry={date, staff:name, savedAt:new Date().toISOString()};
+  FIELD_IDS.forEach((id,i)=>{entry[FIELD_KEYS[i]]=Number(document.getElementById(id).value)||0;});
+  clearError();
+  try{
+    // Fetch latest first to avoid 409
+    records=await ghGet()||[];
+    const idx=records.findIndex(r=>r.date===entry.date&&r.staff===entry.staff);
+    if(idx>=0) records[idx]=entry; else records.push(entry);
+    await ghSet(records);
+    const el=document.getElementById("saveStatus");
+    el.style.opacity="1"; setTimeout(()=>{el.style.opacity="0";},2500);
+    FIELD_IDS.forEach(id=>{document.getElementById(id).value="";});
+    renderToday(); renderAllCharts();
+  }catch(e){console.error(e);showError("保存失敗："+e.message);}
+}
+
+function renderToday(){
+  const date=document.getElementById("inputDate").value||todayStr();
+  document.getElementById("todayTitle").textContent=`本日の入力状況（${date}）`;
+  const todays=records.filter(r=>r.date===date);
+  const tbody=document.getElementById("todayTbody");
+
+  if(!todays.length){
+    tbody.innerHTML=`<tr><td colspan="23" style="color:var(--text-light);padding:20px;text-align:center;">まだ誰も入力していません</td></tr>`;
+    document.getElementById("todayTotals").innerHTML="";
+    return;
+  }
+
+  tbody.innerHTML=todays.map(r=>`<tr>
+    <td class="staff">${escapeHtml(r.staff)}</td>
+    <td class="num">${r.approach||0}</td><td class="num">${r.service||0}</td><td class="num">${r.hold||0}</td><td class="num">${r.kobutsu||0}</td><td class="num">${r.contact||0}</td><td class="num">${r.kaitori||0}</td>
+    <td class="num">${r.instaDM||0}</td><td class="num">${r.instaInquirySales||0}</td><td class="num">${r.instaInquiryBuy||0}</td><td class="num">${r.instaSaleClients||0}</td><td class="num">${r.instaSaleItems||0}</td><td class="num">¥${(r.instaSaleAmount||0).toLocaleString()}</td><td class="num">${r.instaBuyClients||0}</td><td class="num">${r.instaBuyItems||0}</td>
+    <td class="num">${r.offInstaDM||0}</td><td class="num">${r.offInstaInquirySales||0}</td><td class="num">${r.offInstaInquiryBuy||0}</td><td class="num">${r.offInstaSaleClients||0}</td><td class="num">${r.offInstaSaleItems||0}</td><td class="num">¥${(r.offInstaSaleAmount||0).toLocaleString()}</td><td class="num">${r.offInstaBuyClients||0}</td><td class="num">${r.offInstaBuyItems||0}</td>
+  </tr>`).join("");
+
+  const tot={};
+  FIELD_KEYS.forEach(k=>{tot[k]=todays.reduce((s,r)=>s+(r[k]||0),0);});
+  const storeKeys=FIELD_KEYS.slice(0,6);
+  const instaKeys=FIELD_KEYS.slice(6,14);
+  const offKeys=FIELD_KEYS.slice(14);
+  const STORE_LABELS=["アプローチ","接客","新入荷取置","古物","連絡先","買取概算"];
+  const INSTA_LABELS=["DM","販売問合","買取問合","販売客","販売点","販売金額","買取客","買取点"];
+  document.getElementById("todayTotals").innerHTML=
+    storeKeys.map((k,i)=>`<span class="total-chip store">${STORE_LABELS[i]} <b>${tot[k]}</b></span>`).join("")+
+    instaKeys.map((k,i)=>`<span class="total-chip insta">${INSTA_LABELS[i]} <b>${fmtAmt(k,tot[k])}</b></span>`).join("")+
+    offKeys.map((k,i)=>`<span class="total-chip official">${INSTA_LABELS[i]} <b>${fmtAmt(k,tot[k])}</b></span>`).join("");
+}
+
+// charts
+let chartInstances={};
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+
+function buildDateList(days){
+  const today=new Date(), list=[];
+  for(let i=days-1;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);list.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);}
+  return list;
+}
+
+function renderTrendChart(canvasId, metric, days, mode){
+  destroyChart(canvasId);
+  const dateList=buildDateList(days);
+  let datasets;
+  if(mode==="total"){
+    const data=dateList.map(d=>records.filter(r=>r.date===d).reduce((s,r)=>s+(r[metric]||0),0));
+    const isAmt=AMOUNT_KEYS.has(metric);
+    datasets=[{label:"全体合計",data,borderColor:CHART_COLORS[0],backgroundColor:"rgba(37,99,235,0.08)",fill:true,tension:0.3,pointRadius:3}];
+  }else{
+    const staffSet=[...new Set(records.map(r=>r.staff))];
+    datasets=staffSet.map((s,i)=>({
+      label:s,
+      data:dateList.map(d=>{const rec=records.find(r=>r.date===d&&r.staff===s);return rec?(rec[metric]||0):0;}),
+      borderColor:CHART_COLORS[i%CHART_COLORS.length],
+      backgroundColor:"transparent",tension:0.3,pointRadius:2
+    }));
+  }
+  const isAmt=AMOUNT_KEYS.has(metric);
+  chartInstances[canvasId]=new Chart(document.getElementById(canvasId),{
+    type:"line",data:{labels:dateList.map(d=>d.slice(5)),datasets},
+    options:{responsive:true,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:14}}},
+      scales:{
+        y:{beginAtZero:true,ticks:{precision:0,callback:isAmt?v=>"¥"+v.toLocaleString():v=>v}},
+        x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}
+      }
+    }
+  });
+}
+
+function renderRankChart(){
+  destroyChart("rankChart");
+  const metric=document.getElementById("rankMetricSelect").value;
+  const days=Number(document.getElementById("rankRange").value);
+  const dateList=buildDateList(days);
+  const tot={};
+  records.filter(r=>dateList.includes(r.date)).forEach(r=>{tot[r.staff]=(tot[r.staff]||0)+(r[metric]||0);});
+  const sorted=Object.entries(tot).sort((a,b)=>b[1]-a[1]);
+  const isAmt=AMOUNT_KEYS.has(metric);
+  chartInstances["rankChart"]=new Chart(document.getElementById("rankChart"),{
+    type:"bar",
+    data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:CHART_COLORS,borderRadius:6}]},
+    options:{responsive:true,indexAxis:"y",plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>isAmt?"¥"+ctx.raw.toLocaleString():ctx.raw}}},
+      scales:{x:{beginAtZero:true,ticks:{precision:0,callback:isAmt?v=>"¥"+v.toLocaleString():v=>v}}}
+    }
+  });
+}
+
+function renderAllCharts(){
+  renderTrendChart("storeTrendChart",document.getElementById("storeMetricSelect").value,Number(document.getElementById("storeRange").value),document.getElementById("storeMode").value);
+  renderTrendChart("instaTrendChart",document.getElementById("instaMetricSelect").value,Number(document.getElementById("instaRange").value),document.getElementById("instaMode").value);
+  renderTrendChart("offTrendChart",document.getElementById("offMetricSelect").value,Number(document.getElementById("offRange").value),document.getElementById("offMode").value);
+  renderRankChart();
+}
+
+let currentChartTab="store";
+function switchChartTab(tab){
+  currentChartTab=tab;
+  document.querySelectorAll(".chart-tab").forEach((el,i)=>{
+    const tabs=["store","insta","official"];
+    el.classList.toggle("active",tabs[i]===tab);
+  });
+  document.querySelectorAll(".chart-panel").forEach(el=>el.classList.remove("active"));
+  document.getElementById(`panel-${tab}`).classList.add("active");
+}
+
+// event bindings
+document.getElementById("staffNameBadge").addEventListener("click",()=>openNameModal(false));
+document.getElementById("nameModalCancelBtn").addEventListener("click",closeNameModal);
+document.getElementById("nameModalSaveBtn").addEventListener("click",()=>{
+  const v=document.getElementById("nameSelectInput").value;
+  setStaffName(v); updateStaffBadge(); closeNameModal();
+});
+document.getElementById("submitBtn").addEventListener("click",saveTodayEntry);
+document.getElementById("refreshBtn").addEventListener("click",async()=>{
+  await loadRecords(); renderToday(); renderAllCharts();
+});
+document.getElementById("inputDate").addEventListener("change",renderToday);
+["storeMetricSelect","storeRange","storeMode"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",()=>renderTrendChart("storeTrendChart",document.getElementById("storeMetricSelect").value,Number(document.getElementById("storeRange").value),document.getElementById("storeMode").value));
+});
+["instaMetricSelect","instaRange","instaMode"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",()=>renderTrendChart("instaTrendChart",document.getElementById("instaMetricSelect").value,Number(document.getElementById("instaRange").value),document.getElementById("instaMode").value));
+});
+["offMetricSelect","offRange","offMode"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",()=>renderTrendChart("offTrendChart",document.getElementById("offMetricSelect").value,Number(document.getElementById("offRange").value),document.getElementById("offMode").value));
+});
+["rankMetricSelect","rankRange"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",renderRankChart);
+});
+
+(async function init(){
+  document.getElementById("todayLabel").textContent="本日："+new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
+  document.getElementById("inputDate").value=todayStr();
+  updateStaffBadge();
+  await ensureStaffModal(true);
+  await loadRecords();
+  renderToday();
+  renderAllCharts();
+})();
+</script>
+</body>
+</html>

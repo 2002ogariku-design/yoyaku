@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="取置管理">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>取り置き期限管理ツール｜渋谷店</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --panel2:#f0f2f5; --line:#e4e7ed;
+    --gold:#d97706; --gold-dim:#f59e0b; --text:#1a1a2e; --text-dim:#6b7280;
+    --danger:#dc2626; --danger-bg:#fef2f2; --warn:#d97706; --warn-bg:#fffbeb;
+    --ok:#059669; --ok-bg:#ecfdf5;
+    --accent:#2563eb; --accent-dim:#3b82f6; --accent-bg:#eff6ff;
+    --font-display:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+    --font-body:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;}
+  .wrap{max-width:1480px;margin:0 auto;padding:24px 20px 60px;}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--accent);padding-bottom:16px;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+  header .title-block{display:flex;flex-direction:column;gap:4px;}
+  header .eyebrow{font-size:11px;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;font-weight:700;}
+  header h1{margin:2px 0 0;font-size:24px;font-weight:700;letter-spacing:.02em;font-family:var(--font-display);}
+  header .sub{color:var(--text-dim);font-size:12.5px;}
+  .stat-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px;min-width:84px;text-align:center;}
+  .stat .num{font-size:19px;font-weight:700;color:var(--gold);line-height:1.1;}
+  .stat.danger .num{color:var(--danger);} .stat.warn .num{color:var(--warn);} .stat.ok .num{color:var(--ok);}
+  .stat .lbl{font-size:10.5px;color:var(--text-dim);margin-top:2px;}
+
+  .filebar{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .filebar .fname{font-size:13px;color:var(--text);}
+  .filebar .fname .label{color:var(--text-dim);font-size:11px;display:block;margin-bottom:2px;}
+  .filebar .spacer{flex:1;}
+  .btn{
+    border-radius:6px;padding:9px 16px;font-size:12.5px;cursor:pointer;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-weight:600;
+  }
+  .btn:hover{border-color:var(--gold-dim);}
+  .btn.primary{background:var(--accent);color:#fff8f0;border-color:var(--accent);}
+  .btn.primary:hover{background:#1d4ed8;}
+  .btn.danger-outline{color:var(--danger);border-color:#4a2a22;}
+  .btn.danger-outline:hover{border-color:var(--danger);}
+  input[type=file]{display:none;}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .toolbar input[type=text], .toolbar select{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;
+  }
+  .toolbar select{cursor:pointer;}
+  .toolbar input[type=text]{min-width:180px;}
+  .toolbar .spacer{flex:1;}
+  .toolbar button.tb{background:var(--panel2);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;padding:7px 12px;font-size:12.5px;cursor:pointer;}
+  .toolbar button.tb.active{color:var(--gold);border-color:var(--gold-dim);}
+  .toolbar button.tb:hover{color:var(--text);}
+
+  table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:10px;overflow:hidden;}
+  thead th{
+    text-align:left;font-size:11px;color:var(--text-dim);font-weight:600;letter-spacing:.04em;padding:10px 10px;
+    border-bottom:1px solid var(--line);background:var(--panel2);position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap;
+  }
+  thead th:hover{color:var(--text);}
+  thead th .arrow{color:var(--gold);font-size:10px;margin-left:3px;}
+  tbody tr{border-bottom:1px solid var(--line);transition:background .15s;}
+  tbody tr:hover{background:var(--panel2);}
+  tbody tr.is-done{opacity:.45;}
+  td{padding:9px 10px;vertical-align:top;}
+  .td-item{max-width:260px;}
+  .item-name{font-size:13px;color:var(--text);line-height:1.35;}
+  .item-brand{font-size:11px;color:var(--gold-dim);font-weight:600;margin-bottom:1px;}
+  .item-code{font-size:10.5px;color:var(--text-dim);font-family:monospace;}
+  .item-code-row{display:flex;align-items:center;gap:6px;}
+  .g-search-btn{
+    display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;
+    color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-dim);
+    border-radius:5px;padding:1px 6px;text-decoration:none;flex-shrink:0;white-space:nowrap;
+  }
+  .g-search-btn:hover{background:var(--accent);color:#fff;}
+  .price{font-family:monospace;font-size:12.5px;color:var(--text-dim);white-space:nowrap;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .badge.danger{background:var(--danger-bg);color:var(--danger);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.critical{background:#5a1414;color:#ffe3d6;font-weight:700;}
+
+  tbody tr.urgency-critical td:first-child{border-left:4px solid #5a1414;}
+  tbody tr.urgency-danger td:first-child{border-left:4px solid var(--danger);}
+  tbody tr.urgency-warn td:first-child{border-left:4px solid var(--warn);}
+  tbody tr.urgency-ok td:first-child{border-left:4px solid var(--ok);}
+  tbody tr.is-done td:first-child{border-left:4px solid var(--line);}
+
+  .group-header-row td{padding:0;border:none;}
+  .group-header{
+    display:flex; align-items:center; gap:8px; justify-content:space-between;
+    padding:10px 14px; margin:14px 0 8px; border-radius:8px; font-weight:700; font-size:13px;
+  }
+  .group-header.critical{background:#5a1414; color:#ffe3d6;}
+  .group-header.danger{background:var(--danger-bg); color:var(--danger);}
+  .group-header.warn{background:var(--warn-bg); color:var(--warn);}
+  .group-header.ok{background:var(--ok-bg); color:var(--ok);}
+  .group-count{font-size:11.5px; font-weight:600; opacity:.85;}
+  .deadline-cell{white-space:nowrap;}
+  .deadline-date{font-size:12.5px;}
+  .audit-note{font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.3;}
+  input.cell-input{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;
+    padding:5px 7px;font-size:12px;width:100%;min-width:150px;
+  }
+  input.cell-input::placeholder{color:#5a574e;}
+  input.cell-input.touched{border-color:var(--gold-dim);}
+  select.cell-select{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;
+    padding:5px 6px;font-size:12px;width:100%;min-width:170px;cursor:pointer;
+  }
+  select.cell-select.touched{border-color:var(--gold-dim);}
+  select.cell-select option[value=""]{color:#5a574e;}
+  .instruction-note{font-size:11.5px;line-height:1.4;padding:4px 7px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);}
+  .instruction-note.cancel{color:var(--danger);border-color:#4a2a22;}
+  .instruction-note.relist{color:var(--ok);border-color:#1f3a28;}
+  input.instruction-input{font-size:11.5px;}
+  input.instruction-input.cancel{color:var(--danger);border-color:#e3a99a;}
+  input.instruction-input.relist{color:var(--ok);border-color:#a8d4b3;}
+  .location-block{font-size:11.5px;line-height:1.55;}
+  .location-block .row{display:flex;gap:5px;}
+  .location-block .k{color:var(--text-dim);white-space:nowrap;}
+  .location-block .v{color:var(--text);font-weight:600;}
+  .location-block .v.mismatch{color:var(--warn);}
+  .staff-block{font-size:11.5px;line-height:1.55;}
+  .staff-block .row{display:flex;gap:5px;}
+  .staff-block .k{color:var(--text-dim);white-space:nowrap;}
+  .staff-block .v{color:var(--text);font-weight:600;}
+  .staff-block .v.meigi-diff{color:var(--danger);}
+  .meigi-badge{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:700;color:var(--danger);background:var(--danger-bg);border-radius:4px;padding:2px 6px;}
+  .pending-title{font-size:12px;color:var(--text-dim);margin-bottom:8px;letter-spacing:.03em;}
+  .pending-chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .pending-chip{
+    display:flex;align-items:center;gap:6px;background:var(--warn-bg);border:1px solid #e3cf8f;
+    color:var(--warn);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .pending-chip:hover{filter:brightness(0.96);}
+  .pending-chip .n{background:var(--warn);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;}
+  .pending-chip.all-done{background:var(--ok-bg);color:var(--ok);border-color:#bfe0c6;}
+  .unfilled-badge{display:inline-block;margin-top:4px;font-size:10.5px;color:var(--danger);font-weight:600;}
+  .row-save-btn{
+    background:var(--accent);color:#fff;border:none;border-radius:6px;
+    padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
+  }
+  .row-save-btn:hover{background:#1d4ed8;}
+  .row-save-btn:active{transform:scale(0.97);}
+  .saved-tick{display:inline-block;margin-top:4px;font-size:10.5px;color:var(--ok);font-weight:700;opacity:0;transition:opacity .4s;}
+  .last-updated{display:block;margin-top:4px;font-size:10px;color:var(--text-dim);}
+  .biko-row{display:flex;gap:6px;margin-top:6px;}
+  .biko-preset-select{flex:1;font-size:11px;padding:4px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);color:var(--text-dim);}
+  .clear-search-btn{
+    position:relative; margin-left:-30px; background:none; border:none; color:var(--text-dim);
+    cursor:pointer; font-size:15px; padding:6px 8px;
+  }
+  .search-wrap{display:flex; align-items:center; flex:1;}
+  .search-wrap input[type=text]{flex:1;}
+  .done-checkbox{width:16px;height:16px;cursor:pointer;accent-color:var(--gold);}
+  .staff-tag{font-size:12px;color:var(--text);}
+  .empty-state{text-align:center;padding:70px 20px;color:var(--text-dim);}
+  .empty-state .big{font-size:15px;color:var(--text);margin-bottom:8px;}
+  footer{margin-top:18px;font-size:11px;color:var(--text-dim);text-align:right;}
+  .hint{font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6;}
+@media (max-width: 760px){
+  body{font-size:15px;}
+  .wrap{padding:14px 10px 60px;}
+  header{flex-direction:column;align-items:flex-start;gap:10px;}
+  header h1{font-size:19px;}
+  header .sub{font-size:12.5px;}
+  .stat-row{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .stat{min-width:0;padding:10px 8px;}
+  .stat .num{font-size:19px;}
+  .stat .lbl{font-size:10.5px;}
+
+  .filebar{flex-direction:column;align-items:stretch;gap:10px;padding:14px;}
+  .filebar .fname{order:-1;}
+  .filebar .spacer{display:none;}
+  .filebar label.btn, .filebar button.btn{width:100%;text-align:center;padding:13px;font-size:14px;}
+
+  .toolbar{flex-direction:column;align-items:stretch;gap:8px;}
+  .toolbar input[type=text], .toolbar select, .toolbar button.tb{width:100%;padding:11px;font-size:14px;}
+  .toolbar .spacer{display:none;}
+
+  #bulkBar{flex-direction:column;align-items:stretch;}
+  #bulkBar select, #bulkBar button{width:100%;padding:11px;font-size:14px;}
+
+  .pending-title{font-size:12.5px;}
+  .pending-chips{gap:7px;}
+  .pending-chip{font-size:12px;padding:7px 12px;}
+
+  /* ---- Card layout for the item list ---- */
+  table, thead, tbody, tr{display:block;width:100%;}
+  thead{display:none;}
+  table{border-radius:0;background:transparent;border-spacing:0;}
+
+  tbody tr{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    margin-bottom:14px;padding:0;overflow:hidden;border-left-width:5px;
+  }
+  tbody tr:hover{background:var(--panel);}
+  tr.is-done{opacity:.55;}
+  tbody tr.urgency-critical{border-left-color:#5a1414;}
+  tbody tr.urgency-danger{border-left-color:var(--danger);}
+  tbody tr.urgency-warn{border-left-color:var(--warn);}
+  tbody tr.urgency-ok{border-left-color:var(--ok);}
+  tbody tr.is-done{border-left-color:var(--line);}
+  tbody tr.group-header-row{
+    background:transparent;border:none;border-left:none;margin-bottom:0;border-radius:0;overflow:visible;
+  }
+
+  td{ display:block; border:none; padding:0; }
+
+  /* top strip: checkboxes */
+  td[data-label="選択"], td[data-label="完了"]{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:10px 14px; background:var(--panel2);
+  }
+  td[data-label="選択"]{ border-bottom-right-radius:0; }
+  td[data-label="選択"]::before{ content:"選択"; font-size:11px; color:var(--text-dim); }
+  td[data-label="完了"]::before{ content:"完了"; font-size:11px; color:var(--text-dim); }
+  td[data-label="選択"] input, td[data-label="完了"] input{ width:20px; height:20px; }
+
+  /* this wraps the two checkbox cells into one visual top bar */
+  tr{ position:relative; }
+
+  td[data-label="期限"]{
+    padding:12px 14px 10px; border-top:1px solid var(--line);
+  }
+  td[data-label="期限"] .deadline-date{ font-size:15px; font-weight:700; }
+  td[data-label="期限"] .badge{ font-size:12px; padding:3px 10px; margin-top:4px; display:inline-block; }
+  td[data-label="期限"]::before{ display:none; }
+
+  td[data-label="ブランド"]{ padding:0 14px 4px; }
+  td[data-label="ブランド"]::before{ display:none; }
+  td[data-label="ブランド"] .item-brand{ font-size:13px; }
+  td[data-label="ブランド"] .item-code{ font-size:11px; }
+  .g-search-btn{ font-size:11px; padding:4px 9px; }
+
+  td[data-label="商品"]{ padding:0 14px 12px; border-bottom:1px solid var(--line); }
+  td[data-label="商品"]::before{ display:none; }
+  td[data-label="商品"] .item-name{ font-size:15.5px; line-height:1.4; }
+
+  td[data-label="売価"], td[data-label="担当者"], td[data-label="在庫・返送先"]{
+    display:inline-block; vertical-align:top; width:50%; box-sizing:border-box;
+    padding:10px 14px; border-bottom:1px solid var(--line);
+  }
+  td[data-label="売価"]{ width:100%; border-bottom:1px solid var(--line); }
+  td[data-label="売価"]::before, td[data-label="担当者"]::before, td[data-label="在庫・返送先"]::before{
+    content:attr(data-label); display:block; font-size:10.5px; color:var(--text-dim); font-weight:700; margin-bottom:4px;
+  }
+  td[data-label="売価"] .price{ font-size:16px; }
+
+  td[data-label="本部指示"], td[data-label="確認"], td[data-label="備考"]{
+    display:block; padding:12px 14px; border-bottom:1px solid var(--line);
+  }
+  tr td[data-label="備考"]{ border-bottom:none; }
+  td[data-label="保存"]{ display:block; padding:12px 14px; border-top:1px solid var(--line); }
+  td[data-label="保存"]::before{ display:none; }
+  .row-save-btn{ width:100%; padding:12px; font-size:14px; }
+  td[data-label="本部指示"]::before, td[data-label="確認"]::before, td[data-label="備考"]::before{
+    content:attr(data-label); display:block; font-size:11px; color:var(--gold-dim); font-weight:700; margin-bottom:6px;
+  }
+
+  .cell-input, select.cell-select, input.instruction-input{
+    width:100%; box-sizing:border-box; font-size:16px; padding:10px 12px; min-width:0;
+  }
+  .unfilled-badge{ margin-top:6px; }
+  .location-block, .staff-block{ font-size:13px; }
+
+  .price{text-align:right;}
+
+  /* ---- collapsible sections ---- */
+  .section-toggle{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;
+    padding:13px 16px; background:var(--panel2); border:1.5px solid var(--line); border-radius:10px;
+    font-size:13.5px; font-weight:700; color:var(--text-dim); margin-bottom:8px;
+    transition:background .15s, border-color .15s, color .15s;
+  }
+  .section-toggle:hover{border-color:var(--accent-dim);}
+  .section-toggle.open{
+    background:var(--panel); border-color:var(--accent); color:var(--text);
+    border-bottom-left-radius:0; border-bottom-right-radius:0; margin-bottom:0;
+  }
+  .section-toggle .chev{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:11px; font-weight:700; letter-spacing:.04em; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:3px 10px;
+  }
+  .section-toggle .chev .arrow-ico{font-size:13px; transition:transform .2s; display:inline-block;}
+  .section-toggle.open .chev{ color:var(--accent); border-color:var(--accent-dim); }
+  .section-toggle.open .chev .arrow-ico{transform:rotate(180deg);}
+  .collapsible-body{display:none;}
+  .collapsible-body.open{
+    display:block; border:1.5px solid var(--accent); border-top:none;
+    border-radius:0 0 10px 10px; padding:14px; margin-bottom:14px; background:var(--panel);
+  }
+
+  .filebar{ margin-top:0; }
+  #pendingPanel{ padding:14px; }
+
+  /* sticky bottom action bar, mobile only */
+  #mobileActionBar{ display:none; }
+}
+
+@media (min-width: 761px){
+  #mobileActionBar{ display:none !important; }
+}
+
+@media (max-width: 760px){
+  body{ padding-bottom:74px; } /* room for sticky bottom bar */
+  #mobileActionBar{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:40;
+    background:var(--panel); border-top:1px solid var(--line);
+    padding:10px 12px; gap:8px; box-shadow:0 -4px 16px rgba(0,0,0,0.25);
+  }
+  #mobileActionBar button{
+    flex:1; border:none; border-radius:8px; padding:12px 6px; font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  #mobileActionBar .ma-upload{ background:var(--panel2); color:var(--text); }
+  #mobileActionBar .ma-export{ background:var(--accent); color:#fff; }
+  #mobileActionBar .ma-menu{ background:var(--panel2); color:var(--text-dim); flex:0 0 50px; }
+}
+
+</style>
+</head>
+<body>
+<div id="nameModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:60;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1.5px solid var(--accent);border-radius:12px;padding:22px;max-width:360px;width:90%;">
+    <div style="font-size:15px;font-weight:700;font-family:var(--font-display);margin-bottom:12px;">あなたの名前を選んでください</div>
+    <select id="nameSelectInput" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:14px;"></select>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" id="nameModalCancelBtn">キャンセル</button>
+      <button class="btn primary" id="nameModalSaveBtn">決定</button>
+    </div>
+  </div>
+</div>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <div class="eyebrow">RINKAN 渋谷店</div>
+      <h1>取り置き期限管理ツール</h1>
+      <div class="sub" id="todayLabel">本日：—</div>
+      <div class="sub" id="syncIndicator" style="color:var(--ok);opacity:0;transition:opacity .4s;font-size:11px;"></div>
+    </div>
+    <div class="stat-row" id="statRow"></div>
+    <button id="staffNameBadge" class="tb" style="align-self:flex-start;">👤 名前を設定</button>
+  </header>
+
+  <div class="section-toggle" id="fileToggle">
+    <span>📂 ファイル操作・<span id="fileNameLabelShort">未読み込み</span></span>
+    <span class="chev"><span class="chev-label">開く</span><span class="arrow-ico">▾</span></span>
+  </div>
+  <div class="collapsible-body" id="fileBody">
+    <div class="filebar">
+      <div class="fname">
+        <span class="label">読み込み中のファイル</span>
+        <span id="fileNameLabel">—</span>
+      </div>
+      <div class="spacer"></div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">
+      <label class="btn" for="fileInput" id="uploadBtn" style="display:inline-block;">今週のファイルを読み込む</label>
+      <button class="btn primary" id="exportBtn">提出用Excelを書き出す</button>
+      <button class="btn danger-outline" id="clearBtn">完了：ファイルを削除して次週に備える</button>
+      <button class="btn" id="historyBtn">🕘 変更履歴・元に戻す</button>
+      <button class="btn primary" id="ecCopyBtn">📋 再出品リストをコピー</button>
+    </div>
+  </div>
+
+  <div id="errorBanner" style="display:none;background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.6;"></div>
+
+  <div class="section-toggle" id="pendingToggle">
+    <span>👥 担当者別の未入力件数</span>
+    <span class="chev"><span class="chev-label">開く</span><span class="arrow-ico">▾</span></span>
+  </div>
+  <div class="collapsible-body" id="pendingBody">
+    <div id="pendingPanel" style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:18px;"></div>
+  </div>
+
+  <div id="mainArea">
+    <div class="toolbar" style="margin-bottom:8px;">
+      <div class="search-wrap">
+        <input type="text" id="searchInput" placeholder="🔍 ブランド・品名・品番・担当者で検索">
+        <button type="button" class="clear-search-btn" id="clearSearchBtn" title="検索をクリア">✕</button>
+      </div>
+    </div>
+
+    <div class="section-toggle" id="filterToggle">
+      <span>⚙️ 絞り込み・並び替え</span>
+      <span class="chev"><span class="chev-label">開く</span><span class="arrow-ico">▾</span></span>
+    </div>
+    <div class="collapsible-body" id="filterBody">
+      <div class="toolbar">
+        <select id="brandFilter"><option value="">ブランド：すべて</option></select>
+        <select id="staffFilter"><option value="">担当：すべて</option></select>
+        <button class="tb" id="hideDoneBtn">入力済みを隠す</button>
+        <button class="tb" id="onlyPendingBtn">未入力のみ表示</button>
+        <button class="tb" id="onlyMeigiBtn">⚠️ 名義違いのみ</button>
+        <button class="tb" id="selectAllToolbarBtn">表示中を全選択</button>
+        <button class="tb" id="pinMineBtn">⭐ 自分の担当を上に固定</button>
+        <div class="spacer"></div>
+      </div>
+    </div>
+
+    <div id="bulkBar" style="display:none;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--gold-dim);border-radius:8px;padding:8px 12px;margin-bottom:10px;">
+      <span id="bulkCount" style="font-size:12.5px;color:var(--text);font-weight:600;"></span>
+      <select id="bulkKakuninSelect" class="cell-select" style="max-width:220px;"></select>
+      <button class="btn" id="bulkApplyBtn" style="padding:6px 12px;font-size:12px;">選択した行に一括設定</button>
+      <button class="btn" id="bulkClearBtn" style="padding:6px 12px;font-size:12px;">選択解除</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px;"><input type="checkbox" id="selectAllCheckbox"></th>
+          <th data-key="done" style="width:34px;">✓</th>
+          <th data-key="deadline">期限<span class="arrow" id="arrow-deadline"></span></th>
+          <th data-key="brand">ブランド<span class="arrow" id="arrow-brand"></span></th>
+          <th data-key="item">商品<span class="arrow" id="arrow-item"></span></th>
+          <th data-key="price">売価<span class="arrow" id="arrow-price"></span></th>
+          <th data-key="staff">担当者<span class="arrow" id="arrow-staff"></span></th>
+          <th style="width:140px;">在庫・返送先</th>
+          <th style="width:160px;">本部指示</th>
+          <th style="width:185px;">確認</th>
+          <th style="width:190px;">備考</th>
+          <th style="width:70px;">保存</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none;">条件に一致するアイテムがありません</div>
+  </div>
+
+  <div class="hint">
+    「確認」「備考」「完了」の入力内容は店舗共有のデータベースに自動保存され、他のスタッフの画面にも数秒〜十数秒ほどで反映されます。<b>今週のExcelファイルは1人がアップロードすれば、他の全員の画面に自動で読み込まれます</b>（毎週誰か1人がアップロードするだけでOK）。入力が終わったら「提出用Excelを書き出す」を押すと提出用ファイルをダウンロードできます。提出が済んだら「完了：ファイルを削除して次週に備える」を押すと全員の画面がリセットされます。
+  </div>
+
+  <footer id="footerNote"></footer>
+</div>
+
+<div id="mobileActionBar">
+  <button class="ma-upload" id="maUploadBtn">📂 読込</button>
+  <button class="ma-export" id="maExportBtn">📤 書き出す</button>
+  <button class="ma-menu" id="maMenuBtn">⋯</button>
+</div>
+
+<div id="historyModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:60;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1.5px solid var(--accent);border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:15px;font-weight:700;font-family:var(--font-display);">変更履歴</div>
+      <button class="btn" id="historyCloseBtn" style="padding:5px 10px;font-size:12px;">閉じる</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-dim);margin-bottom:12px;line-height:1.6;">
+      過去の保存内容の一覧です。選ぶと、その時点の「確認・備考・本部指示・完了」の状態にまとめて戻せます（やり直しはできません。慎重に選んでください）。
+    </div>
+    <div id="historyList" style="font-size:12.5px;"></div>
+  </div>
+</div>
+
+<div id="ecModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:60;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1.5px solid var(--accent);border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:82vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:15px;font-weight:700;font-family:var(--font-display);">再出品リスト（EC出品依頼用）</div>
+      <button class="btn" id="ecCloseBtn" style="padding:5px 10px;font-size:12px;">閉じる</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-dim);line-height:1.6;">
+      「確認」が「出品依頼済み」になっている商品の品番を、EC出品依頼チャットにそのまま貼れる形式にまとめました。下のEC期限は分かれば入力してください（空欄でもコピーできます）。
+    </div>
+    <label style="font-size:12px;color:var(--text);">EC期限（任意）
+      <input type="text" id="ecDeadlineInput" placeholder="例：2026年6月22日" style="width:100%;margin-top:4px;padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);">
+    </label>
+    <textarea id="ecTextarea" readonly style="width:100%;height:220px;font-family:monospace;font-size:13px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:10px;resize:vertical;"></textarea>
+    <button class="btn primary" id="ecCopyConfirmBtn" style="align-self:flex-end;">コピーする</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_WORKBOOK = "tk-workbook-b64";
+const STORAGE_FILENAME = "tk-filename";
+const STORAGE_EDITS = "tk-edits"; // {id: {確認, 備考, done}}
+
+let workbook = null;
+let sheetName = null;
+let headerRowIdx = null;     // 0-indexed row of header
+let colMap = {};             // header label -> column index (0-indexed)
+let items = [];              // parsed rows
+let edits = {};              // id -> {確認, 備考, done}
+let sortKey = "deadline";
+let sortDir = 1;
+let hideDone = false;
+let onlyPending = false;
+let selectedIds = new Set();
+let pinMine = false;
+let onlyMeigi = false;
+
+function isMeigi(it){
+  if(!it.初回担当 || !it.現担当) return false;
+  // strip store prefixes (e.g. "渋谷山本" vs "山本") and compare
+  const strip = s => s.replace(/渋谷|新宿|心斎橋|銀座|池袋/g,"").trim();
+  return strip(it.初回担当) !== strip(it.現担当);
+}
+const STORAGE_STAFFNAME = "tk-staffname";
+const STORAGE_LAST_STAFF_FILTER = "tk-last-staff-filter";
+
+const STAFF_ROSTER = [
+  "福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江",
+  "小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介",
+  "佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"
+];
+
+function getStaffName(){
+  try{ return localStorage.getItem(STORAGE_STAFFNAME) || ""; }catch(e){ return ""; }
+}
+function setStaffName(name){
+  try{ localStorage.setItem(STORAGE_STAFFNAME, name); }catch(e){ /* ignore */ }
+}
+function openNameModal(force){
+  const sel = document.getElementById("nameSelectInput");
+  sel.innerHTML = STAFF_ROSTER.map(n => `<option value="${n}">${n}</option>`).join("");
+  const current = getStaffName();
+  if(current && STAFF_ROSTER.includes(current)) sel.value = current;
+  document.getElementById("nameModalCancelBtn").style.display = force ? "none" : "inline-block";
+  document.getElementById("nameModalOverlay").style.display = "flex";
+}
+function closeNameModal(){
+  document.getElementById("nameModalOverlay").style.display = "none";
+}
+function ensureStaffNameModal(force){
+  return new Promise(resolve=>{
+    if(getStaffName() && !force){ resolve(getStaffName()); return; }
+    openNameModal(force);
+    const saveBtn = document.getElementById("nameModalSaveBtn");
+    const handler = ()=>{
+      const sel = document.getElementById("nameSelectInput");
+      setStaffName(sel.value);
+      updateStaffNameBadge();
+      closeNameModal();
+      document.getElementById("nameModalCancelBtn").style.display = "inline-block";
+      saveBtn.removeEventListener("click", handler);
+      resolve(sel.value);
+    };
+    saveBtn.addEventListener("click", handler);
+  });
+}
+function ensureStaffName(){
+  // kept for backward-compat call sites; returns current name without blocking
+  return getStaffName();
+}
+function updateStaffNameBadge(){
+  const el = document.getElementById("staffNameBadge");
+  if(!el) return;
+  const name = getStaffName();
+  el.textContent = name ? `👤 ${name}` : "👤 名前を設定";
+}
+
+function todayJST(){ const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function parseDate(s){ if(!s) return null; const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) return null; return new Date(+m[1], +m[2]-1, +m[3]); }
+function daysBetween(a,b){ return Math.round((a-b)/(1000*60*60*24)); }
+function urgencyOf(deadline){
+  const today = todayJST(); const d = parseDate(deadline);
+  if(!d) return {level:"ok", days:0};
+  const diff = daysBetween(today, d);
+  if(diff > 14) return {level:"critical", days:diff};
+  if(diff > 0) return {level:"danger", days:diff};
+  if(diff >= -3) return {level:"warn", days:diff};
+  return {level:"ok", days:diff};
+}
+const GROUP_DEFS = {
+  critical: {emoji:"🔥", label:"重大な期限超過（15日以上）"},
+  danger:   {emoji:"🔴", label:"期限超過"},
+  warn:     {emoji:"🟡", label:"期限間近（3日以内）"},
+  ok:       {emoji:"🟢", label:"余裕あり"}
+};
+function groupKeyOf(it){
+  return urgencyOf(it.期限).level;
+}
+function fmtYen(n){ if(n==null||n==="") return "-"; const num = Number(n); if(isNaN(num)) return String(n); return "¥" + num.toLocaleString("ja-JP"); }
+function cleanText(s){ if(s==null) return ""; return String(s).replace(/_x000D_\n?/g,"").trim(); }
+function excelDateToYMD(v){
+  if(v==null || v==="") return "";
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v === "number"){
+    const d = XLSX.SSF.parse_date_code(v);
+    if(!d) return "";
+    return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+  }
+  const s = String(v);
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[0] : s;
+}
+
+const GH_OWNER = "2002ogariku-design";
+const GH_REPO = "yoyaku";
+const GH_PATH = "shibuya-tk/data.json";
+const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+const WB_GH_PATH = "shibuya-tk/wb.json";
+const WB_GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${WB_GH_PATH}`;
+let wbGhSha = null;
+let sharedWbVersion = 0; // version seen from the shared store
+
+async function fetchSharedWorkbook(){
+  const token = getGhToken();
+  if(!token) return null;
+  try{
+    const res = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
+      headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
+    });
+    if(res.status === 404){ wbGhSha = null; return null; }
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    wbGhSha = data.sha;
+    return JSON.parse(b64ToUtf8(data.content));
+  }catch(e){ console.error("fetchSharedWorkbook failed", e); return null; }
+}
+
+async function saveSharedWorkbook(b64, filename){
+  const token = getGhToken();
+  if(!token) throw new Error("アクセスキーが未設定です");
+  try{
+    const head = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
+      headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
+    });
+    if(head.ok){ wbGhSha = (await head.json()).sha; }
+    else if(head.status === 404){ wbGhSha = null; }
+  }catch(e){}
+  const version = Date.now();
+  const body = {
+    message: "update workbook " + new Date().toISOString(),
+    content: utf8ToB64(JSON.stringify({b64, filename, version}))
+  };
+  if(wbGhSha) body.sha = wbGhSha;
+  const res = await fetch(WB_GH_API, {
+    method:"PUT",
+    headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error("ファイルの共有保存に失敗しました（HTTP " + res.status + "）");
+  const d = await res.json();
+  wbGhSha = d.content.sha;
+  sharedWbVersion = version;
+  return version;
+}
+const GH_TOKEN_KEY = "tk-gh-token";
+
+function getGhToken(){
+  let t = null;
+  try{ t = localStorage.getItem(GH_TOKEN_KEY); }catch(e){ /* ignore */ }
+  if(!t){
+    t = window.prompt("共有用のアクセスキーを入力してください（担当者から共有された文字列。この端末にのみ保存され、コードには残りません）");
+    if(t){
+      try{ localStorage.setItem(GH_TOKEN_KEY, t.trim()); }catch(e){ /* ignore */ }
+      t = t.trim();
+    }
+  }
+  return t;
+}
+
+function utf8ToB64(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64ToUtf8(b64){
+  return decodeURIComponent(escape(atob(b64.replace(/\n/g,""))));
+}
+
+const localStore = {
+  get(key){
+    try{ const v = localStorage.getItem(key); return v == null ? null : {value:v}; }
+    catch(e){ return null; }
+  },
+  set(key, value){
+    try{ localStorage.setItem(key, value); }catch(e){ console.error(e); }
+  },
+  delete(key){
+    try{ localStorage.removeItem(key); }catch(e){ /* ignore */ }
+  }
+};
+
+// Shared storage backed by a single JSON file in a GitHub repo (via the Contents API).
+// All keys map to the same file; we only ever store the "edits" blob this way.
+let ghLastSha = null;
+
+const sharedStore = {
+  async get(key){
+    const token = getGhToken();
+    if(!token) return null;
+    try{
+      const res = await fetch(`${GH_API}?ts=${Date.now()}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github+json"
+        }
+      });
+      if(res.status === 401){
+        try{ localStorage.removeItem(GH_TOKEN_KEY); }catch(e){}
+        showError("共有アクセスキーが正しくありません。ページを再読み込みして、もう一度入力してください。");
+        return null;
+      }
+      if(res.status === 404){ ghLastSha = null; return null; }
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      ghLastSha = data.sha;
+      return {value: b64ToUtf8(data.content)};
+    }catch(e){
+      console.error("github get failed", e);
+      return null;
+    }
+  },
+  async set(key, value){
+    const token = getGhToken();
+    if(!token) throw new Error("共有アクセスキーが入力されていません。");
+
+    const MAX_RETRIES = 3;
+    for(let attempt = 0; attempt < MAX_RETRIES; attempt++){
+      // refresh sha right before writing to minimize lost-update races
+      try{
+        const head = await fetch(`${GH_API}?ts=${Date.now()}`, {
+          headers: {"Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json"}
+        });
+        if(head.ok){ const hd = await head.json(); ghLastSha = hd.sha; }
+        else if(head.status === 404){ ghLastSha = null; }
+      }catch(e){ /* fall through with whatever sha we last had */ }
+
+      const body = {
+        message: "update edits " + new Date().toISOString(),
+        content: utf8ToB64(value)
+      };
+      if(ghLastSha) body.sha = ghLastSha;
+      const res = await fetch(GH_API, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      if(res.ok){
+        const data = await res.json();
+        ghLastSha = data.content.sha;
+        return;
+      }
+      if(res.status === 409 && attempt < MAX_RETRIES - 1){
+        // someone else saved at the same moment; retry with a fresh sha
+        await new Promise(r => setTimeout(r, 300 + attempt * 300));
+        continue;
+      }
+      const errText = await res.text().catch(()=> "");
+      throw new Error(`共有データベース（GitHub）への保存に失敗しました（HTTP ${res.status}）${errText}`);
+    }
+  },
+  async delete(key){
+    const token = getGhToken();
+    if(!token) return;
+    try{
+      const head = await fetch(`${GH_API}?ts=${Date.now()}`, {
+        headers: {"Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json"}
+      });
+      if(!head.ok) return;
+      const hd = await head.json();
+      await fetch(GH_API, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({message: "reset edits", sha: hd.sha})
+      });
+      ghLastSha = null;
+    }catch(e){ /* ignore */ }
+  }
+};
+
+let lastEditsSerialized = "";
+let focusedField = null; // `${id}:${field}` currently being typed into, to avoid clobbering during poll merge
+let pendingSyncFlash = false;
+
+async function loadFromStorage(){
+  try{
+    // 1. First check GitHub for the current shared workbook
+    const shared = await fetchSharedWorkbook().catch(()=>null);
+    if(shared && shared.b64 && shared.version){
+      // GitHub has a file — use it (it's always the authoritative source)
+      parseWorkbookFromB64(shared.b64, shared.filename || "共有ファイル");
+      localStore.set(STORAGE_WORKBOOK, shared.b64);
+      localStore.set(STORAGE_FILENAME, shared.filename || "");
+      sharedWbVersion = shared.version;
+    } else {
+      // No shared file yet — check local cache as fallback
+      const wbRes = localStore.get(STORAGE_WORKBOOK);
+      const fnRes = localStore.get(STORAGE_FILENAME);
+      if(wbRes && wbRes.value){
+        parseWorkbookFromB64(wbRes.value, fnRes && fnRes.value ? fnRes.value : "読み込み済みファイル");
+      }
+      // else: leave empty — user will upload the file
+    }
+  }catch(e){
+    console.error(e);
+    showError("ファイルの読み込みに失敗しました：" + (e && e.message ? e.message : e));
+  }
+  try{
+    const editRes = await sharedStore.get(STORAGE_EDITS);
+    const raw = (editRes && editRes.value) ? editRes.value : "{}";
+    edits = JSON.parse(raw);
+    lastEditsSerialized = raw;
+  }catch(e){ console.error(e); edits = {}; }
+}
+
+async function persistWorkbook(b64, filename){
+  localStore.set(STORAGE_WORKBOOK, b64);
+  localStore.set(STORAGE_FILENAME, filename);
+  // Also push to shared store so everyone else gets it automatically
+  try{
+    const version = await saveSharedWorkbook(b64, filename);
+    flashSyncIndicator("📂 ファイルを全員に共有しました");
+  }catch(e){
+    console.error(e);
+    showError("⚠️ ファイルの共有保存に失敗しました（自分の画面では読み込まれています）：" + (e && e.message ? e.message : e));
+  }
+}
+async function persistEdits(){
+  try{
+    const raw = JSON.stringify({...edits, _wbVersion: sharedWbVersion || 0});
+    await sharedStore.set(STORAGE_EDITS, raw);
+    lastEditsSerialized = raw;
+    return true;
+  }catch(e){ console.error(e); showError("保存に失敗しました：" + (e && e.message ? e.message : e)); return false; }
+}
+
+function stampEdit(id){
+  const name = getStaffName() || "名前未設定";
+  if(!edits[id]) edits[id] = {確認:"", 備考:"", 本部指示:"", done:false};
+  edits[id].lastBy = name;
+  edits[id].lastAt = new Date().toISOString();
+}
+
+function showSavedTick(el){
+  if(!el) return;
+  let tick = el.parentElement.querySelector(".saved-tick");
+  if(!tick){
+    tick = document.createElement("span");
+    tick.className = "saved-tick";
+    el.parentElement.appendChild(tick);
+  }
+  tick.textContent = "✓ 保存済み";
+  tick.style.opacity = "1";
+  clearTimeout(tick.__fade);
+  tick.__fade = setTimeout(()=>{ tick.style.opacity = "0"; }, 2200);
+}
+
+function lastUpdatedLabel(ed){
+  if(!ed || !ed.lastBy || !ed.lastAt) return "";
+  const d = new Date(ed.lastAt);
+  const dateStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return `最終更新: ${escapeHtml(ed.lastBy)} ${dateStr}`;
+}
+
+// Poll the shared database periodically so everyone's 確認・備考 converge, like a slow-motion shared sheet.
+async function pollSharedUpdates(){
+  // Always check if someone uploaded a new file — compare SHA cheaply using HEAD-like check
+  try{
+    const token = getGhToken();
+    if(token){
+      const wbMeta = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
+        headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
+      });
+      if(wbMeta.ok){
+        const meta = await wbMeta.json();
+        if(meta.sha && meta.sha !== wbGhSha){
+          // File changed — download and apply
+          wbGhSha = meta.sha;
+          const shared = JSON.parse(b64ToUtf8(meta.content));
+          if(shared && shared.b64 && shared.version && shared.version !== sharedWbVersion){
+            sharedWbVersion = shared.version;
+            const fname = shared.filename || "共有ファイル";
+            parseWorkbookFromB64(shared.b64, fname);
+            localStore.set(STORAGE_WORKBOOK, shared.b64);
+            localStore.set(STORAGE_FILENAME, fname);
+            // Also refresh edits for the new file
+            try{
+              const editRes = await sharedStore.get(STORAGE_EDITS);
+              if(editRes && editRes.value){
+                edits = JSON.parse(editRes.value);
+                lastEditsSerialized = editRes.value;
+              }
+            }catch(e){}
+            populateFilters();
+            render();
+            flashSyncIndicator(`📂 ${fname} を自動で読み込みました`);
+            return; // skip further polling this cycle
+          }
+        }
+      }
+    }
+  }catch(e){ console.error("wb poll error", e); }
+
+  try{
+    const editRes = await sharedStore.get(STORAGE_EDITS);
+    const raw = (editRes && editRes.value) ? editRes.value : null;
+    if(raw && raw !== lastEditsSerialized){
+      const remote = JSON.parse(raw);
+      for(const id of Object.keys(remote)){
+        if(id.startsWith("_")) continue;
+        if(!edits[id]){
+          edits[id] = remote[id]; // brand new entry from someone else
+        } else {
+          for(const field of Object.keys(remote[id])){
+            if(field === focusedField) continue; // actively typing here
+            const localVal = edits[id][field];
+            const remoteVal = remote[id][field];
+            // Only take remote value if local is empty/false/0
+            // This prevents poll from overwriting what the user just typed
+            const localEmpty = localVal === "" || localVal === false || localVal === 0 || localVal == null;
+            if(localEmpty) edits[id][field] = remoteVal;
+          }
+        }
+      }
+      lastEditsSerialized = raw;
+      if(!focusedField){ render(); flashSyncIndicator(); }
+      else { pendingSyncFlash = true; }
+    }
+  }catch(e){
+    console.error("poll error", e);
+  }
+}
+function flashSyncIndicator(msg){
+  const el = document.getElementById("syncIndicator");
+  if(!el) return;
+  el.textContent = msg ? `${msg}（${new Date().toLocaleTimeString("ja-JP")}）` : "他のスタッフの更新を反映しました（" + new Date().toLocaleTimeString("ja-JP") + "）";
+  el.style.opacity = "1";
+  clearTimeout(window.__syncFade);
+  window.__syncFade = setTimeout(()=>{ el.style.opacity = "0"; }, 4000);
+}
+
+function b64ToArrayBuffer(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+function arrayBufferToB64(buf){
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+let rawWorkbookB64 = null;
+
+function parseWorkbookFromB64(b64, filename){
+  rawWorkbookB64 = b64;
+  const bytes = b64ToArrayBuffer(b64);
+  workbook = XLSX.read(bytes, {type:"array", cellDates:false});
+  sheetName = workbook.SheetNames[0];
+  document.getElementById("fileNameLabel").textContent = filename;
+  buildItemsFromSheet();
+}
+
+function buildItemsFromSheet(){
+  const ws = workbook.Sheets[sheetName];
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  headerRowIdx = null;
+  colMap = {};
+
+  for(let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 30); r++){
+    let rowVals = [];
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      rowVals.push(cell ? cell.v : null);
+    }
+    if(rowVals.includes("品番ハイフン有") && rowVals.includes("ブランド")){
+      headerRowIdx = r;
+      rowVals.forEach((v,c)=>{ if(v!=null) colMap[String(v).trim()] = range.s.c + c; });
+      break;
+    }
+  }
+
+  items = [];
+  if(headerRowIdx == null){
+    return;
+  }
+  for(let r = headerRowIdx + 1; r <= range.e.r; r++){
+    const codeCol = colMap["品番ハイフン有"];
+    const codeCell = ws[XLSX.utils.encode_cell({r, c: codeCol})];
+    if(!codeCell || !codeCell.v) continue;
+    const get = (label) => {
+      const c = colMap[label];
+      if(c==null) return null;
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      return cell ? cell.v : null;
+    };
+    const id = String(get("品番ハイフン有")).trim();
+    items.push({
+      id,
+      row: r,
+      品番: get("品番ハイフン有"),
+      ブランド: get("ブランド"),
+      品名: get("品名"),
+      売価: get("売価"),
+      初回担当: cleanText(get("初回担当")),
+      現担当: cleanText(get("現担当") || get("初回担当")),
+      期限: excelDateToYMD(get("取り置き期限")),
+      前回回答: cleanText(get("前回回答")),
+      在庫監査コメント: cleanText(get("在庫監査コメント")),
+      現在庫区分: cleanText(get("現在庫区分")),
+      取り置き店舗: cleanText(get("取り置き店舗")),
+    });
+    if(!edits[id]){
+      edits[id] = {確認: cleanText(get("確認")) || "", 備考: cleanText(get("備考")) || "", 本部指示: cleanText(get("在庫監査コメント")) || "", done:false};
+    } else if(edits[id].本部指示 === undefined){
+      edits[id].本部指示 = cleanText(get("在庫監査コメント")) || "";
+    }
+  }
+}
+
+function populateFilters(){
+  const brandSel = document.getElementById("brandFilter");
+  const staffSel = document.getElementById("staffFilter");
+  brandSel.innerHTML = '<option value="">ブランド：すべて</option>';
+  staffSel.innerHTML = '<option value="">担当：すべて</option>';
+  const brands = [...new Set(items.map(i=>i.ブランド).filter(Boolean))].sort();
+  const staffs = [...new Set(items.flatMap(i=>[i.現担当, i.初回担当]).filter(Boolean))].sort();
+  for(const b of brands){ const o=document.createElement("option"); o.value=b; o.textContent=b; brandSel.appendChild(o); }
+  for(const s of staffs){ const o=document.createElement("option"); o.value=s; o.textContent=s; staffSel.appendChild(o); }
+  try{
+    const lastStaff = localStorage.getItem(STORAGE_LAST_STAFF_FILTER);
+    if(lastStaff && staffs.includes(lastStaff)) staffSel.value = lastStaff;
+  }catch(e){ /* ignore */ }
+}
+
+function getFiltered(){
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const brand = document.getElementById("brandFilter").value;
+  const staff = document.getElementById("staffFilter").value;
+  return items.filter(it=>{
+    const ed = edits[it.id] || {};
+    if(hideDone && ed.done) return false;
+    if(onlyPending && ed.確認) return false;
+    if(onlyMeigi && !isMeigi(it)) return false;
+    if(brand && it.ブランド !== brand) return false;
+    if(staff && it.現担当 !== staff && it.初回担当 !== staff) return false;
+    if(q){
+      const hay = [it.ブランド, it.品名, it.品番, it.現担当].join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sortItems(arr){
+  const myName = pinMine ? getStaffName() : "";
+  return arr.slice().sort((a,b)=>{
+    if(myName){
+      const aMine = (a.現担当||"").includes(myName) ? 0 : 1;
+      const bMine = (b.現担当||"").includes(myName) ? 0 : 1;
+      if(aMine !== bMine) return aMine - bMine;
+    }
+    let va, vb;
+    switch(sortKey){
+      case "deadline": va=a.期限||""; vb=b.期限||""; break;
+      case "brand": va=a.ブランド||""; vb=b.ブランド||""; break;
+      case "item": va=a.品名||""; vb=b.品名||""; break;
+      case "price": va=a.売価||0; vb=b.売価||0; break;
+      case "staff": va=a.現担当||""; vb=b.現担当||""; break;
+      case "done": va=(edits[a.id]||{}).done?1:0; vb=(edits[b.id]||{}).done?1:0; break;
+      default: va=""; vb="";
+    }
+    if(va<vb) return -1*sortDir;
+    if(va>vb) return 1*sortDir;
+    return 0;
+  });
+}
+
+function renderStats(){
+  const total = items.length;
+  let overdue=0, soon=0, done=0, meigi=0;
+  for(const it of items){
+    const ed = edits[it.id] || {};
+    if(ed.done){ done++; }
+    const u = urgencyOf(it.期限);
+    if(u.level==="danger" || u.level==="critical") overdue++;
+    else if(u.level==="warn") soon++;
+    if(isMeigi(it)) meigi++;
+  }
+  document.getElementById("statRow").innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">全件</div></div>
+    <div class="stat danger"><div class="num">${overdue}</div><div class="lbl">期限超過</div></div>
+    <div class="stat warn"><div class="num">${soon}</div><div class="lbl">期限間近(3日内)</div></div>
+    <div class="stat ok"><div class="num">${done}</div><div class="lbl">入力済み</div></div>
+    <div class="stat danger" style="cursor:pointer;" onclick="document.getElementById('onlyMeigiBtn').click()" title="クリックで絞り込み"><div class="num">${meigi}</div><div class="lbl">名義違い</div></div>
+  `;
+}
+function renderPendingPanel(){
+  const panel = document.getElementById("pendingPanel");
+  if(!items.length){ panel.style.display = "none"; return; }
+
+  const byStaff = {};
+  const addTo = (staff, pending) => {
+    if(!staff) return;
+    if(!byStaff[staff]) byStaff[staff] = {pending:0, total:0};
+    byStaff[staff].total++;
+    if(pending) byStaff[staff].pending++;
+  };
+  for(const it of items){
+    const ed = edits[it.id] || {};
+    const pending = !ed.確認;
+    const first = it.初回担当 || "";
+    const current = it.現担当 || "";
+    // Attribute to both the original holder and the current one (dedupe if same)
+    if(first && current && first !== current){
+      addTo(first, pending);
+      addTo(current, pending);
+    } else {
+      addTo(current || first || "担当未設定", pending);
+    }
+  }
+  const entries = Object.entries(byStaff).sort((a,b)=> b[1].pending - a[1].pending || a[0].localeCompare(b[0],"ja"));
+  const totalPending = items.filter(it => !(edits[it.id]||{}).確認).length;
+
+  panel.style.display = "block";
+  panel.innerHTML = `
+    <div class="pending-title">担当者別の確認欄 未入力件数（${totalPending}件 / 全${items.length}件中）</div>
+    <div style="font-size:10.5px;color:var(--text-dim);margin-bottom:8px;">※名義違いの商品は「初回」「現在」両方の担当者にカウントされます</div>
+    <div class="pending-chips">
+      ${entries.map(([staff, v])=>{
+        const isDone = v.pending===0;
+        return `<span class="pending-chip ${isDone?'all-done':''}" data-staff="${escapeHtml(staff)}">${escapeHtml(staff)} ${isDone ? "✓ 完了" : `<span class="n">${v.pending}</span>件未入力`}</span>`;
+      }).join("")}
+    </div>
+  `;
+  panel.querySelectorAll(".pending-chip").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      document.getElementById("staffFilter").value = chip.getAttribute("data-staff");
+      onlyPending = true;
+      document.getElementById("onlyPendingBtn").classList.add("active");
+      render();
+    });
+  });
+}
+function renderArrows(){
+  document.querySelectorAll("[id^=arrow-]").forEach(el=>el.textContent="");
+  const el = document.getElementById("arrow-"+sortKey);
+  if(el) el.textContent = sortDir===1 ? "▲" : "▼";
+}
+
+const KAKUNIN_OPTIONS = [
+  "",
+  "出品NG(理由記載ない場合は再出品)",
+  "出品依頼済み",
+  "期間延長 山内確認済",
+  "返送済"
+];
+
+const BIKO_PRESETS = [
+  "お客様に確認済み",
+  "来店予定あり",
+  "再出品依頼済み",
+  "返送手配済み",
+  "本部に確認中"
+];
+
+function escapeHtml(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderGoogleSearchLink(it){
+  const query = [it.ブランド, it.品名].filter(Boolean).join(" ");
+  if(!query) return "";
+  const url = "https://www.google.com/search?q=" + encodeURIComponent(query);
+  return `<a class="g-search-btn" href="${url}" target="_blank" rel="noopener" title="Googleでこの商品を検索">🔍G</a>`;
+}
+
+function renderLocationBlock(it){
+  const here = it.現在庫区分 || "-";
+  const target = it.取り置き店舗 || "-";
+  const mismatch = here && target && here !== target;
+  return `
+    <div class="location-block">
+      <div class="row"><span class="k">現在:</span><span class="v">${escapeHtml(here)}</span></div>
+      <div class="row"><span class="k">返送先:</span><span class="v ${mismatch?'mismatch':''}">${escapeHtml(target)}</span></div>
+    </div>
+  `;
+}
+
+function renderInstructionInput(it, ed){
+  const val = ed.本部指示 !== undefined ? ed.本部指示 : (it.在庫監査コメント || "");
+  const cls = val.includes("返送") ? "cancel" : (val.includes("出品") ? "relist" : "");
+  return `<input type="text" class="cell-input instruction-input ${cls}" data-id="${it.id}" data-field="本部指示" placeholder="本部指示を入力" value="${escapeHtml(val)}">`;
+}
+
+function renderKakuninSelect(it, ed){
+  const current = ed.確認 || "";
+  const hasCustom = current && !KAKUNIN_OPTIONS.includes(current);
+  const opts = KAKUNIN_OPTIONS.map(o=>{
+    const label = o === "" ? "未選択" : o;
+    return `<option value="${escapeHtml(o)}" ${current===o?"selected":""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  const customOpt = hasCustom ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>` : "";
+  return `<select class="cell-select ${current?'touched':''}" data-id="${it.id}" data-field="確認">${opts}${customOpt}</select>`;
+}
+
+function updateBulkBar(){
+  const bar = document.getElementById("bulkBar");
+  const count = selectedIds.size;
+  if(count === 0){
+    bar.style.display = "none";
+    return;
+  }
+  bar.style.display = "flex";
+  document.getElementById("bulkCount").textContent = `${count}件選択中`;
+}
+
+function render(){
+  document.getElementById("todayLabel").textContent = "本日：" + todayJST().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
+  const fnFull = document.getElementById("fileNameLabel").textContent || "未読み込み";
+  document.getElementById("fileNameLabelShort").textContent = fnFull.length > 18 ? fnFull.slice(0,17) + "…" : fnFull;
+  renderStats();
+  renderArrows();
+  renderPendingPanel();
+
+  document.getElementById("footerNote").textContent = items.length
+    ? `${items.length}件を読み込み中（シート: ${sheetName}）／確認・備考の入力はこのツール内に自動保存されます`
+    : "";
+
+  const emptyState = document.getElementById("emptyState");
+  const tbody = document.getElementById("tbody");
+
+  if(!items.length){
+    tbody.innerHTML = "";
+    emptyState.style.display = "block";
+    emptyState.innerHTML = `<div class="big">ファイルが読み込まれていません</div>「今週のファイルを読み込む」から取り置き期限表（.xlsx）を選択してください。`;
+    return;
+  }
+
+  const filtered = sortItems(getFiltered());
+  emptyState.style.display = filtered.length ? "none" : "block";
+  if(!filtered.length) emptyState.innerHTML = "条件に一致するアイテムがありません";
+  tbody.innerHTML = "";
+
+  const showGroups = (sortKey === "deadline");
+  let lastGroupKey = null;
+
+  for(const it of filtered){
+    const ed = edits[it.id] || {確認:"", 備考:"", done:false};
+    const u = urgencyOf(it.期限);
+
+    if(showGroups && !ed.done){
+      const gKey = groupKeyOf(it);
+      if(gKey !== lastGroupKey){
+        const groupCount = filtered.filter(x => !(edits[x.id]||{}).done && groupKeyOf(x) === gKey).length;
+        const def = GROUP_DEFS[gKey];
+        const headerTr = document.createElement("tr");
+        headerTr.className = "group-header-row";
+        headerTr.innerHTML = `<td colspan="11"><div class="group-header ${gKey}">${def.emoji} ${def.label}<span class="group-count">${groupCount}件</span></div></td>`;
+        tbody.appendChild(headerTr);
+        lastGroupKey = gKey;
+      }
+    }
+
+    let badgeHtml;
+    if(u.level==="critical") badgeHtml = `<span class="badge critical">🔥 ${u.days}日超過</span>`;
+    else if(u.level==="danger") badgeHtml = `<span class="badge danger">${u.days}日超過</span>`;
+    else if(u.level==="warn") badgeHtml = u.days===0 ? `<span class="badge warn">本日期限</span>` : `<span class="badge warn">あと${-u.days}日</span>`;
+    else badgeHtml = `<span class="badge ok">あと${-u.days}日</span>`;
+
+    const tr = document.createElement("tr");
+    tr.classList.add("urgency-" + u.level);
+    if(ed.done) tr.classList.add("is-done");
+
+    tr.innerHTML = `
+      <td data-label="選択"><input type="checkbox" class="select-checkbox" ${selectedIds.has(it.id)?"checked":""} data-id="${it.id}"></td>
+      <td data-label="完了"><input type="checkbox" class="done-checkbox" ${ed.done?"checked":""} data-id="${it.id}" data-action="done"></td>
+      <td class="deadline-cell" data-label="期限"><div class="deadline-date">${it.期限||"-"}</div>${badgeHtml}</td>
+      <td data-label="ブランド"><div class="item-brand">${it.ブランド||"-"}</div><div class="item-code-row"><span class="item-code">${it.品番||""}</span>${renderGoogleSearchLink(it)}</div></td>
+      <td class="td-item" data-label="商品">
+        <div class="item-name">${it.品名||""}</div>
+        ${it.前回回答 ? `<div class="audit-note">前回: ${it.前回回答}</div>` : ""}
+      </td>
+      <td class="price" data-label="売価">${fmtYen(it.売価)}</td>
+      <td data-label="担当者">
+        <div class="staff-block">
+          <div class="row"><span class="k">初回:</span><span class="v">${escapeHtml(it.初回担当||"-")}</span></div>
+          <div class="row"><span class="k">現在:</span><span class="v ${isMeigi(it) ? "meigi-diff" : ""}">${escapeHtml(it.現担当||"-")}</span></div>
+        </div>
+        ${isMeigi(it) ? `<div class="meigi-badge">⚠️ 名義違い</div>` : ""}
+      </td>
+      <td data-label="在庫・返送先">${renderLocationBlock(it)}</td>
+      <td data-label="本部指示">${renderInstructionInput(it, ed)}</td>
+      <td data-label="確認">${renderKakuninSelect(it, ed)}${!ed.確認 ? `<div class="unfilled-badge">未入力</div>` : ""}</td>
+      <td data-label="備考">
+        <input type="text" class="cell-input ${ed.備考?'touched':''}" data-id="${it.id}" data-field="備考" placeholder="備考を入力" value="${(ed.備考||"").replace(/"/g,'&quot;')}">
+        <div class="biko-row">
+          <select class="biko-preset-select" data-id="${it.id}">
+            <option value="">よく使う文言を挿入...</option>
+            ${BIKO_PRESETS.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("")}
+          </select>
+        </div>
+        ${lastUpdatedLabel(ed) ? `<span class="last-updated">${lastUpdatedLabel(ed)}</span>` : ""}
+      </td>
+      <td data-label="保存">
+        <button class="row-save-btn" data-id="${it.id}">保存</button>
+        <span class="row-save-tick" id="tick_${it.id}" style="display:block;font-size:10.5px;color:var(--ok);opacity:0;transition:opacity .4s;margin-top:3px;">✓</span>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  tbody.querySelectorAll(".row-save-btn").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.getAttribute("data-id");
+      if(!edits[id]) edits[id] = {確認:"", 備考:"", 本部指示:"", done:false};
+      // Read current DOM values directly — guaranteed to capture what's on screen
+      const kakuninEl = tbody.querySelector(`.cell-select[data-id="${id}"][data-field="確認"]`);
+      const bikoEl = tbody.querySelector(`.cell-input[data-id="${id}"][data-field="備考"]`);
+      const honbuEl = tbody.querySelector(`.cell-input[data-id="${id}"][data-field="本部指示"]`);
+      if(kakuninEl) edits[id].確認 = kakuninEl.value;
+      if(bikoEl) edits[id].備考 = bikoEl.value;
+      if(honbuEl) edits[id].本部指示 = honbuEl.value;
+      stampEdit(id);
+      btn.textContent = "保存中...";
+      btn.disabled = true;
+      const ok = await persistEdits();
+      btn.textContent = "保存";
+      btn.disabled = false;
+      if(ok){
+        const tick = document.getElementById(`tick_${id}`);
+        if(tick){ tick.style.opacity = "1"; clearTimeout(tick.__t); tick.__t = setTimeout(()=>{ tick.style.opacity = "0"; }, 2000); }
+        render();
+        flashSyncIndicator("保存しました");
+      }
+    });
+  });
+
+  tbody.querySelectorAll(".select-checkbox").forEach(el=>{
+    el.addEventListener("change", (e)=>{
+      const id = el.getAttribute("data-id");
+      if(e.target.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      updateBulkBar();
+    });
+  });
+  tbody.querySelectorAll('[data-action="done"]').forEach(el=>{
+    el.addEventListener("change", async (e)=>{
+      const id = el.getAttribute("data-id");
+      edits[id].done = e.target.checked;
+      stampEdit(id);
+      render();
+      const ok = await persistEdits();
+      if(ok) flashSyncIndicator("保存しました");
+    });
+  });
+  tbody.querySelectorAll(".cell-input").forEach(el=>{
+    const id = el.getAttribute("data-id");
+    const field = el.getAttribute("data-field");
+    let saveTimer = null;
+    el.addEventListener("focus", ()=>{ focusedField = `${id}:${field}`; });
+    el.addEventListener("input", (e)=>{
+      edits[id][field] = e.target.value;
+      el.classList.toggle("touched", !!e.target.value);
+      // debounce: save 600ms after typing stops
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async ()=>{
+        stampEdit(id);
+        const ok = await persistEdits();
+        if(ok) showSavedTick(el);
+      }, 600);
+    });
+    el.addEventListener("blur", async ()=>{
+      clearTimeout(saveTimer);
+      if(focusedField === `${id}:${field}`) focusedField = null;
+      stampEdit(id);
+      const ok = await persistEdits();
+      if(ok) showSavedTick(el);
+      if(!focusedField && pendingSyncFlash){ pendingSyncFlash = false; render(); flashSyncIndicator(); }
+    });
+  });
+  tbody.querySelectorAll(".cell-select").forEach(el=>{
+    const id = el.getAttribute("data-id");
+    const field = el.getAttribute("data-field");
+    el.addEventListener("focus", ()=>{ focusedField = `${id}:${field}`; });
+    el.addEventListener("blur", ()=>{
+      if(focusedField === `${id}:${field}`) focusedField = null;
+      if(!focusedField && pendingSyncFlash){ pendingSyncFlash = false; render(); flashSyncIndicator(); }
+    });
+    el.addEventListener("change", async (e)=>{
+      edits[id][field] = e.target.value;
+      el.classList.toggle("touched", !!e.target.value);
+      stampEdit(id);
+      render(); // immediately reflect the change visually
+      const ok = await persistEdits();
+      if(ok) showSavedTick(el);
+    });
+  });
+  tbody.querySelectorAll(".biko-preset-select").forEach(el=>{
+    const id = el.getAttribute("data-id");
+    el.addEventListener("change", async (e)=>{
+      const phrase = e.target.value;
+      if(!phrase){ return; }
+      const input = tbody.querySelector(`.cell-input[data-id="${id}"][data-field="備考"]`);
+      if(input){
+        const current = edits[id].備考 || "";
+        edits[id].備考 = current ? (current + " / " + phrase) : phrase;
+        input.value = edits[id].備考;
+        input.classList.add("touched");
+      }
+      stampEdit(id);
+      const ok = await persistEdits();
+      if(ok && input) showSavedTick(input);
+      e.target.value = "";
+    });
+  });
+}
+
+function showError(msg){
+  const el = document.getElementById("errorBanner");
+  el.style.display = "block";
+  el.textContent = msg;
+}
+function clearError(){
+  document.getElementById("errorBanner").style.display = "none";
+}
+
+document.getElementById("fileInput").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  clearError();
+  try{
+    const buf = await file.arrayBuffer();
+    const b64 = arrayBufferToB64(buf);
+    // refresh shared edits first so we don't clobber what other staff already entered
+    try{
+      const editRes = await sharedStore.get(STORAGE_EDITS);
+      if(editRes && editRes.value){
+        edits = JSON.parse(editRes.value);
+        lastEditsSerialized = editRes.value;
+      }
+    }catch(err){ console.error("could not refresh shared edits before parsing new file", err); }
+    parseWorkbookFromB64(b64, file.name);
+    if(!items.length){
+      showError(`「${file.name}」を読み込みましたが、商品データの行が見つかりませんでした。ヘッダー行（品番ハイフン有・ブランド等の列名）が含まれているシートか確認してください。`);
+    }
+    populateFilters();
+    render();
+    // persistWorkbook is async (saves to shared store) — run in background, don't block render
+    persistWorkbook(b64, file.name);
+  }catch(err){
+    console.error(err);
+    showError("ファイルの読み込み中にエラーが発生しました：" + (err && err.message ? err.message : err));
+  }
+  e.target.value = "";
+});
+
+function colLetter(idx0){ // 0-indexed column number -> "A","B",...
+  let n = idx0 + 1, s = "";
+  while(n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+function colLettersToIndex(letters){ // "A"->0, "B"->1, "AA"->26
+  let n = 0;
+  for(const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+function escapeXmlText(s){
+  return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+}
+
+async function resolveSheetXmlPath(zip){
+  const wbXmlText = await zip.file("xl/workbook.xml").async("string");
+  const wbDoc = new DOMParser().parseFromString(wbXmlText, "application/xml");
+  const sheetEls = Array.from(wbDoc.getElementsByTagName("sheet"));
+  let targetRid = null;
+  for(const el of sheetEls){
+    if(el.getAttribute("name") === sheetName){
+      targetRid = el.getAttribute("r:id") || el.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id");
+      break;
+    }
+  }
+  if(!targetRid && sheetEls.length){
+    targetRid = sheetEls[0].getAttribute("r:id") || sheetEls[0].getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id");
+  }
+  const relsText = await zip.file("xl/_rels/workbook.xml.rels").async("string");
+  const relsDoc = new DOMParser().parseFromString(relsText, "application/xml");
+  const relEls = Array.from(relsDoc.getElementsByTagName("Relationship"));
+  let target = null;
+  for(const el of relEls){
+    if(el.getAttribute("Id") === targetRid){
+      target = el.getAttribute("Target");
+      break;
+    }
+  }
+  if(!target) target = "worksheets/sheet1.xml";
+  target = target.replace(/^\.?\//,"");
+  return "xl/" + target;
+}
+
+const SML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+function setCellInlineString(rowEl, doc, colIdx0, text){
+  const ref = colLetter(colIdx0) + rowEl.getAttribute("r");
+  const cells = Array.from(rowEl.getElementsByTagName("c"));
+  let target = cells.find(c => c.getAttribute("r") === ref);
+  if(!target){
+    target = doc.createElementNS(SML_NS, "c");
+    target.setAttribute("r", ref);
+    let inserted = false;
+    for(const c of cells){
+      const m = c.getAttribute("r").match(/^[A-Z]+/);
+      if(m && colLettersToIndex(m[0]) > colIdx0){
+        rowEl.insertBefore(target, c);
+        inserted = true;
+        break;
+      }
+    }
+    if(!inserted) rowEl.appendChild(target);
+  } else {
+    // keep existing style attribute (s=""), clear value/content children
+    while(target.firstChild) target.removeChild(target.firstChild);
+  }
+  if(text){
+    target.removeAttribute("t");
+    target.setAttribute("t", "inlineStr");
+    const isEl = doc.createElementNS(SML_NS, "is");
+    const tEl = doc.createElementNS(SML_NS, "t");
+    tEl.setAttribute("xml:space","preserve");
+    tEl.textContent = text;
+    isEl.appendChild(tEl);
+    target.appendChild(isEl);
+  } else {
+    target.removeAttribute("t");
+  }
+}
+
+async function buildSubmissionBlob(){
+  if(!rawWorkbookB64) throw new Error("元ファイルが読み込まれていません。");
+  const bytes = b64ToArrayBuffer(rawWorkbookB64);
+  const zip = await JSZip.loadAsync(bytes);
+  const sheetPath = await resolveSheetXmlPath(zip);
+  const sheetXmlText = await zip.file(sheetPath).async("string");
+  const doc = new DOMParser().parseFromString(sheetXmlText, "application/xml");
+  if(doc.getElementsByTagName("parsererror").length){
+    throw new Error("元ファイルのシートXMLの解析に失敗しました。");
+  }
+
+  const colKakunin = colMap["確認"];
+  const colBiko = colMap["備考"];
+  const colInstruction = colMap["在庫監査コメント"];
+  const rowEls = Array.from(doc.getElementsByTagName("row"));
+  const rowByNum = {};
+  for(const r of rowEls) rowByNum[r.getAttribute("r")] = r;
+
+  let writeCount = 0, sampleRef = null, sampleText = null;
+  for(const it of items){
+    const ed = edits[it.id] || {};
+    const rowNum = String(it.row + 1); // it.row is 0-indexed
+    const rowEl = rowByNum[rowNum];
+    if(!rowEl) continue;
+    if(colKakunin != null && ed.確認){
+      setCellInlineString(rowEl, doc, colKakunin, ed.確認);
+      writeCount++;
+      if(!sampleRef){ sampleRef = colLetter(colKakunin) + rowNum; sampleText = ed.確認; }
+    } else if(colKakunin != null){
+      setCellInlineString(rowEl, doc, colKakunin, "");
+    }
+    if(colBiko != null && ed.備考){
+      setCellInlineString(rowEl, doc, colBiko, ed.備考);
+      writeCount++;
+    } else if(colBiko != null){
+      setCellInlineString(rowEl, doc, colBiko, "");
+    }
+    if(colInstruction != null && ed.本部指示 !== undefined){
+      setCellInlineString(rowEl, doc, colInstruction, ed.本部指示 || "");
+    }
+  }
+
+  const newXml = new XMLSerializer().serializeToString(doc);
+  zip.file(sheetPath, newXml);
+
+  // verify: re-parse the serialized XML and confirm the sample value is present as inline text
+  if(sampleRef){
+    const verifyDoc = new DOMParser().parseFromString(newXml, "application/xml");
+    const verifyCells = Array.from(verifyDoc.getElementsByTagName("c"));
+    const verifyCell = verifyCells.find(c => c.getAttribute("r") === sampleRef);
+    const verifyText = verifyCell ? verifyCell.textContent : null;
+    if(!verifyCell || verifyText !== sampleText){
+      throw new Error(`書き込みの確認に失敗しました（${sampleRef}セル）。お手数ですが、もう一度お試しください。`);
+    }
+  }
+
+  return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+
+document.getElementById("exportBtn").addEventListener("click", async ()=>{
+  if(!items.length){
+    alert("読み込まれているファイルがありません。先にファイルを読み込んでください。");
+    return;
+  }
+  const btn = document.getElementById("exportBtn");
+  const originalLabel = btn.textContent;
+  btn.textContent = "作成中...";
+  btn.disabled = true;
+  try{
+    const blob = await buildSubmissionBlob();
+    const origName = document.getElementById("fileNameLabel").textContent || "取り置き期限表.xlsx";
+    const outName = origName.replace(/\.xlsx?$/i,"") + "_提出用.xlsx";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = outName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }catch(err){
+    console.error(err);
+    showError("提出用ファイルの作成中にエラーが発生しました：" + (err && err.message ? err.message : err));
+  }finally{
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("clearBtn").addEventListener("click", async ()=>{
+  if(!confirm("今週のファイルと入力内容を全員の画面からリセットします。提出が完了していることを確認してください。続けますか？")) return;
+  workbook = null; sheetName = null; headerRowIdx = null; colMap = {}; items = []; edits = {}; rawWorkbookB64 = null; sharedWbVersion = 0;
+  try{
+    localStore.delete(STORAGE_WORKBOOK);
+    localStore.delete(STORAGE_FILENAME);
+    await sharedStore.delete(STORAGE_EDITS);
+    // Also delete the shared workbook file
+    const token = getGhToken();
+    if(token && wbGhSha){
+      await fetch(WB_GH_API, {
+        method:"DELETE",
+        headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
+        body: JSON.stringify({message:"clear workbook for next week", sha: wbGhSha})
+      }).catch(e=>console.error("wb delete failed", e));
+      wbGhSha = null;
+    }
+  }catch(e){ /* keys may not exist */ }
+  document.getElementById("fileNameLabel").textContent = "—";
+  populateFilters();
+  render();
+});
+
+function formatHistoryDate(iso){
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+document.getElementById("historyBtn").addEventListener("click", async ()=>{
+  const token = getGhToken();
+  if(!token) return;
+  const listEl = document.getElementById("historyList");
+  listEl.innerHTML = "読み込み中...";
+  document.getElementById("historyModalOverlay").style.display = "flex";
+  try{
+    const res = await fetch(
+      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/commits?path=${GH_PATH}&per_page=20`,
+      { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" } }
+    );
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const commits = await res.json();
+    if(!commits.length){
+      listEl.innerHTML = "<div style='color:var(--text-dim);'>履歴がまだありません。</div>";
+      return;
+    }
+    listEl.innerHTML = commits.map((c, i)=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);">
+        <span>${formatHistoryDate(c.commit.author.date)}${i===0 ? '<span style="color:var(--ok);font-weight:700;margin-left:6px;">（最新）</span>' : ""}</span>
+        <button class="btn" data-sha="${c.sha}" style="padding:5px 12px;font-size:11.5px;" ${i===0 ? "disabled" : ""}>この時点に戻す</button>
+      </div>
+    `).join("");
+    listEl.querySelectorAll("button[data-sha]").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        const sha = btn.getAttribute("data-sha");
+        if(!confirm("この時点の内容に戻します。今ある共有データはこの内容で上書きされます。よろしいですか？")) return;
+        btn.textContent = "復元中...";
+        btn.disabled = true;
+        try{
+          const fileRes = await fetch(
+            `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}?ref=${sha}`,
+            { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" } }
+          );
+          if(!fileRes.ok) throw new Error("HTTP " + fileRes.status);
+          const fileData = await fileRes.json();
+          const restoredRaw = b64ToUtf8(fileData.content);
+          await sharedStore.set(STORAGE_EDITS, restoredRaw);
+          edits = JSON.parse(restoredRaw);
+          lastEditsSerialized = restoredRaw;
+          document.getElementById("historyModalOverlay").style.display = "none";
+          render();
+          flashSyncIndicator("過去の状態に復元しました");
+        }catch(err){
+          console.error(err);
+          alert("復元に失敗しました：" + (err && err.message ? err.message : err));
+          btn.textContent = "この時点に戻す";
+          btn.disabled = false;
+        }
+      });
+    });
+  }catch(err){
+    console.error(err);
+    listEl.innerHTML = "<div style='color:var(--danger);'>履歴の取得に失敗しました：" + (err && err.message ? err.message : err) + "</div>";
+  }
+});
+document.getElementById("historyCloseBtn").addEventListener("click", ()=>{
+  document.getElementById("historyModalOverlay").style.display = "none";
+});
+
+function buildEcRelistText(){
+  const targets = items.filter(it => (edits[it.id] || {}).確認 === "出品依頼済み");
+  const codes = targets.map(it => it.品番).filter(Boolean);
+  const lines = ["【再出品】"];
+  lines.push(...codes);
+  const staffName = getStaffName();
+  lines.push(staffName ? `渋谷 ${staffName}` : "渋谷");
+  const deadline = document.getElementById("ecDeadlineInput").value.trim();
+  if(deadline){
+    lines.push("");
+    lines.push(`EC 期限 ${deadline}`);
+  }
+  return { text: lines.join("\n"), count: codes.length };
+}
+
+document.getElementById("ecCopyBtn").addEventListener("click", ()=>{
+  const { text, count } = buildEcRelistText();
+  if(count === 0){
+    alert("「確認」が「出品依頼済み」になっている商品がありません。");
+    return;
+  }
+  document.getElementById("ecTextarea").value = text;
+  document.getElementById("ecModalOverlay").style.display = "flex";
+});
+document.getElementById("ecDeadlineInput").addEventListener("input", ()=>{
+  const { text } = buildEcRelistText();
+  document.getElementById("ecTextarea").value = text;
+});
+document.getElementById("ecCloseBtn").addEventListener("click", ()=>{
+  document.getElementById("ecModalOverlay").style.display = "none";
+});
+document.getElementById("ecCopyConfirmBtn").addEventListener("click", async ()=>{
+  const ta = document.getElementById("ecTextarea");
+  ta.focus();
+  ta.select();
+  let copied = false;
+  try{ await navigator.clipboard.writeText(ta.value); copied = true; }
+  catch(e){ try{ copied = document.execCommand("copy"); }catch(e2){ copied = false; } }
+  const btn = document.getElementById("ecCopyConfirmBtn");
+  const original = btn.textContent;
+  btn.textContent = copied ? "コピーしました" : "選択済み（Ctrl+Cでコピー）";
+  setTimeout(()=>{ btn.textContent = original; }, 2000);
+});
+
+document.querySelectorAll("thead th[data-key]").forEach(th=>{
+  th.addEventListener("click", ()=>{
+    const key = th.getAttribute("data-key");
+    if(sortKey===key){ sortDir *= -1; } else { sortKey = key; sortDir = 1; }
+    render();
+  });
+});
+document.getElementById("searchInput").addEventListener("input", render);
+document.getElementById("clearSearchBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("searchInput");
+  input.value = "";
+  input.focus();
+  render();
+});
+document.getElementById("brandFilter").addEventListener("change", render);
+document.getElementById("staffFilter").addEventListener("change", (e)=>{
+  try{ localStorage.setItem(STORAGE_LAST_STAFF_FILTER, e.target.value); }catch(err){}
+  render();
+});
+document.getElementById("hideDoneBtn").addEventListener("click", (e)=>{
+  hideDone = !hideDone;
+  e.target.classList.toggle("active", hideDone);
+  render();
+});
+document.getElementById("onlyPendingBtn").addEventListener("click", (e)=>{
+  onlyPending = !onlyPending;
+  e.target.classList.toggle("active", onlyPending);
+  render();
+});
+
+document.getElementById("onlyMeigiBtn").addEventListener("click", (e)=>{
+  onlyMeigi = !onlyMeigi;
+  e.target.classList.toggle("active", onlyMeigi);
+  render();
+});
+
+document.getElementById("selectAllCheckbox").addEventListener("change", (e)=>{
+  const visibleIds = sortItems(getFiltered()).map(it=>it.id);
+  if(e.target.checked){
+    visibleIds.forEach(id=>selectedIds.add(id));
+  } else {
+    visibleIds.forEach(id=>selectedIds.delete(id));
+  }
+  render();
+  updateBulkBar();
+});
+
+document.getElementById("selectAllToolbarBtn").addEventListener("click", ()=>{
+  const visibleIds = sortItems(getFiltered()).map(it=>it.id);
+  const allSelected = visibleIds.length && visibleIds.every(id=>selectedIds.has(id));
+  if(allSelected){
+    visibleIds.forEach(id=>selectedIds.delete(id));
+  } else {
+    visibleIds.forEach(id=>selectedIds.add(id));
+  }
+  render();
+  updateBulkBar();
+});
+
+document.getElementById("pinMineBtn").addEventListener("click", async (e)=>{
+  if(!getStaffName()){
+    await ensureStaffNameModal();
+    if(!getStaffName()) return;
+  }
+  pinMine = !pinMine;
+  e.target.classList.toggle("active", pinMine);
+  render();
+});
+
+document.getElementById("bulkClearBtn").addEventListener("click", ()=>{
+  selectedIds.clear();
+  render();
+  updateBulkBar();
+});
+
+document.getElementById("bulkApplyBtn").addEventListener("click", async ()=>{
+  const value = document.getElementById("bulkKakuninSelect").value;
+  if(!value){
+    alert("適用する選択肢を選んでください。");
+    return;
+  }
+  if(!selectedIds.size) return;
+  if(!confirm(`選択中の${selectedIds.size}件の「確認」欄を「${value}」に一括設定します。よろしいですか？`)) return;
+  for(const id of selectedIds){
+    if(!edits[id]) edits[id] = {確認:"", 備考:"", 本部指示:"", done:false};
+    edits[id].確認 = value;
+  }
+  await persistEdits();
+  selectedIds.clear();
+  render();
+  updateBulkBar();
+});
+
+function setupCollapsible(toggleId, bodyId, defaultOpenDesktop){
+  const toggle = document.getElementById(toggleId);
+  const body = document.getElementById(bodyId);
+  const label = toggle.querySelector(".chev-label");
+  const isMobile = window.innerWidth <= 760;
+  const startOpen = isMobile ? false : defaultOpenDesktop;
+  function syncLabel(){ label.textContent = toggle.classList.contains("open") ? "閉じる" : "開く"; }
+  if(startOpen){ toggle.classList.add("open"); body.classList.add("open"); }
+  syncLabel();
+  toggle.addEventListener("click", ()=>{
+    toggle.classList.toggle("open");
+    body.classList.toggle("open");
+    syncLabel();
+  });
+  return {
+    open(){ toggle.classList.add("open"); body.classList.add("open"); syncLabel(); }
+  };
+}
+
+const fileSection = setupCollapsible("fileToggle", "fileBody", true);
+setupCollapsible("pendingToggle", "pendingBody", true);
+setupCollapsible("filterToggle", "filterBody", true);
+
+document.getElementById("maUploadBtn").addEventListener("click", ()=>{
+  fileSection.open();
+  document.getElementById("fileInput").click();
+  document.getElementById("fileToggle").scrollIntoView({behavior:"smooth", block:"start"});
+});
+document.getElementById("maExportBtn").addEventListener("click", ()=>{
+  document.getElementById("exportBtn").click();
+});
+document.getElementById("maMenuBtn").addEventListener("click", ()=>{
+  fileSection.open();
+  document.getElementById("fileToggle").scrollIntoView({behavior:"smooth", block:"start"});
+});
+
+document.getElementById("staffNameBadge").addEventListener("click", openNameModal);
+document.getElementById("nameModalCancelBtn").addEventListener("click", closeNameModal);
+document.getElementById("nameModalSaveBtn").addEventListener("click", ()=>{
+  const sel = document.getElementById("nameSelectInput");
+  setStaffName(sel.value);
+  updateStaffNameBadge();
+  closeNameModal();
+});
+
+(async function init(){
+  try{
+    if(typeof XLSX === "undefined"){
+      showError("Excel読み込み用ライブラリ（SheetJS）の読み込みに失敗しました。ネットワーク接続を確認し、ページを再読み込みしてください。");
+      return;
+    }
+    updateStaffNameBadge();
+    await ensureStaffNameModal(true);
+    const bulkSel = document.getElementById("bulkKakuninSelect");
+    bulkSel.innerHTML = KAKUNIN_OPTIONS.map(o=>`<option value="${escapeHtml(o)}">${o===""?"選択してください":escapeHtml(o)}</option>`).join("");
+    await loadFromStorage();
+    populateFilters();
+    render();
+    setInterval(pollSharedUpdates, 6000);
+  }catch(err){
+    console.error(err);
+    showError("初期化中にエラーが発生しました：" + (err && err.message ? err.message : err));
+  }
+})();
+</script>
+</body>
+</html>

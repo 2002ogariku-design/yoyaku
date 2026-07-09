@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>150 — ブランドテスト満点計画</title>
+<style>
+:root{
+  --bg:#0f0f11; --surface:#18181c; --surface2:#1f1f25; --line:#2a2a31;
+  --ink:#ececef; --mut:#8f8f99; --silver:#c9c9d4;
+  --acc:#4fd1b8; --acc-dim:#2b6f63; --bad:#e0654f; --gold:#d4af6a;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.6}
+body{padding-bottom:76px;max-width:720px;margin:0 auto}
+.disp{font-family:Georgia,"Times New Roman","Hiragino Mincho ProN",serif;letter-spacing:.14em}
+header{padding:22px 18px 10px}
+header h1{font-size:13px;color:var(--mut);font-weight:400;text-transform:uppercase;letter-spacing:.3em}
+header .big{font-size:34px;color:var(--silver);line-height:1.2;margin-top:2px}
+header .big b{color:var(--ink);font-weight:700}
+.chips{display:flex;gap:8px;padding:10px 18px 4px;flex-wrap:wrap}
+.chip{font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:99px;color:var(--mut)}
+.chip b{color:var(--gold);font-weight:600}
+main{padding:12px 18px}
+section{display:none}
+section.on{display:block}
+h2{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.25em;margin:22px 0 10px;font-weight:500}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+
+/* 150点ゲージ */
+.gauge{display:flex;height:34px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:8px 0 6px}
+.gseg{position:relative;background:var(--surface2)}
+.gseg+.gseg{border-left:1px solid var(--bg)}
+.gfill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(180deg,#5fe0c6,#37a892);opacity:.92;transition:width .6s ease}
+.glegend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.glegend span{font-size:11.5px;color:var(--mut)}
+.glegend b{color:var(--silver);font-weight:600}
+.score-now{font-size:13px;color:var(--mut);margin-top:6px}
+.score-now b{color:var(--acc);font-size:17px}
+
+.catrow{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)}
+.catrow:last-child{border-bottom:none}
+.catrow .nm{font-size:14px}
+.catrow .nm small{color:var(--mut);margin-left:6px}
+.catrow .st{font-size:12px;color:var(--mut);text-align:right}
+.catrow .st b{color:var(--ink)}
+.bar{height:4px;background:var(--surface2);border-radius:2px;margin-top:5px;width:120px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc)}
+.empty-note{font-size:12px;color:var(--gold)}
+
+button{font-family:inherit;font-size:14px;border:none;border-radius:11px;cursor:pointer;transition:opacity .15s}
+button:active{opacity:.7}
+.btn{background:var(--surface2);color:var(--ink);border:1px solid var(--line);padding:12px 16px;width:100%;text-align:left;margin-bottom:9px}
+.btn.primary{background:var(--acc);color:#06211c;font-weight:700;text-align:center;border:none}
+.btn.ghost{background:transparent;color:var(--mut);text-align:center}
+.btn-row{display:flex;gap:9px}
+.btn-row .btn{width:auto;flex:1;text-align:center;margin-bottom:0}
+
+/* quiz */
+.qmeta{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:10px}
+.qtext{font-size:16.5px;font-weight:600;line-height:1.65;margin-bottom:16px}
+.choice{background:var(--surface2);border:1px solid var(--line);color:var(--ink);padding:13px 14px;width:100%;text-align:left;margin-bottom:9px;border-radius:11px;font-size:14.5px;line-height:1.5}
+.choice.ok{border-color:var(--acc);background:rgba(79,209,184,.13)}
+.choice.ng{border-color:var(--bad);background:rgba(224,101,79,.12)}
+.choice:disabled{cursor:default}
+.exp{font-size:13.5px;color:var(--silver);background:var(--surface2);border-left:3px solid var(--acc);padding:10px 12px;border-radius:0 9px 9px 0;margin:6px 0 14px;display:none}
+.exp.ng{border-left-color:var(--bad)}
+.judge{font-size:15px;font-weight:700;margin:2px 0 8px;display:none}
+.judge.ok{color:var(--acc)}.judge.ng{color:var(--bad)}
+
+/* flashcard */
+.fcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;min-height:190px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px 18px;margin-bottom:12px;cursor:pointer}
+.fcard .item{font-size:17px;font-weight:600;line-height:1.6}
+.fcard .price{font-size:26px;color:var(--gold);margin-top:12px;font-weight:700;display:none}
+.fcard .note{font-size:12px;color:var(--mut);margin-top:6px;display:none}
+.fcard .hint{font-size:12px;color:var(--mut);margin-top:14px}
+.fcard.open .price,.fcard.open .note{display:block}
+.fcard.open .hint{display:none}
+
+/* exam result */
+.res-line{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}
+.res-line:last-child{border-bottom:none}
+.res-big{text-align:center;padding:14px 0 6px}
+.res-big .n{font-size:52px;font-weight:800;color:var(--acc)}
+.res-big .n small{font-size:20px;color:var(--mut);font-weight:400}
+
+/* import */
+textarea,select,input[type=text]{width:100%;background:var(--surface2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:11px;font-family:inherit;font-size:14px;margin-bottom:10px}
+textarea{min-height:130px;resize:vertical}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px}
+.loading{display:none;font-size:13px;color:var(--acc);padding:8px 0}
+.gen-preview{font-size:13px}
+.gen-preview .g{padding:9px 0;border-bottom:1px solid var(--line)}
+.msg{font-size:13px;padding:9px 12px;border-radius:9px;margin-bottom:10px;display:none}
+.msg.ok{background:rgba(79,209,184,.12);color:var(--acc);display:block}
+.msg.err{background:rgba(224,101,79,.12);color:var(--bad);display:block}
+
+/* tabs */
+nav{position:fixed;bottom:0;left:0;right:0;max-width:720px;margin:0 auto;display:flex;background:rgba(15,15,17,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);z-index:10}
+nav button{flex:1;background:none;color:var(--mut);padding:11px 0 max(11px,env(safe-area-inset-bottom));font-size:11px;border-radius:0;display:flex;flex-direction:column;gap:3px;align-items:center}
+nav button.on{color:var(--acc)}
+nav .ic{font-size:18px;line-height:1}
+.small{font-size:12px;color:var(--mut)}
+.tag{display:inline-block;font-size:10.5px;border:1px solid var(--line);border-radius:5px;padding:1px 7px;color:var(--mut);margin-right:6px;vertical-align:1px}
+.qimg{width:100%;max-height:320px;object-fit:contain;border-radius:12px;background:#0a0a0c;margin:0 0 14px;display:none}
+.ph-pend{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.ph-pend img{width:74px;height:74px;object-fit:cover;border-radius:9px;flex-shrink:0}
+.ph-pend .flds{flex:1}
+.ph-pend input{margin-bottom:6px}
+.ph-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:9px;margin-top:8px}
+.ph-item{position:relative}
+.ph-item img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
+.ph-item .nm{font-size:10.5px;color:var(--mut);line-height:1.3;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ph-item .del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);color:var(--bad);border:none;border-radius:6px;width:22px;height:22px;font-size:13px;line-height:1;padding:0}
+input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
+.paste-zone{background:var(--surface2);border:2px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;color:var(--mut);font-size:13px;margin-bottom:10px;cursor:text;min-height:70px;outline:none;-webkit-user-select:text;user-select:text;overflow:hidden;transition:border-color .2s}
+.paste-zone:focus{border-color:var(--acc)}
+.paste-zone img{display:none !important}
+.paste-zone *{font-size:13px !important;color:var(--mut) !important}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 class="disp">Rinkan Brand Test</h1>
+  <div class="big disp">満点計画 <b>/150</b></div>
+</header>
+<div class="chips">
+  <span class="chip">第1回（模試扱い） <b id="d1"></b></span>
+  <span class="chip">第2回・評価対象 <b id="d2"></b></span>
+</div>
+
+<main>
+
+<!-- ================= HOME ================= -->
+<section id="tab-home" class="on">
+  <h2>満点までの距離</h2>
+  <div class="card">
+    <div class="gauge" id="gauge"></div>
+    <div class="score-now">現在の推定到達点：<b id="estScore">0</b> <span>/ 150点</span></div>
+    <div class="glegend" id="glegend"></div>
+  </div>
+
+  <h2>カテゴリ別 習熟度</h2>
+  <div class="card" id="catList"></div>
+
+  <h2>今日やること</h2>
+  <div class="card">
+    <button class="btn primary" onclick="startWeak()">弱点優先で10問（推奨）</button>
+    <button class="btn" onclick="go('quiz')">カテゴリを選んで演習する</button>
+    <button class="btn" onclick="go('price')">売価フラッシュカード</button>
+    <button class="btn" onclick="go('exam')">模擬テスト（本番形式）</button>
+  </div>
+</section>
+
+<!-- ================= QUIZ ================= -->
+<section id="tab-quiz">
+  <div id="quizMenu">
+    <h2>演習モード</h2>
+    <div class="card">
+      <button class="btn primary" onclick="startWeak()">弱点優先モード（間違えた問題から出題）</button>
+      <button class="btn" onclick="startCat('all')">全カテゴリ ランダム</button>
+      <button class="btn" id="btnPhotoMode" onclick="startPhoto()">📷 写真あてクイズ（<span id="phCount">0</span>問）</button>
+      <div id="catBtns"></div>
+    </div>
+    <p class="small" style="padding:0 4px">未登録カテゴリは「取込」タブでマニュアルを貼り付けると問題が増やせます。</p>
+  </div>
+  <div id="quizPlay" style="display:none">
+    <div class="card">
+      <div class="qmeta"><span id="qProg"></span><span id="qCat"></span></div>
+      <img class="qimg" id="qImg" alt="">
+      <div class="qtext" id="qText"></div>
+      <div id="qChoices"></div>
+      <div id="qInputWrap" style="display:none">
+        <input type="text" id="qInput" placeholder="モデル名を入力" autocomplete="off" onkeydown="if(event.key==='Enter')submitInput()">
+        <button class="btn primary" style="text-align:center" onclick="submitInput()">回答する</button>
+      </div>
+      <div class="judge" id="qJudge"></div>
+      <div class="exp" id="qExp"></div>
+      <div class="btn-row" id="qNextRow" style="display:none">
+        <button class="btn" id="qFixBtn" style="display:none;border-color:var(--acc);color:var(--acc)" onclick="fixToCorrect()">実は正解だった</button>
+        <button class="btn primary" onclick="nextQ()">次の問題</button>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="quitQuiz()">演習をやめる</button>
+  </div>
+  <div id="quizDone" style="display:none">
+    <div class="card">
+      <div class="res-big"><span class="n" id="qDoneScore"></span></div>
+      <p class="small" style="text-align:center" id="qDoneMsg"></p>
+    </div>
+    <button class="btn primary" onclick="retryWrong()" id="btnRetryWrong">間違えた問題だけもう一度</button>
+    <button class="btn" onclick="quitQuiz()">メニューに戻る</button>
+  </div>
+</section>
+
+<!-- ================= PRICE ================= -->
+<section id="tab-price">
+  <h2>売価・定価フラッシュカード</h2>
+  <p class="small" style="margin-bottom:10px">タップで価格を表示。本番の売価はECの税込売価から出題されるので、日々の新入荷は「取込」で追加していこう。</p>
+  <div class="fcard" id="fcard" onclick="flipCard()">
+    <div class="item" id="fItem">—</div>
+    <div class="price" id="fPrice"></div>
+    <div class="note" id="fNote"></div>
+    <div class="hint">タップして価格を表示</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn" style="border-color:var(--bad);color:var(--bad)" onclick="rateCard(false)">まだ怪しい</button>
+    <button class="btn" style="border-color:var(--acc);color:var(--acc)" onclick="rateCard(true)">覚えた</button>
+  </div>
+  <p class="small" style="text-align:center;margin-top:10px" id="fStat"></p>
+</section>
+
+<!-- ================= EXAM ================= -->
+<section id="tab-exam">
+  <div id="examMenu">
+    <h2>模擬テスト</h2>
+    <div class="card">
+      <p style="font-size:14px;margin-bottom:12px">本番の配点構成（クロム20・ゴローズ10・アパレル40・基礎20・時計10・バッグ10・ジュエリー10・売価30）に合わせた比率で30問出題します。結果から150点換算の予測スコアを出します。</p>
+      <button class="btn primary" onclick="startExam()">模擬テストを開始（30問）</button>
+    </div>
+    <h2>過去の結果</h2>
+    <div class="card" id="examHistory"><p class="small">まだ受験履歴がありません。</p></div>
+  </div>
+  <div id="examPlay" style="display:none">
+    <div class="card">
+      <div class="qmeta"><span id="eProg"></span><span id="eCat"></span></div>
+      <img class="qimg" id="eImg" alt="">
+      <div class="qtext" id="eText"></div>
+      <div id="eChoices"></div>
+      <div id="eInputWrap" style="display:none">
+        <input type="text" id="eInput" placeholder="モデル名を入力" autocomplete="off" onkeydown="if(event.key==='Enter')eSubmitInput()">
+        <button class="btn primary" style="text-align:center" onclick="eSubmitInput()">回答する</button>
+      </div>
+      <div class="judge" id="eJudge"></div>
+      <div class="exp" id="eExp"></div>
+      <div class="btn-row" id="eNextRow" style="display:none">
+        <button class="btn" id="eFixBtn" style="display:none;border-color:var(--acc);color:var(--acc)" onclick="eFixToCorrect()">実は正解だった</button>
+        <button class="btn primary" onclick="eNext()">次の問題</button>
+      </div>
+    </div>
+    <button class="btn ghost" onclick="quitExam()">中断する</button>
+  </div>
+  <div id="examResult" style="display:none">
+    <div class="card">
+      <div class="res-big"><span class="n"><span id="eScore"></span><small> /150点換算</small></span></div>
+      <div id="eBreak"></div>
+    </div>
+    <button class="btn primary" onclick="quitExam()">メニューに戻る</button>
+  </div>
+</section>
+
+<!-- ================= IMPORT ================= -->
+<section id="tab-import">
+  <h2>写真から問題を作る</h2>
+  <div class="card">
+    <div class="msg" id="phMsg"></div>
+    <label>カテゴリ</label>
+    <select id="phCat"></select>
+    <label>写真を貼り付け or 選択</label>
+    <div class="paste-zone" id="pasteZone" tabindex="0" contenteditable="true">ここをタップしてペースト（写真をコピーしてから）</div>
+    <input type="file" id="phFile" accept="image/*" multiple onchange="pickPhotos(this)">
+    <div id="phPending"></div>
+    <button class="btn primary" id="phSave" style="display:none" onclick="savePhotos()">写真問題として保存</button>
+    <p class="small" style="margin-top:6px">保存するとモデル名あて記述式クイズになり、演習・模擬にも出題されます。</p>
+    <div class="ph-list" id="phList"></div>
+  </div>
+
+  <h2>マニュアルから問題を生成（AI）</h2>
+  <div class="card">
+    <div class="msg" id="genMsg"></div>
+    <label>カテゴリ</label>
+    <select id="genCat"></select>
+    <label>Notionマニュアルの本文を貼り付け</label>
+    <textarea id="genText" placeholder="ブランドマニュアルの該当ページを全選択コピーして、ここに貼り付け"></textarea>
+    <button class="btn primary" onclick="genQuestions()">AIで5問生成する</button>
+    <div class="loading" id="genLoading">問題を生成中…（10秒ほど）</div>
+    <div class="gen-preview" id="genPreview"></div>
+    <button class="btn" id="genSave" style="display:none" onclick="saveGen()">この問題を保存する</button>
+  </div>
+
+  <h2>売価データを追加</h2>
+  <div class="card">
+    <div class="msg" id="pMsg"></div>
+    <label>1行につき「商品名（スペース）価格」で貼り付け</label>
+    <textarea id="pText" style="min-height:90px" placeholder="例）&#10;Chrome Hearts キーパーリング 300300&#10;goro's 特大フェザー 275000"></textarea>
+    <button class="btn primary" onclick="importPrices()">売価カードに追加</button>
+  </div>
+
+  <h2>データ管理</h2>
+  <div class="card">
+    <p class="small" style="margin-bottom:10px">問題数：<b id="statQ"></b>問（うち追加分 <b id="statC"></b>）／ 売価カード：<b id="statP"></b>枚 ／ 写真問題：<b id="statPh"></b>問</p>
+    <button class="btn" onclick="resetStats(this)">学習履歴をリセット（問題は残す）</button>
+    <button class="btn" style="color:var(--bad)" onclick="resetAll(this)">追加データを全て削除</button>
+  </div>
+</section>
+
+</main>
+
+<nav>
+  <button class="on" data-t="home" onclick="go('home')"><span class="ic">◈</span>ホーム</button>
+  <button data-t="quiz" onclick="go('quiz')"><span class="ic">✎</span>演習</button>
+  <button data-t="price" onclick="go('price')"><span class="ic">¥</span>売価</button>
+  <button data-t="exam" onclick="go('exam')"><span class="ic">⏱</span>模擬</button>
+  <button data-t="import" onclick="go('import')"><span class="ic">＋</span>取込</button>
+</nav>
+
+<script>
+/* ============ ストレージ互換層 ============ */
+/* claude.aiプレビューではwindow.storage、GitHub Pages等ではIndexedDBを使用 */
+if(!window.storage){
+  const dbp=new Promise((res,rej)=>{
+    const r=indexedDB.open('rinkan150',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  const op=(mode,fn)=>dbp.then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction('kv',mode);
+    const rq=fn(tx.objectStore('kv'));
+    tx.oncomplete=()=>res(rq&&rq.result);
+    tx.onerror=()=>rej(tx.error);
+  }));
+  window.storage={
+    async get(k){const v=await op('readonly',st=>st.get(k));return v===undefined?null:{key:k,value:v}},
+    async set(k,v){await op('readwrite',st=>st.put(v,k));return{key:k,value:v}},
+    async delete(k){await op('readwrite',st=>st.delete(k));return{key:k,deleted:true}},
+    async list(p){const keys=await op('readonly',st=>st.getAllKeys());return{keys:(keys||[]).map(String).filter(k=>!p||k.startsWith(p))}}
+  };
+}
+/* ============ 設定 ============ */
+const CATS=[
+ {id:'chrome', name:'クロムハーツ', pts:20},
+ {id:'goros',  name:'ゴローズ', pts:10},
+ {id:'apparel',name:'アパレル', pts:40},
+ {id:'basic',  name:'ブランド・商品基礎', pts:20},
+ {id:'watch',  name:'時計', pts:10},
+ {id:'bag',    name:'バッグ', pts:10},
+ {id:'jewelry',name:'ジュエリー', pts:10},
+ {id:'price',  name:'売価', pts:30},
+];
+const T1=new Date('2026-07-18'), T2=new Date('2026-10-10');
+
+/* ============ シード問題（マニュアル抽出データより） ============ */
+const SEED=[
+// --- クロムハーツ：歴史 ---
+q('chrome','歴史','クロムハーツが誕生した年と場所の組み合わせとして正しいのは？',['1988年・ロサンゼルス','1985年・ニューヨーク','1990年・ラスベガス','1992年・マリブ'],0,'1988年、アメリカ・ロサンゼルスで誕生。'),
+q('chrome','歴史','クロムハーツの創業者は？',['リチャード・スターク','レナード・カムホート','ジョン・バウマン','ジョー・フォティ'],0,'創業者はリチャード・スターク。カムホート（彫金）とバウマン（レザー）は共同創業メンバー。'),
+q('chrome','歴史','創業メンバー3人のうち、彫金職人だったのは？',['レナード・カムホート','ジョン・バウマン','リチャード・スターク','マット・ディジャコモ'],0,'レナード・カムホートが彫金職人。ジョン・バウマンはレザークラフト担当。'),
+q('chrome','歴史','リチャード・スタークの出身地は？',['ニューヨーク州ユーティカ','カリフォルニア州マリブ','テキサス州ダラス','イリノイ州シカゴ'],0,'NY州ユーティカ出身。原宿の実験店舗名「UTICA」の由来でもある。'),
+q('chrome','歴史','リチャード・スタークが若い頃に就いていた職業は？',['大工の見習い','彫金師','バーテンダー','写真家'],0,'大工の見習いとして建築会社に勤務。その会社が皮革製品も扱っていたことからレザーに惹かれた。'),
+q('chrome','歴史','クロムハーツが1992年に受賞した賞は？',['CFDAアクセサリー部門賞','LVMHプライズ','ピッティ・ウオモ大賞','ADC賞'],0,'1992年にCFDA（アメリカ・ファッション・デザイナーズ協会）アクセサリー部門賞を受賞。'),
+q('chrome','歴史','日本で1990年に最初にクロムハーツの取り扱いを開始したのは？',['インテレクチュアルギャラリー','ユナイテッドアローズ','コム・デ・ギャルソン青山店','ビームス'],0,'1990年インテレクチュアルギャラリー→1991年CDG青山店→1992年ユナイテッドアローズの順。'),
+q('chrome','歴史','1992年にクロムハーツの販売を開始したセレクトショップは？',['ユナイテッドアローズ','シップス','ビームス','エストネーション'],0,'1992年にユナイテッドアローズが販売開始。'),
+q('chrome','歴史','2000年代に原宿で展開され話題になった実験店舗の名前は？',['UTICA（ユティカ）','MALIBU','FOTI','CEMETERY'],0,'リチャードの出身地ユーティカにちなんだ実験店舗「UTICA」。'),
+q('chrome','歴史','「CHROME HEARTS」というブランド名の由来は？',['80年代のホラー映画の仮タイトル','バイクチームの名前','LAの通りの名前','聖書の一節'],0,'リチャードが衣装提供した80年代ホラー映画の仮タイトルに由来。'),
+q('chrome','歴史','レナード・カムホートが脱退後に立ち上げたブランドは？',['LONE ONES','TADY&KING','CODY SANDERSON','FIRST ARROWS'],0,'1995年に脱退しLONE ONESを設立。'),
+// --- クロムハーツ：デザイナー・人物 ---
+q('chrome','人物','リチャードの妻で、アートディレクション・空間演出を担当するのは？',['ローリー・リン・スターク','ジェシー・ジョー・スターク','ケイト・ハドソン','ベラ・ハディッド'],0,'ローリー・リン・スターク。ファッション企画・店舗演出・広告ビジュアルを統括。'),
+q('chrome','人物','一部商品に「FOTI」ロゴが刻印される、グラフィックやスカルを手掛けたアーティストは？',['ジョー・フォティ','マット・ディジャコモ','レナード・カムホート','ヴァージル・アブロー'],0,'ジョー・フォティ。リチャードの親友でクロムハーツのアートを担当。'),
+q('chrome','人物','現在ヘッドデザイナーを務めるリチャードの長女は？',['ジェシー・ジョー・スターク','ローリー・リン・スターク','サラ・スターク','ジェーン・スターク'],0,'ジェシー・ジョー・スターク。2010-2011AWで「PETE PUNK」コレクションを発表。'),
+q('chrome','人物','ジェシー・ジョー・スタークが影響を公言しているパンクバンドに含まれないのは？',['ニルヴァーナ','The Clash','Rancid','Misfits'],0,'公言しているのはThe Clash、Rancid、Misfits。'),
+q('chrome','人物','PPO（PETE PUNK OFFSPRING）ラインを手掛け、"チョンパー"の唇モチーフで知られるアーティストは？',['マット・ディジャコモ','ジョー・フォティ','ロバート・メイプルソープ','ガレス・ピュー'],0,'マット・ディジャコモ。絵の具やマジックペンのラフなアートが特徴。'),
+q('chrome','人物','2016年12月にクロムハーツとのコラボを発表したモデルは？',['ベラ・ハディッド','ケイト・ハドソン','ジジ・ハディッド','ケンダル・ジェンナー'],0,'ベラ・ハディッド。Dior、VERSACEなどでも活躍。'),
+q('chrome','人物','2011年にローリー・リン・スタークと新ライン「CH＋KH」を立ち上げたのは？',['ケイト・ハドソン','ベラ・ハディッド','ジェシー・ジョー・スターク','リアーナ'],0,'ケイト・ハドソンとの「CH＋KH」。'),
+q('chrome','人物','Foti by CHROME HEARTSに存在するキャラクターの数は？',['12','8','10','16'],0,'12キャラクター。マハリア、ハリスティーター、デルフィーノ、ペペ、スキッピーなど。'),
+q('chrome','人物','氷室京介が1998年のツアーグッズとして作成したクロムハーツのアイテムは？',['3トリンケッツ','ドッグタグ','キーパーリング','クロスボールネックレス'],0,'3トリンケッツ。全て「KYOSUKE HIMURO」刻印入りで、通常品より定価が安い。'),
+// --- クロムハーツ：モチーフ ---
+q('chrome','モチーフ','クロスモチーフの意味と、そのインスピレーション源は？',['災いから身を守る・実家近くの墓地','権力の象徴・教会','愛情の象徴・結婚式','魔除け・ダビデの星'],0,'クロスは"災いから身を守る"意味。インスピレーションは実家の近くの墓地。'),
+q('chrome','モチーフ','BSフレアのデザインの元になっているのは？',['フランス王家のユリの紋章','イギリス王室のバラ','ケルトの結び目','スペインの太陽紋'],0,'フランス王家のユリの紋章。権力・主権、また聖母マリアの象徴として純粋・純潔の意味も。'),
+q('chrome','モチーフ','ダガーモチーフに込められた意味は？',['お守り','復讐','勝利','富'],0,'中世の短剣をイメージし、"お守り"の意味が込められている。'),
+q('chrome','モチーフ','スターモチーフの意味として正しいのは？',['魔除け','航海の安全','名声','自由'],0,'"魔除け"の意味。ダビデの星、日本語では六芒星や籠目とも呼ばれる。'),
+q('chrome','モチーフ','ケルティックモチーフのデザイン元は？',['ケルト神話の番犬','ケルトの十字架','北欧のルーン文字','アイルランドの竪琴'],0,'ケルト神話に出てくる番犬。犬モチーフは"守護"の意味を持つ。'),
+q('chrome','モチーフ','バルカンの名前の由来は？',['火と鍛冶の神','戦の神','海の神','星の名前'],0,'火と鍛冶の神の名を冠する。元はレザーブレードのみ、後にペーパーチェーンも通るように。'),
+q('chrome','モチーフ','レナード・カムホートがデザインした最初のモチーフといわれるのは？',['カンパナ（ベル）','クロス','ダガー','フローラル'],0,'カンパナ。モチーフは「ベル」。'),
+q('chrome','モチーフ','クロスに次いで古いモチーフといわれるのは？',['フローラル','スター','ハート','ケルティック'],0,'フローラル。クロスとの掛け合わせモチーフが多数存在（例：キーパー、フローラルクロス）。'),
+// --- クロムハーツ：製造・素材 ---
+q('chrome','製造','キャスト製法で原型からゴム型を取る際の縮小率はおよそ？',['1割','3割','0.1割','5割'],0,'原型→ゴム型で約1割、ゴム型→WAXで0.2〜0.5割縮小する。'),
+q('chrome','製造','クロムハーツに存在するゴールド/プラチナ素材の組み合わせは？',['22KYG・18KWG・PT950','18KYG・18KPG・PT900','24KYG・22KWG・PT950','22KYG・18KPG・PT900'],0,'22Kイエローゴールド、18Kホワイトゴールド、PT950の3種類のみ。18Kピンクゴールドは存在しない。'),
+q('chrome','製造','金の硬度について正しいのは？',['24Kが最も柔らかい','24Kが最も硬い','18Kが最も柔らかい','純度と硬度は無関係'],0,'柔らかい 24K→22K→18K 硬い。数値が高いほど柔らかい。'),
+q('chrome','製造','22Kの純金含有率は？',['91.7%','75%','99.99%','83.5%'],0,'22Kは純金91.7%＋混合物8.3%。18Kは75%。'),
+q('chrome','製造','ホールマークとは？',['純度を保証するため分析検査し刻印するマーク','職人のサイン','製造年の刻印','店舗コード'],0,'純度保証の刻印。EU（ヨーロッパ）で購入した商品についている。'),
+q('chrome','製造','複数パーツで作られたアイテムに必ず存在するのは？',['ロウ付け跡','バリ','巣穴','いぶし'],0,'パーツ同士を溶接した跡＝ロウ付け跡は複数パーツ構成のアイテムに必ず存在する。'),
+q('chrome','製造','個体差がほぼ生まれない刻印方法は？',['レーザー刻印','手彫り','打刻','リューター'],0,'レーザーはハネ・ハライも綺麗に入り個体差ほぼなし。手彫り・打刻は必ず個体差が出る。'),
+// --- クロムハーツ：ディティール ---
+q('chrome','ディティール','ベイルやチェーンを通すためにボディについている輪っかの名称は？',['カン','ベイル','丸カン','グロメット'],0,'カン。ベイルはチェーンを通すためにカンやリングについている輪っか。'),
+q('chrome','ディティール','留め具のないブレスレットの名称とサイズの決まり方は？',['バングル・内周のセンチ','ブレスレット・コマの数','バングル・コマの数','ブレスレット・内周のセンチ'],0,'留め具なし＝バングルで内周cm（例:13.5cm=M）。留め具あり＝ブレスレットでコマ数（例:11LINK）。'),
+q('chrome','ディティール','リングの「腹」とはどの部分？',['リング背面の輪の部分','デザインがある正面','刻印の内側','側面の円周'],0,'腹＝リング背面の輪の部分。正面はフェイス。'),
+q('chrome','ディティール','ピアスで耳たぶの中に通す棒部分の総称は？',['ポスト','キャッチ','スタッド','フープ'],0,'ポスト。キャッチは垂れ下がりや紛失を防止するパーツ。'),
+// --- クロムハーツ：オールド ---
+q('chrome','オールド','#10ダガーのオールドと現行の見分けとして正しいのは？',['オールドは8903刻印なしで約9gと軽い','オールドは8903刻印ありで重い','現行は刻印なし','重さは同じで刻印のみ違う'],0,'オールド＝8903刻印なし・薄く軽い(9g前後)。現行＝8903刻印あり・厚く重い(11g前後)。'),
+q('chrome','オールド','3トリンケッツのオールドのプレート並び順は？',['①ダガー②シールド③クロス','①ダガー②クロス③シールド','①クロス②ダガー③シールド','①シールド②ダガー③クロス'],0,'オールドは①ダガー②シールド③クロス。中期以降は①ダガー②クロス③シールド。'),
+q('chrome','オールド','Bリング（大）のオールドの特徴は？',['『H』の背びれが2本','『H』の背びれが1本','エッジが効いている','レーザー刻印'],0,'オールドはエッジが弱く『H』背びれが2本。現行は背びれ1本でエッジが効いている。'),
+q('chrome','オールド','フローラルクロスIDブレスのオールドの特徴は？',['1992手彫り刻印・差し込み口の切込み2か所','1997立体刻印・切込み4か所','1995立体刻印・コマ丸み','2002刻印・太く濃い'],0,'オールド＝1992・手彫り刻印・コマ平たい・切込み2か所。現行＝1997・立体刻印・切込み4か所。'),
+q('chrome','オールド','スモールボックスIDのオールドの年号刻印は？',['1996','2002','1992','1988'],0,'オールドは1996刻印でホースシュー周りにかすれた二重丸。現行は2002刻印。'),
+q('chrome','オールド','チェーンプレート/カニカンのオールドの特徴は？',['©がCHの上に位置・爪が太く短い','©がCHの下に位置・爪が細く長い','©刻印がない','爪の本数が違う'],0,'オールドは©がCHの上・手彫り風刻印・カニカンの爪が太く短い。'),
+q('chrome','オールド','1ボールシリーズのオールドの見分けポイントは？',['カンがBリングではなく丸カン','刻印が太い','ボールが小さい','年号刻印あり'],0,'オールドはチェーンを通すカンが丸カン（現行はBリング）。'),
+q('chrome','オールド','タイニーCHクロス/ダガーフープピアスのオールドの刻印は？',['STERLING刻印のみ','925刻印のみ','年号+STERLING','刻印なし'],0,'オールドはSTERLING刻印のみ。'),
+// --- クロムハーツ：コラボ ---
+q('chrome','コラボ','2007年にコラボした、モノクロ写真で有名な写真家は？',['ロバート・メイプルソープ','アンディ・ウォーホル','リチャード・アヴェドン','ヘルムート・ニュートン'],0,'ロバート・メイプルソープ。死去の翌年…2007年にスカーフとペンダントでコラボが実現。'),
+q('chrome','コラボ','HERMESコラボモデルのベースとなっているのはほぼどのモデル？',['JJ DEAN','レザーライダース','GYMバッグ','デニムトラッカー'],0,'ほぼJJ DEANベース。裏地にヴィンテージのエルメススカーフを使用した全て1点もの。'),
+q('chrome','コラボ','WESCOとのコラボモデル3型に含まれないのは？',['エンジニア','ファイヤーマン','ボス','ジョブマスター'],0,'コラボ3型はファイヤーマン・ボス・ジョブマスター。'),
+q('chrome','コラボ','CHIPPEWAとWESCOのコラボブーツの見分け方に含まれないのは？',['ソールの色が赤い','インディアン刻印','内側がベージュ','光沢が強い'],0,'見分けは①インディアン刻印②内側ベージュ③光沢が強い、の3点。内タグなしで品番プリント。'),
+q('chrome','コラボ','BIRKENSTOCKとのコラボメイン3型は？',['アリゾナ・ギゼ・ボストン','アリゾナ・マドリッド・チューリッヒ','ギゼ・ロンドン・パリ','ボストン・ミラノ・キョウト'],0,'アリゾナ、ギゼ、ボストンの3型。'),
+q('chrome','コラボ','UGGコラボのムートンブーツ最大の特徴は？',['センターにスモールCHクロス','かかとにダガー','サイドにBSフレア','タンにフローラル'],0,'センターにスモールCHクロスが打たれているのが最大の特徴。'),
+q('chrome','コラボ','Rick Owensとのコラボのメイン2型は？',['ジオバスケット・ラモーンズ','ジオバスケット・DRKSHDW','ラモーンズ・ダンク','エアフォース・ジオバスケット'],0,'ジオバスケットとラモーンズ（正式名称はSneakersに変更）。なおリックオウエンスコラボ品はクロムハーツでカスタム一切不可。'),
+q('chrome','コラボ','OFF-WHITEとの2015年コラボで都市名Tシャツが作られた都市の数は？',['17都市','10都市','12都市','20都市'],0,'東京・NY・LAなど17都市。デザイナーはヴァージル・アブロー。'),
+q('chrome','コラボ','VANSとのコラボメインモデルは？',['SLIP ON × MATTY BOY','OLD SKOOL','SK8-HI','AUTHENTIC'],0,'SLIP ON × MATTY BOY（およびSLIP ON）。'),
+q('chrome','コラボ','ALDENコラボで使用されているレザーは？',['コードバン','ブライドルレザー','シェルスエード','ホースフロント'],0,'ALDENの代名詞コードバン（馬のお尻の革）を使用したチャッカブーツ2型のみ。'),
+// --- クロムハーツ：定価 ---
+q('chrome','定価','キーパーリング（SV）の2026年税込価格は？',['300,300円','129,800円','357,500円','218,000円'],0,'キーパー・フローラルクロス・ダブルフローラルクロスはいずれもSV 300,300円税込(2026)。'),
+q('chrome','定価','クラシックオーバルクロスリング（SV）の2026年税込価格は？',['357,500円','300,300円','129,800円','247,500円'],0,'クラシックオーバルクロスはSV 357,500円税込(2026)。'),
+q('chrome','定価','スクロールバンド/SBTバンド（SV）の2026年税込価格は？',['129,800円','85,800円','100,100円','162,800円'],0,'スクロールバンド・SBTバンドはSV 129,800円税込(2026)。SBTの22kは国内展開なし。'),
+q('chrome','定価','3mmスペーサーファックユー（SV）の2026年税込価格は？',['85,800円','100,100円','129,800円','63,800円'],0,'3mm=85,800円。6mmスペーサー（ファックユー/フォーエバー）は100,100円税込(2026)。'),
+q('chrome','定価','ダガーリングの2023年定価（+tax）は？',['155,000円','138,000円','126,000円','180,000円'],0,'ダガーは138,000+tax(2022)→155,000+tax(2023)。'),
+q('chrome','定価','K&Tリングの2023年定価（+tax）は？',['180,000円','161,000円','155,000円','206,000円'],0,'K&Tは161,000+tax(2022)→180,000+tax(2023)。22kは1,530,000+tax。'),
+q('chrome','定価','NTFLリングの刻印は？',['CHROME HEARTS','TRUE FUCKING LOVE','NTFL','FOREVER'],0,'NTFL＝「CHROME HEARTS」刻印。TFL＝「TRUE FUCKING LOVE」刻印。'),
+q('chrome','定価','タイニーECHプラスリングのリンク展開は？',['4LINK/5LINK','3LINK/4LINK','5LINK/6LINK','2LINK/3LINK'],0,'4LINK/5LINK展開。70,000+tax(2023)、22kは319,000+tax。'),
+q('chrome','定価','バブルガム系リング（CHクロス/スター/ハート）の2023年定価（+tax）は？',['45,000円','60,000円','35,000円','58,000円'],0,'バブルガム系は45,000+tax(2023)。22kは218,000+tax。'),
+q('chrome','定価','ベイビークラシック系リングの2023年定価（+tax）は？',['100,000円','72,000円','85,000円','126,000円'],0,'ベイビークラシック系は100,000+tax(2023)。K&T/ダガーの22kは491,000+tax。'),
+// --- ゴローズ ---
+q('goros','歴史','高橋吾郎が青山に店舗を構え制作活動を開始した年は？',['1966年','1971年','1979年','1987年'],0,'1966年青山で開始→1971年原宿へ移転。'),
+q('goros','歴史','ゴローズが原宿へ移転した年は？',['1971年','1966年','1975年','1980年'],0,'1971年に原宿へ移転。その後渡米しインディアンと交流。'),
+q('goros','歴史','高橋吾郎が交流を深めたインディアンの部族は？',['スー族','ナバホ族','アパッチ族','ホピ族'],0,'スー族。精神文化や儀式がフェザーなどのデザイン体系に影響。'),
+q('goros','歴史','高橋吾郎が1979年に授かったインディアンネームは？',['イエローイーグル','シルバーイーグル','レッドフェザー','ゴールデンホーク'],0,'1979年「イエローイーグル」を授かる。'),
+q('goros','歴史','ゴローズでシルバー製品の取り扱いが始まった年は？',['1987年','1966年','1971年','1995年'],0,'1987年にシルバー取り扱い開始。現在のジュエリーラインが確立。'),
+q('goros','歴史','高橋吾郎が逝去した年は？',['2013年','2011年','2015年','2008年'],0,'2013年逝去。店舗は存続し思想と技術を継承。'),
+q('goros','カスタム','フックの正しい向きは？',['イーグルの顔が表を向く','イーグルの顔が裏を向く','イーグルの頭が下','向きは自由'],0,'フック＝イーグルの顔が表。ホイール＝メタルのイーグルの頭が自分の首の方向。'),
+q('goros','カスタム','ゴローズのチェーンの種類4つは？',['細丸・細角・太丸・太角','小・中・大・特大','丸・角・平・捻','S・M・L・XL'],0,'細丸、細角、太丸、太角の4種類。種類によりカスタムできるアイテムが異なる。'),
+q('goros','カスタム','細丸チェーンに組み合わせられるのは？',['SVフェザー大・グラス小','ハートホイールフェザー大','メタル','ハートホイールフェザー小'],0,'細丸に〇なのはSVフェザー大とグラス小のみ。ハートホイールフェザー大は細角のみ〇。'),
+q('goros','カスタム','メタルを組み合わせられるチェーンは？',['太角・太丸','細角・細丸','細角のみ','全チェーン'],0,'メタルは太角・太丸のみ〇。細チェーンは×。'),
+q('goros','カスタム','ビーズXLサイズの用途として正しいのは？',['ネックレス用と首後ろ調節用','下に垂らす用のみ','全用途に使える','使用できない'],0,'XLはネックレス〇・首後ろ調節〇・下に垂らすは×。Sは下に垂らす用が〇。'),
+q('goros','カスタム','プレーンホイール（メタルなし）の使い方は？',['革ひもやマルカンで他アイテムと組む','単体でネックレスにする','フックに直接つける','リングとして使う'],0,'革ひもやマルカンで組み合わせて使う。存在感UPや重なり防止に。マルカン組み/1本組み/2本組みがある。'),
+q('goros','チェーン','ホイール付きチェーンの長さは？',['52cm（フックホイールを外すと47cm）','50cm','47cm','55cm'],0,'ホイール付きは52cm、フックホイールを外した長さは47cm。単体チェーンは50cm。'),
+q('goros','チェーン','ホイール付きロングチェーン（太角/太丸）の長さは？',['75cm','70cm','65cm','80cm'],0,'ロングチェーンは75cm。太角・太丸のみ。'),
+q('goros','チェーン','単品ホイールのラインナップとして正しいのは？',['SV/メタル付き/全金/メタル付き全金','SV/全金のみ','SV/半金/全金','メタル付きのみ'],0,'SVホイール、メタル付きホイール、全金ホイール、メタル付き全金ホイールの4種（2026年マニュアル追記箇所）。'),
+q('goros','チェーン','SVイーグルフックの販売形態は？',['チェーンをつけて商品化・単体販売なし','単体販売あり','ホイールとセット販売のみ','受注生産のみ'],0,'基本的にチェーンをつけて商品化となるため単体販売なし。'),
+q('goros','特大フェザー','特大フェザーのモデルチェンジが行われた年は？',['2004年','2013年','1987年','2000年'],0,'2004年。それまで＝オールド、以降＝現行。大きな違いはバチカンの広さ（オールド狭い/現行広い）。'),
+q('goros','特大フェザー','特大フェザーのオールドと現行の大きな違いは？',['バチカンの広さ','フェザーの長さ','銀の純度','刻印の位置'],0,'チェーンを通すバチカンがオールドは狭く、現行は広い。'),
+q('goros','特大フェザー','メタル付き特大フェザーの「現行」はいつから？',['2013年〜','2004年〜','2000年〜','1990年〜'],0,'現行=2013年〜。イボメタル=2004〜2013年。それ以前はイボメタル×オールドバチカン。'),
+q('goros','特大フェザー','特大フェザーの「左向き」の定義は？',['首から下げた際、先端が左側へ曲がる','先端が右側へ曲がる','羽根の刻印が左','バチカンが左に付く'],0,'首から下げた際に先端に向かって左側へ曲がるものが左向き。'),
+// --- アパレル：BALENCIAGA ---
+q('apparel','BALENCIAGA','バレンシアガの創業者と創業年・場所は？',['クリストバル・バレンシアガ・1914年スペイン','デムナ・ヴァザリア・1936年パリ','ニコラ・ゲスキエール・1914年パリ','クリストバル・バレンシアガ・1936年スペイン'],0,'1914年スペインでオートクチュール店として創業。1936年にスペイン内戦を機にパリへ移転。'),
+q('apparel','BALENCIAGA','バレンシアガのデザイナー変遷として正しい順は？',['ニコラ・ゲスキエール→アレキサンダー・ワン→デムナ','デムナ→ニコラ→ワン','ワン→ニコラ→デムナ','ニコラ→デムナ→ワン'],0,'1995-2012ニコラ・ゲスキエール、2013-2015アレキサンダー・ワン、2016-2025デムナ。2026〜はピエールパオロ・ピッチョーリ。'),
+q('apparel','BALENCIAGA','デムナ・ヴァザリアがバレンシアガのデザイナーに就任したのは？',['2015年（16年〜コレクション）','2012年','2019年','2010年'],0,'2015年就任。ボックスシルエット、オーバーサイズ、ゴシック体ロゴが特徴。'),
+q('apparel','BALENCIAGA','ロデオ（ミディアム）の定価は？',['564,300円','496,100円','801,900円','385,000円'],0,'ミディアム564,300円／スモール496,100円／ラージ801,900円。今一番人気のバッグ。'),
+q('apparel','BALENCIAGA','紙を入れるためのバッグでサイズ表記もその形式のモデルは？',['ペーパー（A6/A4）','シティ','ネイビー','エブリデイ'],0,'ペーパーはA6/A4のサイズ展開。'),
+q('apparel','BALENCIAGA','「バレンシアガといえばこれ」と言われた2001年発売のバッグは？',['シティ','ロデオ','モナコ','ルカゴール'],0,'シティ。2012〜15年に大人気。ミニ/スモール/ミディアム/ジャイアント展開。'),
+q('apparel','BALENCIAGA','2016年〜の初期デムナの名作スニーカーは？',['スピードトレーナー','トリプルエス','トラックスニーカー','3XL'],0,'スピードトレーナー（2016〜）。トリプルエスは2017〜で初定価78,000円程度のイタリア製。'),
+q('apparel','BALENCIAGA','店頭完売が続き古物必須といわれる2024年〜の人気ブーツは？',['ストンパーブーツ','アラスカブーツ','ヴェノム','トルーパー'],0,'ストンパーブーツ（2024〜）はとにかく人気で店頭完売続き。'),
+q('apparel','BALENCIAGA','×グッチのコラボ企画の名前は？',['ザ ハッカー','ザ コピー','ダブルロゴ','スワップ'],0,'ザ ハッカー。ジャンボGGジャケットやBB柄パフィダウン（ASAP ROCKY着用）など。'),
+q('apparel','BALENCIAGA','ポプリントラックジャケット（18SS）で正しいのは？',['レッドはブティック限定','全色世界同時発売','デムナ以前のデザイン','刺繍ロゴが初期'],0,'「バレンシアガといえば」の定番。レッドはブティック限定。近年は刺繍ロゴに。'),
+q('apparel','BALENCIAGA','22AWでアップルのパロディから注意喚起を受けBBロゴに変更されたシリーズは？',['Be different','ポロジップ','パリムーン','スピードハンターズ'],0,'Be different（22AW）。ポロジップパーカーはポロラルフローレンのパロディ。'),
+q('apparel','BALENCIAGA','ラムシュタイン（21SS）コラボの生産数は？',['200着限定','500着限定','1000着限定','非限定'],0,'ドイツのバンド、ラムシュタインとのコラボで200着限定。'),
+q('apparel','BALENCIAGA','25SSのY2Kトライバルデニムについて正しいのは？',['トライバルシリーズはVETEMENTSでも発売','バレンシアガのみの展開','2020年発売','コラボ商品'],0,'25SSのトライバルシリーズ。VETEMENTSでも発売されている（マニュアル修正点）。'),
+// --- アパレル：Rick Owens ---
+q('apparel','RickOwens','リック・オウエンスがブランドを設立した年と場所は？',['1994年ロサンゼルス','1997年パリ','2002年ロサンゼルス','1994年パリ'],0,'1994年LAで設立（当初ウィメンズのみ）。2002年メンズ発表・CFDA新人賞、2003年パリへ移転。'),
+q('apparel','RickOwens','リック・オウエンスのパートナーで共にブランドを営むのは？',['ミシェル・ラミー','ローリー・リン','ステラ・マッカートニー','フィービー・ファイロ'],0,'ミシェル・ラミー。彼女のブランドで約8年働き、結婚して現在も共に活動。'),
+q('apparel','RickOwens','リック・オウエンスのディフュージョンライン（セカンド）は？',['DRKSHDW','Lilies','Drops','PODS'],0,'DRKSHDW（ダークシャドウ）。Liliesはレディース、Dropsはジュエリーライン。'),
+q('apparel','RickOwens','リック・オウエンスの拠点がパリに移った理由のひとつは？',['LAで強盗被害に遭った','税制優遇','LVMH傘下入り','工場の閉鎖'],0,'2003年、LAでの強盗被害が一因となりパリへ移転。'),
+q('apparel','RickOwens','2009年に東京・青山にオープンした店舗は世界で何店舗目？',['4店舗目','1店舗目','2店舗目','10店舗目'],0,'パリ・NY・ロンドンに続く4店舗目のフラッグシップ。'),
+q('apparel','RickOwens','リック・オウエンス×ドクターマーチンのコラボモデルは？',['1460ベックス','ジオバスケット','ラモーンズ','マストドンプロ'],0,'1460 BEX DS RO（ベックス）とメガレースブーツ。アディダスとはRUNNERとMASTODON PRO。'),
+// --- アパレル：VETEMENTS ---
+q('apparel','VETEMENTS','VETEMENTSの設立年と設立者は？',['2014年・デムナと弟グラム','2015年・デムナ単独','2013年・グラム単独','2016年・デムナと弟グラム'],0,'2014年、デムナ・ヴァザリアと弟グラム・ヴァザリアが設立。ブランド名はフランス語で「服」。'),
+q('apparel','VETEMENTS','デムナのキャリアとして正しいのは？',['マルジェラ→ルイヴィトン→VETEMENTS→バレンシアガ','ルイヴィトン→マルジェラ→VETEMENTS','セリーヌ→VETEMENTS→グッチ','ディオール→バレンシアガ→VETEMENTS'],0,'2009マルジェラ（ウィメンズ）→2013ルイヴィトン メンズシニアデザイナー→2014 VETEMENTS→2016バレンシアガ→2025グッチ。'),
+q('apparel','VETEMENTS','デムナのオーバーサイズの原点といわれるのは？',['幼少期に大人の服を着ていた体験','バスケットボール','軍服の研究','ヒップホップカルチャー'],0,'ジョージア出身で内戦を経験、難民として大人の服を着ていた体験が原点。'),
+q('apparel','VETEMENTS','15AWの名作でカニエ着用により話題、オーバーサイズの火付け役となったのは？',['メタルロゴパーカー','タイタニックパーカー','TFDパーカー','パープルパーカー'],0,'メタルロゴパーカー（15AW）。現在30万前後。'),
+q('apparel','VETEMENTS','TFDパーカー（16AW）のオマージュ元は？',['クレイドルオブフィルスのTシャツ','メタリカのツアーT','ニルヴァーナのスマイル','KISSのロゴ'],0,'英パンクバンド、クレイドルオブフィルスのTシャツオマージュ。20万前後。'),
+q('apparel','VETEMENTS','「ヴェトモン界のカイリュー的存在」と呼ばれるアイテムは？',['TFDボンバー','メタルロゴパーカー','スカル','SNOOPDOG'],0,'TFDボンバー（16AW）。オーバーサイズは50万前後。'),
+q('apparel','VETEMENTS','グラムの名作「ワールドツアー」（20AW）で人気の初期カラーは？',['ブラック×イエロー','ブラック×レッド','ホワイト×ブルー','グレー×グリーン'],0,'架空ツアーのパーカーで、初期ブラック×イエローが人気。'),
+q('apparel','VETEMENTS','カートゥーンパーカー（19SS）の当時の仕様は？',['アプリでアニメーションが浮かぶ','蓄光プリント','香り付き','音が鳴る'],0,'アプリをかざすとアニメーションが浮かぶ仕様（現在は廃止）。相場3万前後。'),
+// --- アパレル：Supreme ---
+q('apparel','Supreme','Supremeの創業者と創業年・場所は？',['ジェームス・ジェビア・1994年NY','ショーン・ステューシー・1994年LA','ジェームス・ジェビア・1998年NY','NIGO・1994年NY'],0,'1994年4月、NYラファイエット通りでジェームス・ジェビアが創業。'),
+q('apparel','Supreme','SupremeのBOXロゴの元ネタとなったアーティストは？',['バーバラ・クルーガー','キース・ヘリング','バスキア','KAWS'],0,'バーバラ・クルーガーの反消費主義アートのパロディ。赤地に白文字・Futuraフォント。'),
+q('apparel','Supreme','1994年にSupremeの知名度を爆発させた出来事は？',['カルバン・クライン広告へのステッカーゲリラ','ルイ・ヴィトンとのコラボ','NIKEとのコラボ','パリコレ出展'],0,'CKの広告にステッカーを勝手に貼りNY中に1万枚以上ばらまき、NY Timesに取り上げられた。'),
+q('apparel','Supreme','Supremeの日本1号店（1998年）はどこ？',['代官山','原宿','渋谷','大阪'],0,'1998年代官山。2006年原宿、2011年大阪・ロンドン、2023年ソウル、2024年上海。'),
+q('apparel','Supreme','2020年にSupremeを約2100億円で買収した企業は？',['VF Corporation','LVMH','ケリング','ナイキ'],0,'VANSやThe North Faceの親会社VF Corporation。'),
+q('apparel','Supreme','2017年に公式コラボが実現し「ストリート史に残る事件」といわれた相手は？',['Louis Vuitton','GUCCI','シャネル','エルメス'],0,'2017年のLouis Vuittonコラボ。'),
+q('apparel','Supreme','オリジナル最高の名作といわれる17SSのアイテムは？',['Faux Fur Bomber Jacket','Flowers Pants','CANDY TEE','Alpaca wool coat'],0,'Faux Fur Bomber Jacket。各店10数着のみで最高50万前後。'),
+q('apparel','Supreme','CANDY TEE（15AW）が日本未発売となった理由は？',['不二家パロディの商標権問題','生地の不良','関税問題','数量不足'],0,'不二家のパロディで商標権問題により日本未発売。'),
+q('apparel','Supreme','Supremeの新作リリース曜日（日本）は？',['土曜11:00','木曜11:00','金曜20:00','日曜10:00'],0,'日本は土曜11:00、欧米は木曜。人気週は事前抽選制。'),
+// --- アパレル：Louis Vuitton ---
+q('apparel','LouisVuitton','ルイ・ヴィトンが世界初の旅行用トランク専門店を開いた年は？',['1854年','1821年','1888年','1900年'],0,'1854年パリ・カプシーヌ通り。1821年はルイ・ヴィトンの生年。'),
+q('apparel','LouisVuitton','市松模様「ダミエ」を1888年に考案したのは？',['息子ジョルジュ','ルイ本人','孫ガストン','マーク・ジェイコブス'],0,'息子ジョルジュの考案。偽造品対策として発表された。'),
+q('apparel','LouisVuitton','モノグラムの着想元といわれるのは？',['日本の家紋（ジャポニズム）','中国の書','アラベスク模様','ステンドグラス'],0,'1892年商標登録。ジャポニズムの影響で日本の家紋から着想。初期は職人の手描き。'),
+q('apparel','LouisVuitton','1959年にPVC加工モノグラム・キャンバスを発表した3代目は？',['ガストン・ヴィトン','ジョルジュ・ヴィトン','ルイ・ヴィトン','パトリック・ヴィトン'],0,'ガストン・ヴィトン。ソフトバッグ製造が可能になり「スピーディ」「キーポル」誕生。'),
+q('apparel','LouisVuitton','LVMHが誕生した年と合併相手は？',['1987年・モエ・ヘネシー','1996年・ケリング','1978年・モエ・ヘネシー','2000年・リシュモン'],0,'1987年モエ・ヘネシーとの合併でLVMH誕生。ベルナール・アルノーのもと拡大。'),
+q('apparel','LouisVuitton','LVメンズのデザイナー変遷として正しいのは？',['キム・ジョーンズ→ヴァージル→ファレル','ヴァージル→キム→ファレル','マーク→キム→ヴァージル','キム→ファレル→ヴァージル'],0,'2011-2018キム・ジョーンズ、2019-2022ヴァージル・アブロー、2024〜ファレル・ウィリアムス。'),
+q('apparel','LouisVuitton','19SSヴァージルのデビューコレクションの名作バッグは？',['ソフトトランク','キーポル','ネヴァーフル','カプシーヌ'],0,'ソフトトランク。オレンジのチェーン付き、ミニと2展開。'),
+q('apparel','LouisVuitton','2003年に村上隆とのコラボで生まれたラインは？',['モノグラム・マルチカラー','ダミエ・アズール','エピ','グラフィティ'],0,'モノグラム・マルチカラーとチェリーブラッサム。'),
+// --- アパレル：Prada ---
+q('apparel','Prada','プラダの創業者と創業年・場所は？',['マリオ・プラダ・1913年ミラノ','ミウッチャ・プラダ・1913年ミラノ','マリオ・プラダ・1919年ローマ','マルティーノ・プラダ・1900年ミラノ'],0,'1913年、マリオ・プラダが弟マルティーノとミラノで創業。1919年イタリア王室御用達に。'),
+q('apparel','Prada','1979年にミウッチャが発表し大ヒットした素材は？',['ナイロン','サフィアーノレザー','ツイード','デニム'],0,'ナイロン素材のバッグ。トライアングルロゴ付きナイロンバッグが大ヒット。'),
+q('apparel','Prada','2021SSからプラダの共同クリエイティブ・ディレクターに就任したのは？',['ラフ・シモンズ','ヘディ・スリマン','キム・ジョーンズ','ダニエル・リー'],0,'ラフ・シモンズ。ミウッチャ・プラダとの共同体制。'),
+q('apparel','Prada','プラダが近年ナイロンから切り替えた素材は？',['Re-Nylon（再生ナイロン）','エコレザー','オーガニックコットン','リサイクルポリエステル'],0,'Re-Nylonへ切替、価格引き上げでハイラグジュアリーへ転換しV字回復。'),
+q('apparel','Prada','プラダの定番シューズ「モノリス」に存在しないのは？',['ヒールモノリスパンプス','ポーチ付きモノリスブーツ','モノリスローファー','サイドゴアモノリスブーツ'],0,'モノリスはポーチ付きブーツ/ダービー/サイドゴア/ローファー/サンダル。'),
+// --- アパレル：CELINE ---
+q('apparel','CELINE','セリーヌの創業時（1945年）の業態は？',['皮革の子供靴専門店','婦人服店','ハンドバッグ店','香水店'],0,'セリーヌ・ヴィピアナが夫と創業した子供靴専門店。1959年婦人靴、1966年ハンドバッグ、1967年レディース服。'),
+q('apparel','CELINE','1977年にセリーヌのデザイナーに就任したアメリカ出身デザイナーは？',['マイケル・コース','フィービー・ファイロ','エディ・スリマン','マーク・ジェイコブス'],0,'マイケル・コース。キャリアウーマンの支持を獲得。'),
+q('apparel','CELINE','フィービー・ファイロがセリーヌに就任したのは？',['2008年','2004年','2019年','1996年'],0,'2008年就任、2018年退任時に「フィービーロス」という言葉が生まれた。'),
+q('apparel','CELINE','フィービーがクロエ時代にコンビを組んでいたのは？',['ステラ・マッカートニー','ヴィヴィアン・ウエストウッド','ミウッチャ・プラダ','サラ・バートン'],0,'セントラル・セント・マーチンズで出会い、クロエでステラ＝デザイナー／フィービー＝アシスタントのコンビ。'),
+q('apparel','CELINE','フィービー代表作のバッグ「ラゲージ」で男性にも人気のサイズは？',['ファントム','ナノ','マイクロ','ミニ'],0,'ファントムは男性にも人気。ナノ/ミニ/マイクロ/ファントム展開。'),
+q('apparel','CELINE','カニエやトラヴィス・スコット着用で60〜100万円で取引されるフィービー作は？',['シルクスカーフシャツ（2011SS）','クロンビーコート','バイカーライダース','バイカラーニット'],0,'2011SSのシルクスカーフシャツ。当時はアウトレットに残っていた。'),
+// --- アパレル：Dior ---
+q('apparel','Dior','1947年に「ニュー・ルック」を発表したのは？',['クリスチャン・ディオール','イヴ・サンローラン','マルク・ボアン','ジョン・ガリアーノ'],0,'創業者クリスチャン・ディオール。戦後モードを再定義しフランスモード復権の立役者に。'),
+q('apparel','Dior','21歳でディオールの後継者となり「トラペーズライン」を発表したのは？',['イヴ・サンローラン','マルク・ボアン','エディ・スリマン','クリス・ヴァン・アッシュ'],0,'イヴ・サンローラン（1957-1960）。1958年トラペーズライン。徴兵により退任。'),
+q('apparel','Dior','RINKAN的に最重要とされるディオールオムのデザイナーと期間は？',['エディ・スリマン（2001-2007）','キム・ジョーンズ（2018-2025）','クリス・ヴァン・アッシュ（2007-2018）','ガリアーノ（1996-2011）'],0,'エディ・スリマン期。極細シルエット・ブラック基調・ロック融合で世界のメンズシルエットを変えた。'),
+q('apparel','Dior','2026年からディオールのデザイナーに就任するのは？',['ジョナサン・アンダーソン','グレン・マーティンス','デムナ','ピエールパオロ・ピッチョーリ'],0,'ロエベで成功したジョナサン・アンダーソンが2026年〜就任。'),
+q('apparel','Dior','キム・ジョーンズ期（2018-2025）の代表コラボに含まれないのは？',['バンクシー','KAWS','Shawn Stussy','Travis Scott'],0,'代表コラボはKAWS、Shawn Stussy、Travis Scott。'),
+// --- アパレル：Maison Margiela ---
+q('apparel','Margiela','マルタン・マルジェラの経歴として正しいのは？',['1957年ベルギー生まれ・ゴルチエで約3年修行','1961年フランス生まれ・ディオールで修行','1957年オランダ生まれ・シャネルで修行','1950年ベルギー生まれ・イヴサンローランで修行'],0,'1957年ベルギー生まれ、アントワープ王立美術アカデミー卒、ジャンポール・ゴルチエで約3年修行し1988年設立。'),
+q('apparel','Margiela','マルジェラのタグの4点ステッチの本来の意味は？',['外して着る前提（ブランド主張をしない）','偽造防止','品質保証','サイズ識別'],0,'ブランド主張をしないため外して着る前提。古参ファンほどタグを外す文化がある。'),
+q('apparel','Margiela','マルジェラ最大の特徴とされる思想は？',['匿名性（Anonymity）','マキシマリズム','ミニマリズム','エコロジー'],0,'デザイナーが表に出ない、モデルの顔を隠す、主語は「私たち」。ブランドより作品が主役。'),
+q('apparel','Margiela','2014年に就任しブランド名をMaison Margielaに変更したのは？',['ジョン・ガリアーノ','グレン・マーティンス','ラフ・シモンズ','デムナ'],0,'ジョン・ガリアーノ（2014-2025）。2025年〜はグレン・マーティンス（Y/PROJECT、DIESEL再生の実績）。'),
+q('apparel','Margiela','TABIブーツが初めて発表されたコレクションは？',['1989年SS','1994年AW','2000年SS','2014年AW'],0,'1989SSコレクションから発売され現在も人気。ペンキ加工やフラットソールも存在。'),
+q('apparel','Margiela','カニエ着用で話題になり2025年に再販された靴は？',['フューチャーハイ','ジャーマントレーナー','フュージョン','TABIブーツ'],0,'フューチャーハイ。2014年頃ブーム→2025年再販で相場向上。'),
+// --- アパレル：LOEWE ---
+q('apparel','LOEWE','ロエベの起源は？',['1846年マドリードの皮革職人工房','1872年バルセロナの帽子店','1905年マドリードの王室工房','1846年リスボンの革工房'],0,'1846年スペイン・マドリードで皮革職人らが工房設立。1872年エンリケ・ロエベ・ロスバーグが加入しブランド化。'),
+q('apparel','LOEWE','ロエベが1905年に授かった称号は？',['スペイン王室御用達','フランス王室御用達','英国王室御用達','法王庁御用達'],0,'アルフォンソ13世よりスペイン王室御用達に認定。'),
+q('apparel','LOEWE','1970年に発表されたアナグラムロゴの構成は？',['4つのL','2つのL','LとW','LOEWEの5文字'],0,'4つのLを組み合わせたロゴ。職人技術の象徴。'),
+q('apparel','LOEWE','ジョナサン・アンダーソン就任後のヒットバッグに含まれないのは？',['アマソナ','パズル','ハンモック','ゲート'],0,'JWA就任（2013）後のヒットはPuzzle、Hammock、Gate。アマソナは1975年発表の伝統モデル。'),
+// --- アパレル：特別枠（GUCCI・26SS） ---
+q('apparel','GUCCI','グッチの創業者と創業地は？',['グッチオ・グッチ・フィレンツェ','マウリツィオ・グッチ・ミラノ','グッチオ・グッチ・ローマ','トム・フォード・フィレンツェ'],0,'1921年、グッチオ・グッチがフィレンツェで創業したラゲージブランド。'),
+q('apparel','GUCCI','バンブーバッグが生まれた背景は？',['大戦でのレザー不足によるキャンバス転換期','竹の産地との提携','日本市場向け企画','環境対応'],0,'第二次大戦でレザー不足→キャンバス素材へ転換した時期にバンブーバッグ誕生。ホースビットローファーは1953年。'),
+q('apparel','GUCCI','1994年に低迷していたGUCCIを復活させたデザイナーは？',['トム・フォード','アレッサンドロ・ミケーレ','フリーダ・ジャンニーニ','サバト・デ・サルノ'],0,'トム・フォード。セクシュアル・ミニマリズムで完全復活させた。'),
+q('apparel','GUCCI','2026年からGUCCIのデザイナーを務めるのは？',['デムナ','サバト・デ・サルノ','ミケーレ','ジョナサン・アンダーソン'],0,'デムナ（バレンシアガでの実績）。26SSの注目はダークウェアスタイル、Acne Studios、MIUMIU。'),
+// --- 基礎：ブランド名 ---
+q('basic','ブランド名','トライ・リンクというモチーフが特徴のジュエリーブランドは？',['HOORSENBUHS（ホーセンブース）','LONE ONES','Cody Sanderson','Gabor'],0,'HOORSENBUHS。トライ・リンクモチーフが特徴。'),
+q('basic','ブランド名','ベルのモチーフが特徴のメンズシルバーブランドは？',['LONE ONES（ロンワンズ）','TADY&KING','JustinDavis','Bill Wall Leather'],0,'LONE ONES。Chrome Hearts創立メンバーだったレナード・カムホートが設立。'),
+q('basic','ブランド名','スターモチーフが有名なインディアンジュエリーブランドは？',['Cody Sanderson','TADY&KING','goro\'s','ALEX STREETER'],0,'コディサンダーソン。TADY&KINGはゴローズとデザインが似ている日本ブランド。'),
+q('basic','ブランド名','ヴァンクリーフ＆アーペルの代表アイテムは？',['ヴィンテージアルハンブラ','ラブブレス','ハードウェア','ビーゼロワン'],0,'ヴィンテージアルハンブラ。高級・ブライダルジュエリーが人気。'),
+q('basic','ブランド名','イントレチャートで有名なイタリアブランドは？',['BOTTEGA VENETA','GUCCI','PRADA','FENDI'],0,'ボッテガヴェネタ。仕立て・質が非常に良い。'),
+q('basic','ブランド名','ヘリンボーン柄が有名で正規店に長蛇の列ができるパリのブランドは？',['GOYARD','Berluti','GIVENCHY','LANVIN'],0,'ゴヤール。取り扱いが少ない。'),
+q('basic','ブランド名','オーブ（天体）のモチーフが特徴のブランドは？',['Vivienne Westwood','Alexander McQUEEN','Salvatore Ferragamo','VERSACE'],0,'ヴィヴィアン・ウエストウッド。マックイーンはスカル、フェラガモはガンチーニ、ヴェルサーチェはメデューサ。'),
+q('basic','ブランド名','武装戦線でも着用されるライダースの代名詞ブランドは？',['Lewis Leathers','Schott','VANSON','Dr.Martens'],0,'ルイスレザー。バイカーご用達。'),
+q('basic','ブランド名','元Yeezyチームのスタッフで発足されたブランドは？',['entire studios','GALLERY DEPT','NO/FAITH STUDIOS','ERL'],0,'エンタイアスタジオ。独特のシルエットが人気。'),
+q('basic','ブランド名','ステラマッカートニーの代表的なバッグの形は？',['ファラベラ','パディントン','ラゲージ','ピーカブー'],0,'ファラベラ。イギリス発でバッグが女性に大人気。'),
+q('basic','ブランド名','ジェリーロレンゾによるブランドは？',['FEAR OF GOD','OFF-WHITE','KITH','RHUDE'],0,'FEAR OF GOD。ヴィンテージTeeやドローコードパンツの流行を生んだ。FOGはそのセカンドライン。'),
+q('basic','ブランド名','2017-2019年にラフ・シモンズがデザイナーを務めて話題になったブランドは？',['Calvin Klein','DIESEL','JILSANDER','PRADA'],0,'カルバン・クライン。下着が有名なブランド。'),
+// --- 基礎：デザイナー ---
+q('basic','デザイナー','エディ・スリマンの在籍ブランドの順番は？',['ディオールオム→サンローラン→セリーヌ','セリーヌ→ディオールオム→サンローラン','サンローラン→ディオールオム→セリーヌ','ディオールオム→セリーヌ→サンローラン'],0,'2001-2007ディオールオム、2013-2016サンローランパリ、2019-2025セリーヌ。'),
+q('basic','デザイナー','エディの服を着るためにダイエットしたといわれるデザイナーは？',['カール・ラガーフェルド','ジョルジオ・アルマーニ','トム・フォード','ポール・スミス'],0,'カール・ラガーフェルド。'),
+q('basic','デザイナー','ヴァージル・アブローが2012年に立ち上げたブランドは？',['パイレックス ヴィジョン','オフホワイト','デニムティアーズ','ALYX'],0,'パイレックス ヴィジョン。翌2013年にオフホワイト、2019年〜LVメンズ。'),
+q('basic','デザイナー','ボッテガヴェネタのデザイナー変遷（2018〜）は？',['ダニエル・リー→マシュー・ブレイジー→ルイーズ・トロッター','マシュー→ダニエル→ルイーズ','トーマス・マイヤー→ダニエル→マシュー','ダニエル→ルイーズ→マシュー'],0,'2018-2022ダニエル・リー、2023-2025マシュー・ブレイジー、2026〜ルイーズ・トロッター。'),
+q('basic','デザイナー','2005〜2016年にジバンシィを務めたデザイナーは？',['リカルド・ティッシ','アレキサンダー・マックイーン','ジョン・ガリアーノ','クレア・ワイト・ケラー'],0,'リカルド・ティッシ。'),
+q('basic','デザイナー','2018年からサンローランのデザイナーは？',['アンソニー・ヴァカレロ','エディ・スリマン','ステファノ・ピラーティ','トム・フォード'],0,'アンソニー・ヴァカレロ。'),
+// --- 基礎：ディティール・アイテム名 ---
+q('basic','ディティール','紳士靴の「内羽根式」の別名は？',['バルモラル','ブルーチャー','モンク','メダリオン'],0,'内羽根式＝バルモラル、外羽根式＝ブルーチャー。'),
+q('basic','ディティール','デニムの「赤耳」と呼ばれる部分の名称は？',['セルビッチ','リベット','側章','ヨーク'],0,'セルビッチ。リベットは補強金具、側章はスラックス側面のライン。'),
+q('basic','ディティール','スーツラペルにある小さな穴の名称は？',['フラワーホール','ゴージ','ベント','ダーツ'],0,'フラワーホール。ゴージは襟の縫い合わせ線、ベントは背中の切れ込み。'),
+q('basic','ディティール','燕尾服の燕尾部分を取った形のウエスト丈ジャケットは？',['スペンサージャケット','スモーキングジャケット','ナポレオンジャケット','サファリジャケット'],0,'スペンサージャケット。スモーキングはタキシードの原型。'),
+q('basic','アイテム名','モッズコートの元となった軍用アウターの型番と特徴は？',['M-51・フィッシュテール','M-65・立ち襟','N-3B・ファーフード','MA-1・リブ'],0,'M-51。二股に分かれた後ろ裾フィッシュテールが特徴。'),
+q('basic','アイテム名','トレンチコートの特徴3点として正しいのは？',['エポーレット・ガンフラップ・Dカン','トグル・ループ・フード','ラペル・ベント・チンストラップ','ヨーク・タック・カフス'],0,'肩のベルト＝エポーレット、胸の当て布＝ガンフラップ、D字金具＝Dカン。'),
+q('basic','アイテム名','REDWINGが販売する靴ひものない長靴のようなブーツは？',['ペコスブーツ','エンジニアブーツ','チャッカブーツ','ワラビー'],0,'ペコスブーツ。ワラビーはClarksのクレープソールブーツ。'),
+q('basic','アイテム名','頭から顔、首までをすっぽり覆う防寒具は？',['バラクラバ','スヌード','ビーニー','イヤーマフ'],0,'バラクラバ。スヌードは輪状の首防寒具。'),
+q('basic','柄','千鳥格子の柄は何に似ていることが由来？',['犬の牙（ハウンド・トゥース）','鳥の足跡','魚の骨','市松模様'],0,'ハウンド・トゥース（犬の牙）。魚の骨のような柄はヘリンボーン。'),
+q('basic','柄','バーバリーの伝統的な柄の名称は？',['ノバ','トロッター','GG柄','タータン'],0,'ノバ（ノヴァチェック）。トロッターはディオールの伝統柄。'),
+q('basic','素材','コードバンは何の動物の革？',['馬','牛','鹿','ヤギ'],0,'馬（お尻の革）。カーフ・ステアハイド＝牛、ディアスキン＝鹿、ゴートスキン＝ヤギ、シープスキン＝羊。'),
+q('basic','柄','カシミヤの花を図案化した柄は？',['ペイズリー','アーガイル','フェアアイル','チマヨ'],0,'ペイズリー。フェアアイルは星や雪の結晶モチーフ。'),
+// --- 時計 ---
+q('watch','相場','腕時計の相場を決める3要因は？',['流通量・為替・定価','ブランド力・広告・素材','年式・状態・付属品','金利・株価・原油'],0,'①流通量（減ると上昇）②為替（円安で上昇）③定価（二次流通は定価の影響大）。'),
+q('watch','相場','円安に振れると日本の時計相場はどうなる？',['上昇する','下落する','変わらない','取引停止になる'],0,'円安→海外の人が日本で購入するため相場上昇。円高→消費者が海外で買うため下落。'),
+q('watch','買取','ロレックスの買取値入れ率の目安は？',['85〜95%','60〜70%','40〜50%','100%'],0,'ロレックスのリセールが最も良く85〜95%。他ブランドは60〜85%。'),
+q('watch','買取','付属品で最も重要とされるのは？',['保証書','余りコマ','箱','タグ'],0,'保証書。有無で値入れ率が10%以上変動、買取を断る場合もある。'),
+q('watch','買取','磨きについて正しいのは？',['ノンポリッシュの方が評価が高い','磨いた方が高評価','磨きは評価に無関係','傷は必ず磨くべき'],0,'多少傷があっても磨かれていない個体の方が評価が高い。磨きすぎは重量減・ケース形状変化のため敬遠される。'),
+q('watch','Patek','パテック・フィリップの創業年と創業地は？',['1839年ジュネーブ','1875年ル・ブラッシュ','1755年ジュネーブ','1905年ロンドン'],0,'1839年ジュネーブ。ポーランド亡命貴族パテックと時計職人チャペックが設立。'),
+q('watch','Patek','1932年にパテックを買収した現在のオーナー家は？',['スターン兄弟','アルノー家','リシュモン','スウォッチ'],0,'世界大恐慌の影響で1932年にスターン兄弟が買収。同年カラトラバ（Ref.96）発表。'),
+q('watch','Patek','ノーチラスをデザインしたデザイナーは？',['ジェラルド・ジェンタ','ジャン-アドリアン・フィリップ','アルド・チプロ','ローラン・ペリエ'],0,'ジェラルド・ジェンタ。APロイヤルオークも彼のデザイン。'),
+q('watch','Patek','ノーチラス5711に関して正しいのは？',['SS3針の最終モデルで2021年廃盤','現在も生産中','1976年の初代モデル','ゴールドのみ展開'],0,'5711はステンレス3針ノーチラスの最終モデルで2021年廃盤。最後の限定ティファニーブルーは650万ドルで落札。'),
+q('watch','Patek','パテックが世界初に腕時計として商品化した機構は？',['ワールドタイム','トゥールビヨン','ミニッツリピーター','ムーンフェイズ'],0,'世界24都市の時刻が確認できるワールドタイム。'),
+q('watch','Patek','2024年発表、25年ぶりの新モデルは？',['キュビタス','カラトラバ','アクアノート','ゴンドーロ'],0,'キュビタス。45mmスクエア型ケースが特徴で30m防水。'),
+q('watch','AP','オーデマピゲの創業年と創業地は？',['1875年ル・ブラッシュ','1839年ジュネーブ','1755年ジュネーブ','1848年ル・ロックル'],0,'1875年、ジュール=ルイ・オーデマとエドワール=オーギュスト・ピゲがル・ブラッシュで創業。設立から同じ家系で経営。'),
+q('watch','AP','1972年発表のロイヤルオークの革新性は？',['ステンレスを貴金属として扱った世界初のラグスポ','世界初の防水時計','世界初の自動巻き','世界最薄'],0,'クォーツショックの苦境で、39mmステンレスケースを貴金属扱いした世界初のラグジュアリースポーツウォッチ。'),
+q('watch','AP','初代ロイヤルオーク5402の通称は？',['ジャンボ','エクストラシン','オフショア','メガタペ'],0,'当時大きかった39mmケースから「ジャンボ」と呼ばれた。'),
+q('watch','AP','三大時計ブランドで唯一コラボ作品があるのは？',['オーデマピゲ','パテック','ヴァシュロン','どれもない'],0,'AP。マーベル（ブラックパンサー/スパイダーマン各250本）、KAWS、1017 ALYX 9SMなど。'),
+q('watch','VC','ヴァシュロン・コンスタンタンの創業年は？',['1755年','1839年','1875年','1905年'],0,'1755年ジュネーブ。三大ブランドで最も歴史が長い。現在リシュモン傘下。'),
+q('watch','VC','VCのシンボル「マルタ十字」が誕生した年は？',['1880年','1755年','1996年','1900年'],0,'1880年。ムーブメントの一部パーツに酷似していたことからロゴ採用と言われる。'),
+q('watch','VC','ヒストリーク・アメリカン1921の特徴は？',['文字盤が45°回転','ケースが三角形','両面文字盤','デジタル表示'],0,'運転中でも時刻を読めるよう45°回転。1920年代アメリカの車社会が背景。'),
+q('watch','Rolex','ロレックスの創業者と創業地は？',['ハンス・ウイルスドルフ・ロンドン','ハンス・ウイルスドルフ・ジュネーブ','ジェラルド・ジェンタ・ロンドン','ジョン・ハーウッド・ロンドン'],0,'1905年、ハンス・ウイルスドルフがロンドンで創業。'),
+q('watch','Rolex','ロレックス三大発明は？',['オイスター・パーペチュアル・デイトジャスト','オイスター・GMT・デイトナ','パーペチュアル・サブマリーナ・デイデイト','オイスター・クロノ・ミルガウス'],0,'防水ケース「オイスター」(1926)、自動巻き「パーペチュアル」(1931)、日付「デイトジャスト」(1945)。'),
+q('watch','Rolex','1927年に「泳げる腕時計」を証明した出来事は？',['グライツ嬢のドーバー海峡横断','エベレスト登頂','トリエステ号の深海潜航','デイトナレース'],0,'速記記者メルセデス・グライツ嬢がオイスター着用でドーバー海峡横断に成功。'),
+q('watch','Rolex','KING OF ROLEXと称されるモデルは？',['コスモグラフデイトナ','デイデイト','サブマリーナー','GMTマスターII'],0,'デイトナ。唯一のクロノグラフで「デイトナマラソン」という造語も。'),
+q('watch','Rolex','デイデイトに存在しない素材は？',['ステンレス','プラチナ','イエローゴールド','ピンクゴールド'],0,'デイデイトはPT/WG/YG/PGの4素材のみ。ブレスはアイゼンハワー大統領由来の「プレジデントブレス」。'),
+q('watch','Rolex','GMTマスターのニックネーム「ペプシ」のベゼル配色は？',['赤×青','赤×黒','青×黒','黒×緑'],0,'ペプシ=赤×青。コーク=赤×黒、バットマン=青×黒、スプライト（レフティ）=黒×緑、ルートビア=黒×茶。'),
+q('watch','Rolex','サブマリーナー「ハルク」の特徴は？',['オールグリーン文字盤×緑ベゼル','黒文字盤×緑ベゼル','青文字盤×青ベゼル','赤いSUBMARINER表記'],0,'116610LV。黒文字盤×緑ベゼルはスターバックス（126610LV）。'),
+q('watch','Rolex','ポール・ニューマン本人使用のデイトナ6263の2017年落札額は？',['約1780万ドル','約100万ドル','約650万ドル','約5000万ドル'],0,'1780万ドル（約20億円）。エキゾチックダイヤルが特徴。'),
+q('watch','Rolex','ミルガウスの名前の由来は？',['フランス語の1000＋磁束密度の単位','開発者の名前','工場の地名','ミル打ち加工'],0,'1000ガウスの磁気に耐える唯一の耐磁特化モデル。1956年発表、2023年再廃盤。'),
+q('watch','Rolex','2025年新作でハイビート仕様（36,000振動/時）のモデルは？',['ランドドゥエラー','スカイドゥエラー','シードゥエラー','エアキング'],0,'ランドドゥエラー。フラットジュビリーブレス、シースルーバック採用。'),
+// --- バッグ：CHANEL ---
+q('bag','CHANEL','キャビアスキンの元になる革は？',['型押しした牛革','羊革','ヤギ革','エイ革'],0,'表面ざらつきの牛革に型押し。模様がキャビアに似ていることが由来。'),
+q('bag','CHANEL','ラムスキンの特徴として正しいのは？',['非常に柔らかいが傷・水に弱い','硬くて丈夫','耐水性が高い','型崩れしない'],0,'生後1年未満の子羊。しなやかで柔らかいがデリケート。'),
+q('bag','CHANEL','シャネルがエキゾチックレザーの使用廃止を発表した年は？',['2018年','2010年','2021年','2000年'],0,'2018年。クロコ、パイソン、リザード、ガルーシャ、ファーが対象。'),
+q('bag','CHANEL','シャネルの代名詞ファンシーツイードの生地メーカーは？',['リントン・ツイード社','ハリス・ツイード社','ロロ・ピアーナ','エルメネジルド・ゼニア'],0,'1912年イギリス創業のリントン・ツイード社。'),
+q('bag','CHANEL','シリアルナンバーが「ランダム英数8桁」になったのは？',['2023年〜','2020年〜','2015年〜','2010年〜'],0,'2023年からランダム英数8桁。2021年〜はシールからプレートに変化。'),
+q('bag','CHANEL','「2.55」の名前の由来は？',['1955年2月の誕生年月','ココの誕生日','店舗の住所','デザイン番号'],0,'1955年2月にガブリエル・シャネルがデザインしたことから。'),
+q('bag','CHANEL','「11.12」の名前の由来は？',['当時の商品コード01112','1911年12月','デザイナーの背番号','店舗数'],0,'1983年にカール・ラガーフェルドが2.55を再解釈し、商品コード01112にちなんで命名。正式名称はクラシックハンドバッグ。'),
+q('bag','CHANEL','2.55と11.12のロック金具の違いは？',['2.55=マドモアゼルロック／11.12=ココマークロック','2.55=ココマーク／11.12=マドモアゼル','両方ココマーク','両方ターンロック'],0,'2.55は長方形のマドモアゼルロック、11.12はココマークロック。チェーンも2.55はチェーンのみ、11.12はレザー編み込み。'),
+q('bag','CHANEL','マトラッセ25（ラムスキン）の2026年定価は？',['1,925,000円','1,744,600円','925,100円','2,074,600円'],0,'2026年税込1,925,000円（2025年は1,744,600円）。'),
+q('bag','CHANEL','ボーイシャネルのデザインの着想元は？',['弾薬保管バッグ','狩猟バッグ','軍用ヘルメット','葉巻ケース'],0,'オーバーステッチの縁取りとアンティークな留め具。弾薬保管バッグからインスパイア。'),
+q('bag','CHANEL','内フラップ裏のジップポケットの通称は？',['ラブレターポケット','スマイルポケット','シークレットスペース','ココポケット'],0,'シークレットポケット＝ラブレターポケット。背面ポケットはモナリザの微笑みから「スマイルポケット」。'),
+// --- バッグ：Hermès ---
+q('bag','Hermes','バーキンの原型となったバッグは？',['オータクロア','ケリー','ボリード','コンスタンス'],0,'1984年、馬の鞍を入れるサドルバッグ「オータクロア」が原型。ジェーン・バーキンにちなみ命名。'),
+q('bag','Hermes','ケリーの発売当初（1936年）の名称は？',['サック・ア・クロア','サック・ケリー','クロアバッグ','モナコバッグ'],0,'サック・ア・クロア。モナコ王妃グレース・ケリー愛用で1955年頃「ケリー」に改名。'),
+q('bag','Hermes','バーキンとケリーのハンドルの数は？',['バーキン2つ・ケリー1つ','バーキン1つ・ケリー2つ','両方2つ','両方1つ'],0,'バーキンは2本ハンドルでオープンフラップ可。ケリーは1本でフラップを閉じて持つ、ショルダー付き。'),
+q('bag','Hermes','エルメスの人気バッグを探して通うことを俗に何と呼ぶ？',['エルパト','バーキン詣','クロア巡り','H活'],0,'エルメスパトロール＝エルパト。人気バッグはバックヤード保管が多く声かけが必要。'),
+q('bag','Hermes','1997年登場で扱いやすさから抜群の人気を誇る雄仔牛レザーは？',['トゴ','エプソン','スイフト','バレニア'],0,'トゴ。エプソンは2003年登場の型押し、スイフトは2006年登場で発色が良い。'),
+q('bag','Hermes','ヴォーエプソンの特徴は？',['プレス加工の細かな型押し','起毛スエード','ヌメ革','エナメル加工'],0,'プレス加工を施した細かな型押しの雄仔牛レザー。2003年登場。'),
+q('bag','Hermes','バーキン/ケリーの刻印位置が変わったのはいつから？',['2015年（T刻印）から内側ベルト付近','2000年から底面','2010年からハンドル裏','変わっていない'],0,'2015年〜は正面から見て左側の内側ベルト付近。それ以前は正面クロアベルトの裏。'),
+q('bag','Hermes','バーキン25（トゴ）の2025年定価は？',['1,881,000円','1,738,000円','2,057,000円','1,331,000円'],0,'2025年188.1万円（2024年173.8万円、2022年133.1万円）。'),
+q('bag','Hermes','ケリーの外縫いの特徴は？',['ステッチが見えカッチリした印象','ステッチが見えず柔らかい','ノーステッチ','二重ステッチ'],0,'外縫い＝表からステッチが見えエッジが効いたフォーマル向き。内縫い＝柔らかい印象。'),
+q('bag','Hermes','バーキン唯一の外縫いモデルは？',['バーキンセリエ','バーキンカーゴ','バーキンシャドウ','バーキンギリーズ'],0,'バーキンセリエ。シャドウはだまし絵、カーゴは2021年キャンバス×スイフト、ギリーズは通気口デザイン。'),
+q('bag','Hermes','ニロティカスの名前の由来は？',['ナイル川','ニロ族','地名ニロティカ','発見者の名前'],0,'Niloticus＝ナイル川。アフリカ・ナイル川流域原産のクロコダイル。ポロサスは東南アジア・豪州原産。'),
+// --- ジュエリー：カルティエ ---
+q('jewelry','カルティエ','ラブブレスレットが誕生した年と場所は？',['1969年ニューヨーク','1971年パリ','1968年パリ','1980年ロンドン'],0,'1969年NY。デザイナーのアルド・チプロが「貞操帯」から着想。「現代の愛の手錠」と呼ばれる。'),
+q('jewelry','カルティエ','ラブの最新型（2022年〜）の特徴は？',['ビスが外れず裏側に穴がない','ビスが外れる','裏側に半円状の穴が2か所','ドライバー不要'],0,'旧型=ビスが外れる／新型=外れない＋裏に半円穴2か所／最新型=外れない＋穴なし。'),
+q('jewelry','カルティエ','ジュストアンクルの1971年発売当初の名称は？',['ネイルブレスレット','ジュストクルー','クルドパリ','スクリューブレス'],0,'「ネイルブレスレット」。2000年代に「ジュストアンクル」（仏語で一本の釘）に改名。'),
+q('jewelry','カルティエ','ジュストアンクルの旧型/新型の見分けは？',['旧型は穴2つ・新型は穴1つ','旧型は穴1つ・新型は穴2つ','刻印の色','ビスの数'],0,'着脱部分の丸い穴が旧型=2つ、新型=1つ。'),
+q('jewelry','カルティエ','ラブブレス クラシック（PG）の2026年定価は？',['1,359,600円','896,500円','1,478,400円','1,135,200円'],0,'クラシック（ビス2つ・幅6.1mm）は1,359,600円。スモール896,500円、ミディアム1,135,200円。'),
+q('jewelry','カルティエ','ジュストアンクル ブレス クラシック（PG）の2026年定価は？',['1,478,400円','1,359,600円','693,000円','2,455,200円'],0,'クラシック（幅3.5mm）PG 1,478,400円。スモール（2.5mm）は693,000円。'),
+q('jewelry','カルティエ','ラブブレスの通常の着脱方法は？',['専用ドライバーで反時計回りにビスを緩める','プッシュボタン','マグネット','スライド式'],0,'専用ドライバーで反時計回り。パヴェダイヤ＋12石のみヒンジ＋プッシュボタン式。'),
+// --- ジュエリー：ヴァンクリーフ ---
+q('jewelry','VCA','アルハンブラが誕生した年とモチーフは？',['1968年・四つ葉のクローバー','1975年・花','1968年・星','1906年・ハート'],0,'1968年誕生。四つ葉のクローバーが着想源で「愛」「希望」「幸運」「信頼」の意味。'),
+q('jewelry','VCA','ヴィンテージアルハンブラのモチーフサイズは？',['約15mm','約9.5mm','約26mm','約21mm'],0,'ヴィンテージ約15mm。スウィート約9.5mm、マジック約26mm、ピュア約16mm、ビザンチン約21mm。'),
+q('jewelry','VCA','フチにミル打ちが「ない」アルハンブラは？',['ピュアとビザンチン','ヴィンテージとスウィート','マジックとラッキー','全てミル打ちあり'],0,'ピュア（約16mm）とビザンチン（約21mm・金属のみ）は滑らかな仕上がり。'),
+q('jewelry','VCA','アルハンブラの新型カニカンの特徴は？',['平坦でロゴ刻印あり','丸みがありロゴなし','S字フック','マグネット式'],0,'旧型=丸みを帯びてロゴ刻印なし、新型=平坦でロゴ刻印あり。'),
+q('jewelry','VCA','ヴィンテージアルハンブラ ブレス（YG×5Pオニキス）の2026年定価は？',['814,000円','852,500円','896,500円','259,600円'],0,'オニキス814,000円。マザーオブパール852,500円、カーネリアン896,500円。'),
+q('jewelry','VCA','モース硬度10の標準鉱物は？',['ダイヤモンド','ルビー','トパーズ','クォーツ'],0,'10=ダイヤモンド。9=コランダム（ルビー・サファイア）、8=トパーズ、7=クォーツ。'),
+q('jewelry','VCA','マザーオブパールの取り扱い注意点は？',['水との接触で収縮の危険','直射日光で変色なし','硬度が高く安心','熱に強い'],0,'真珠層を加工した素材で硬度3.5〜4。水分蒸発で縮む傾向があり水との接触に注意。'),
+q('jewelry','VCA','オニキスとヴェインドオニキスの違いは？',['黒一色か縞模様か','産地の違い','硬度の違い','大きさの違い'],0,'ヴァンクリーフでは黒一色=オニキス、縞模様入り=ヴェインドオニキス。ギリシャ語で「爪」の意。'),
+q('jewelry','VCA','1944年に愛媛県岩城島で発見され日本人学者にちなんで命名された石は？',['スギライト','ピーターサイト','ロードナイト','ヒスイ'],0,'スギライト。杉健一博士にちなむ。世界三大ヒーリングストーンのひとつ。'),
+// --- ジュエリー：ティファニー・エルメス ---
+q('jewelry','ティファニー','ハードウェアコレクションの着想元は？',['1962年製のアーカイブブレスレット','ブルックリン橋','1975年のブルーブック','五番街の店舗'],0,'アーカイブの1962年製ブレスに着想を得て2017年誕生。NYの街並みがインスピレーション。'),
+q('jewelry','ティファニー','ハードウェアのチェーンのコマの名称は？',['ゲージリンク','ボールチェーン','アンカーリンク','キューバンリンク'],0,'ゲージリンク。コマが中空のため軽いが変形しやすい。'),
+q('jewelry','ティファニー','ティファニーTの誕生年と着想元は？',['2014年・ブルーブック(1975-76)のTブレス','2017年・1962年ブレス','2010年・アトラス','2000年・オープンハート'],0,'ティファニーのモノグラム初使用の14KゴールドTブレスに着想し2014年誕生。'),
+q('jewelry','ティファニー','ハードウェアブレス ラージリンク（SV）の2026年定価は？',['456,500円','204,600円','128,700円','500,500円'],0,'ラージ（10mm）SV 456,500円。マイクロ128,700円、スモール204,600円。'),
+q('jewelry','エルメス','1970年代〜現在のフランス製シルバーのホールマークは？',['925・ミネルヴァ刻印','800・イノシシ刻印','950・カニ刻印','999・鷲刻印'],0,'1970年代〜はシルバー925でミネルヴァ刻印。〜1970年代初頭は800でパリ製イノシシ/郊外製カニ。'),
+q('jewelry','エルメス','シェーヌダンクル現行品のシリアルナンバーから分かることは？',['最初の2桁が製造西暦の下2桁','工房の場所','職人番号','販売店舗'],0,'現行はレーザー刻印でシリアル・生産国・925刻印あり。最初の2桁＝製造年の下2桁。'),
+q('jewelry','エルメス','シェーヌダンクルGMブレスの2026年定価は？',['310,200円','330,000円','280,500円','256,300円'],0,'GM 310,200円。TPM 229,900円／PM 256,300円／MM 280,500円／TGM 330,000円。'),
+q('jewelry','エルメス','菱形の刻印（メイカーズマーク）が示すものは？',['製造した工房','製造年','素材の純度','販売国'],0,'メイカーズマークは製品が作られた工房を示す。'),
+];
+function q(cat,sub,text,choices,ans,exp){return{cat,sub,q:text,choices,answer:ans,exp}}
+SEED.forEach((x,i)=>x.id='s'+i);
+
+/* ============ 売価/定価シードカード ============ */
+const SEED_PRICES=[
+ {n:'CH キーパー リング（SV）',p:'300,300円',note:'2026税込・定価'},
+ {n:'CH フローラルクロス リング（SV）',p:'300,300円',note:'2026税込・定価'},
+ {n:'CH ダブルフローラルクロス リング（SV）',p:'300,300円',note:'2026税込・定価'},
+ {n:'CH セメタリークロス リング（SV）',p:'300,300円',note:'2026税込・定価'},
+ {n:'CH クラシックオーバルクロス リング（SV）',p:'357,500円',note:'2026税込・定価'},
+ {n:'CH スクロールバンド（SV）',p:'129,800円',note:'2026税込・定価'},
+ {n:'CH SBTバンド（SV）',p:'129,800円',note:'2026税込・定価／22kは国内展開なし'},
+ {n:'CH 3mmスペーサーファックユー（SV）',p:'85,800円',note:'2026税込・定価'},
+ {n:'CH 6mmスペーサーファックユー（SV）',p:'100,100円',note:'2026税込・定価'},
+ {n:'CH 6mmスペーサーフォーエバー（SV）',p:'100,100円',note:'2026税込・定価'},
+ {n:'CH ダガー リング',p:'155,000円+tax',note:'2023定価／22k 1,420,000+tax'},
+ {n:'CH K&T リング',p:'180,000円+tax',note:'2023定価／22k 1,530,000+tax'},
+ {n:'CH タイニーECHプラス リング',p:'70,000円+tax',note:'2023定価・4LINK/5LINK'},
+ {n:'CH バブルガムCHクロス リング',p:'45,000円+tax',note:'2023定価／22k 218,000+tax'},
+ {n:'CH バブルガムスター リング',p:'45,000円+tax',note:'2023定価'},
+ {n:'CH バブルガムハート リング',p:'45,000円+tax',note:'2023定価'},
+ {n:'CH ベイビークラシックダガー リング',p:'100,000円+tax',note:'2023定価／22k 491,000+tax'},
+ {n:'CH ベイビークラシックK&T リング',p:'100,000円+tax',note:'2023定価'},
+ {n:'CH NTFL リング',p:'53,000円+tax',note:'2023定価・刻印CHROME HEARTS'},
+ {n:'CH ラージスター リング',p:'206,000円+tax',note:'2022定価'},
+ {n:'CH ビーズインバンド リング',p:'120,000円+tax',note:'2023定価'},
+ {n:'CH フローラルハート リング',p:'138,000円+tax',note:'2022定価'},
+ {n:'CH エタニティヴァインバンド',p:'89,000円+tax',note:'2022定価'},
+ {n:'CH TFPパンク各種 リング',p:'63,000円+tax',note:'2022定価'},
+ {n:'CH×WESCO ボス（国内定価）',p:'552,960円',note:'コラボ'},
+ {n:'CH×WESCO ジョブマスター（国内定価）',p:'638,280円',note:'コラボ'},
+ {n:'CH×WESCO ファイヤーマン（国内定価）',p:'729,000円',note:'コラボ'},
+ {n:'CHANEL ミニマトラッセ（マトラッセ20・ラム）',p:'925,100円',note:'2026税込・定価'},
+ {n:'CHANEL マトラッセ23（キャビア）',p:'1,850,200円',note:'2026税込・定価'},
+ {n:'CHANEL 11.12 マトラッセ25（ラム）',p:'1,925,000円',note:'2026税込・定価'},
+ {n:'CHANEL デカマトラッセ30（キャビア）',p:'2,074,600円',note:'2026税込・定価'},
+ {n:'CHANEL デカマトラッセ34（キャビア）',p:'2,186,800円',note:'2026税込・定価'},
+ {n:'HERMES バーキン25（トゴ）',p:'1,881,000円',note:'2025定価'},
+ {n:'HERMES バーキン30（トゴ）',p:'2,057,000円',note:'2025定価'},
+ {n:'HERMES バーキン35（トゴ）',p:'2,222,000円',note:'2025定価'},
+ {n:'HERMES ケリー25（トゴ）',p:'1,859,000円',note:'2025定価'},
+ {n:'HERMES ケリー28（トゴ）',p:'1,969,000円',note:'2025定価'},
+ {n:'HERMES ミニケリー/ケリー20（エプソン）',p:'1,551,000円',note:'2025定価'},
+ {n:'HERMES シェーヌダンクルTPMブレス',p:'229,900円',note:'2026税込・定価'},
+ {n:'HERMES シェーヌダンクルPMブレス',p:'256,300円',note:'2026税込・定価'},
+ {n:'HERMES シェーヌダンクルMMブレス',p:'280,500円',note:'2026税込・定価'},
+ {n:'HERMES シェーヌダンクルGMブレス',p:'310,200円',note:'2026税込・定価'},
+ {n:'HERMES シェーヌダンクルTGMブレス',p:'330,000円',note:'2026税込・定価'},
+ {n:'Cartier ラブブレス クラシック（PG）',p:'1,359,600円',note:'2026税込・定価'},
+ {n:'Cartier ラブブレス スモール（PG）',p:'896,500円',note:'2026税込・定価'},
+ {n:'Cartier ラブリング クラシック（YG）',p:'358,600円',note:'2026税込・定価'},
+ {n:'Cartier ジュストアンクルブレス クラシック（PG）',p:'1,478,400円',note:'2026税込・定価'},
+ {n:'Cartier ジュストアンクルブレス スモール（PG）',p:'693,000円',note:'2026税込・定価'},
+ {n:'Cartier ジュストアンクルリング クラシック（PG）',p:'500,500円',note:'2026税込・定価'},
+ {n:'VCA ヴィンテージアルハンブラ ブレス（YG×5PMOP）',p:'852,500円',note:'2026税込・定価'},
+ {n:'VCA ヴィンテージアルハンブラ ブレス（YG×5Pオニキス）',p:'814,000円',note:'2026税込・定価'},
+ {n:'VCA ヴィンテージアルハンブラ ネックレス（YG×1PMOP）',p:'522,500円',note:'2026税込・定価'},
+ {n:'VCA スウィートアルハンブラ ブレス（YG×1PMOP）',p:'259,600円',note:'2026税込・定価'},
+ {n:'Tiffany ハードウェアブレス ラージリンク（SV）',p:'456,500円',note:'2026税込・定価'},
+ {n:'Tiffany ハードウェアブレス スモールリンク（SV）',p:'204,600円',note:'2026税込・定価'},
+ {n:'Tiffany Tワイヤーブレス（YG）',p:'528,000円',note:'2026税込・定価'},
+ {n:'Tiffany Tスマイルペンダント ミニ（RG）',p:'146,300円',note:'2026税込・定価'},
+ {n:'BALENCIAGA ロデオ ミディアム',p:'564,300円',note:'定価'},
+ {n:'BALENCIAGA ロデオ スモール',p:'496,100円',note:'定価'},
+ {n:'BALENCIAGA ロデオ ラージ',p:'801,900円',note:'定価'},
+];
+SEED_PRICES.forEach((x,i)=>x.id='p'+i);
+
+/* ============ 状態・永続化 ============ */
+let DB={stats:{},custom:[],prices:[],pstats:{},history:[],photos:[]};
+const KEY='rinkan-150-v1';
+const IMGKEY=id=>'rinkan-img-'+id;
+async function loadDB(){
+  try{const r=await window.storage.get(KEY); if(r&&r.value){DB=Object.assign(DB,JSON.parse(r.value));}}catch(e){/* 初回は無しでOK */}
+  if(!DB.photos)DB.photos=[];
+}
+let saveTimer=null;
+function saveDB(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{try{await window.storage.set(KEY,JSON.stringify(DB));}catch(e){console.error('save failed',e);}},400);
+}
+const imgCache={};
+async function getImg(id){
+  if(imgCache[id])return imgCache[id];
+  try{const r=await window.storage.get(IMGKEY(id)); if(r&&r.value){imgCache[id]=r.value;return r.value;}}catch(e){}
+  return null;
+}
+/* 写真→モデル名 記述式 */
+function normAns(s){
+  return (s||'').toLowerCase()
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g,m=>String.fromCharCode(m.charCodeAt(0)-0xFEE0))
+    .replace(/[\u30a1-\u30f6]/g,m=>String.fromCharCode(m.charCodeAt(0)-0x60))
+    .replace(/[\s　・･ｰー\-−–—_.,、。//／()（）\[\]「」『』"'＆&]/g,'');
+}
+function judgeInput(input,ans){
+  const a=normAns(input),b=normAns(ans);
+  if(!a)return false;
+  if(a===b)return true;
+  if(a.length>=2&&b.length>=2&&(a.includes(b)||b.includes(a)))return true;
+  return false;
+}
+function photoMCQ(p){
+  return{id:p.id,cat:p.cat,sub:'写真・記述',q:'この写真のモデル名は？',ans:p.name,exp:'正解：'+p.name+(p.note?'／'+p.note:''),img:p.id,input:true};
+}
+function photoMCQs(cid){
+  const ps=cid?DB.photos.filter(x=>x.cat===cid):DB.photos.slice();
+  return ps.map(photoMCQ);
+}
+function allQ(){return SEED.concat(DB.custom)}
+function allP(){return SEED_PRICES.concat(DB.prices)}
+function stat(id){return DB.stats[id]||{c:0,w:0,streak:0}}
+function record(id,ok){const s=stat(id); if(ok){s.c++;s.streak++}else{s.w++;s.streak=0} DB.stats[id]=s; saveDB(); renderHome();}
+
+/* ============ ナビ ============ */
+function go(t){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('on'));
+  document.getElementById('tab-'+t).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(t==='home')renderHome();
+  if(t==='price')renderCard();
+  if(t==='import')renderImportStats();
+  window.scrollTo(0,0);
+}
+
+/* ============ ホーム ============ */
+function catMastery(cid){
+  let qs;
+  if(cid==='price'){qs=allP().map(p=>p.id); if(!qs.length)return{m:0,n:0,done:0};
+    const done=qs.filter(id=>(DB.pstats[id]||0)>0).length; return{m:done/qs.length,n:qs.length,done};}
+  qs=allQ().filter(x=>x.cat===cid).map(x=>x.id).concat(DB.photos.filter(x=>x.cat===cid).map(x=>x.id));
+  if(!qs.length)return{m:0,n:0,done:0};
+  const done=qs.filter(id=>stat(id).streak>=1).length;
+  return{m:done/qs.length,n:qs.length,done};
+}
+function renderHome(){
+  const d1=Math.ceil((T1-new Date())/864e5), d2=Math.ceil((T2-new Date())/864e5);
+  document.getElementById('d1').textContent=d1>=0?`あと${d1}日`:'終了';
+  document.getElementById('d2').textContent=`あと${d2}日`;
+  let est=0, gauge='', legend='', list='';
+  CATS.forEach(c=>{
+    const{m,n,done}=catMastery(c.id);
+    est+=c.pts*m;
+    const w=(c.pts/150*100).toFixed(2);
+    gauge+=`<div class="gseg" style="width:${w}%"><div class="gfill" style="width:${(m*100).toFixed(0)}%"></div></div>`;
+    legend+=`<span><b>${c.name}</b> ${c.pts}点</span>`;
+    const stTxt=n?`<b>${done}</b>/${n}問 習得`:`<span class="empty-note">未登録 → 取込へ</span>`;
+    list+=`<div class="catrow"><div class="nm">${c.name}<small>${c.pts}点</small><div class="bar"><i style="width:${(m*100).toFixed(0)}%"></i></div></div><div class="st">${stTxt}</div></div>`;
+  });
+  document.getElementById('gauge').innerHTML=gauge;
+  document.getElementById('glegend').innerHTML=legend;
+  document.getElementById('estScore').textContent=Math.round(est);
+  document.getElementById('catList').innerHTML=list;
+  const btns=CATS.filter(c=>c.id!=='price').map(c=>{
+    const n=allQ().filter(x=>x.cat===c.id).length+DB.photos.filter(x=>x.cat===c.id).length;
+    return `<button class="btn" onclick="startCat('${c.id}')" ${n?'':'disabled style="opacity:.4"'}>${c.name}（${n}問）</button>`;
+  }).join('');
+  document.getElementById('catBtns').innerHTML=btns;
+  document.getElementById('phCount').textContent=DB.photos.length;
+  document.getElementById('btnPhotoMode').style.display=DB.photos.length?'block':'none';
+}
+
+/* ============ 演習 ============ */
+let quiz={list:[],i:0,ok:0,wrong:[]};
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function shuffledQ(x){
+  if(x.input)return {...x};
+  const idx=shuffle(x.choices.map((_,i)=>i));
+  return {...x, choices:idx.map(i=>x.choices[i]), answer:idx.indexOf(x.answer)};
+}
+function startCat(cid){
+  let pool=cid==='all'?allQ().slice().concat(photoMCQs()):allQ().filter(x=>x.cat===cid).concat(photoMCQs(cid));
+  if(!pool.length)return;
+  quiz={list:shuffle(pool).slice(0,10).map(shuffledQ),i:0,ok:0,wrong:[]};
+  showQuizUI();renderQ();
+}
+function startPhoto(){
+  const pool=photoMCQs();
+  if(!pool.length)return;
+  quiz={list:shuffle(pool).slice(0,10).map(shuffledQ),i:0,ok:0,wrong:[]};
+  showQuizUI();renderQ();
+}
+function startWeak(){
+  const pool=allQ().slice().concat(photoMCQs()).sort((a,b)=>{
+    const sa=stat(a.id),sb=stat(b.id);
+    const wa=(sa.w*2-sa.c)+(sa.c+sa.w===0?1.5:0)+Math.random()*.5;
+    const wb=(sb.w*2-sb.c)+(sb.c+sb.w===0?1.5:0)+Math.random()*.5;
+    return wb-wa;
+  });
+  quiz={list:pool.slice(0,10).map(shuffledQ),i:0,ok:0,wrong:[]};
+  go('quiz');showQuizUI();renderQ();
+}
+async function showImg(elId,imgId){
+  const el=document.getElementById(elId);
+  if(!imgId){el.style.display='none';el.src='';return}
+  el.style.display='block';el.src='';
+  const d=await getImg(imgId);
+  if(d)el.src=d; else el.style.display='none';
+}
+function showQuizUI(){
+  document.getElementById('quizMenu').style.display='none';
+  document.getElementById('quizDone').style.display='none';
+  document.getElementById('quizPlay').style.display='block';
+}
+function renderQ(){
+  const x=quiz.list[quiz.i];
+  const cat=CATS.find(c=>c.id===x.cat);
+  document.getElementById('qProg').textContent=`${quiz.i+1} / ${quiz.list.length}`;
+  document.getElementById('qCat').textContent=`${cat?cat.name:''}・${x.sub||''}`;
+  showImg('qImg',x.img);
+  document.getElementById('qText').textContent=x.q;
+  const cw=document.getElementById('qChoices'), iw=document.getElementById('qInputWrap');
+  if(x.input){
+    cw.innerHTML='';cw.style.display='none';
+    iw.style.display='block';
+    const inp=document.getElementById('qInput');inp.value='';inp.disabled=false;
+  }else{
+    iw.style.display='none';cw.style.display='block';
+    cw.innerHTML=x.choices.map((c,i)=>`<button class="choice" onclick="answer(${i})">${c}</button>`).join('');
+  }
+  document.getElementById('qJudge').style.display='none';
+  document.getElementById('qExp').style.display='none';
+  document.getElementById('qNextRow').style.display='none';
+  document.getElementById('qFixBtn').style.display='none';
+}
+function submitInput(){
+  const x=quiz.list[quiz.i];
+  if(!x.input)return;
+  const inp=document.getElementById('qInput');
+  if(inp.disabled)return;
+  const ok=judgeInput(inp.value,x.ans);
+  inp.disabled=true;
+  record(x.id,ok);
+  if(ok)quiz.ok++;else quiz.wrong.push(x);
+  const jd=document.getElementById('qJudge');
+  jd.textContent=ok?'正解':'不正解';jd.className='judge '+(ok?'ok':'ng');jd.style.display='block';
+  const ex=document.getElementById('qExp');
+  ex.textContent=x.exp||('正解：'+x.ans);ex.className='exp'+(ok?'':' ng');ex.style.display='block';
+  document.getElementById('qNextRow').style.display='flex';
+  document.getElementById('qFixBtn').style.display=ok?'none':'block';
+}
+function fixToCorrect(){
+  const x=quiz.list[quiz.i];
+  const s=stat(x.id);s.w=Math.max(0,s.w-1);s.c++;s.streak=1;DB.stats[x.id]=s;saveDB();
+  quiz.ok++;
+  const wi=quiz.wrong.indexOf(x);if(wi>=0)quiz.wrong.splice(wi,1);
+  const jd=document.getElementById('qJudge');
+  jd.textContent='正解（自己採点）';jd.className='judge ok';
+  document.getElementById('qExp').className='exp';
+  document.getElementById('qFixBtn').style.display='none';
+  renderHome();
+}
+function answer(i){
+  const x=quiz.list[quiz.i], ok=i===x.answer;
+  record(x.id,ok);
+  if(ok)quiz.ok++;else quiz.wrong.push(x);
+  document.querySelectorAll('#qChoices .choice').forEach((b,j)=>{
+    b.disabled=true;
+    if(j===x.answer)b.classList.add('ok');
+    else if(j===i)b.classList.add('ng');
+  });
+  const jd=document.getElementById('qJudge');
+  jd.textContent=ok?'正解':'不正解';jd.className='judge '+(ok?'ok':'ng');jd.style.display='block';
+  const ex=document.getElementById('qExp');
+  ex.textContent=x.exp||'';ex.className='exp'+(ok?'':' ng');ex.style.display=x.exp?'block':'none';
+  document.getElementById('qNextRow').style.display='flex';
+}
+function nextQ(){
+  quiz.i++;
+  if(quiz.i>=quiz.list.length){finishQuiz();return}
+  renderQ();window.scrollTo(0,0);
+}
+function finishQuiz(){
+  document.getElementById('quizPlay').style.display='none';
+  document.getElementById('quizDone').style.display='block';
+  document.getElementById('qDoneScore').textContent=`${quiz.ok} / ${quiz.list.length}`;
+  const pct=quiz.ok/quiz.list.length;
+  document.getElementById('qDoneMsg').textContent=pct===1?'満点。この調子で全カテゴリ制覇。':pct>=.8?'あと少し。間違えた問題を潰そう。':'間違えた問題は弱点として記録済み。繰り返しで必ず取れる。';
+  document.getElementById('btnRetryWrong').style.display=quiz.wrong.length?'block':'none';
+}
+function retryWrong(){
+  quiz={list:shuffle(quiz.wrong.slice()).map(shuffledQ),i:0,ok:0,wrong:[]};
+  showQuizUI();renderQ();
+}
+function quitQuiz(){
+  document.getElementById('quizPlay').style.display='none';
+  document.getElementById('quizDone').style.display='none';
+  document.getElementById('quizMenu').style.display='block';
+  renderHome();
+}
+
+/* ============ 売価フラッシュカード ============ */
+let cardOrder=[],cardI=0;
+function renderCard(){
+  const ps=allP();
+  if(!cardOrder.length||cardOrder.length!==ps.length){
+    cardOrder=shuffle(ps.map((_,i)=>i));cardI=0;
+  }
+  const p=ps[cardOrder[cardI]];
+  document.getElementById('fcard').classList.remove('open');
+  document.getElementById('fItem').textContent=p.n;
+  document.getElementById('fPrice').textContent=p.p;
+  document.getElementById('fNote').textContent=p.note||'';
+  const learned=ps.filter(x=>(DB.pstats[x.id]||0)>0).length;
+  document.getElementById('fStat').textContent=`${cardI+1} / ${ps.length}枚　覚えた: ${learned}`;
+}
+function flipCard(){document.getElementById('fcard').classList.toggle('open')}
+function rateCard(ok){
+  const p=allP()[cardOrder[cardI]];
+  DB.pstats[p.id]=ok?1:0;saveDB();
+  cardI=(cardI+1)%cardOrder.length;
+  renderCard();
+}
+
+/* ============ 模擬テスト ============ */
+let exam={list:[],i:0,res:{}};
+function priceMCQ(p){
+  const num=parseInt(String(p.p).replace(/[^0-9]/g,''),10);
+  let ds;
+  if(num&&num>1000){
+    const f=[0.8,1.25,1.5,0.6,1.1,2].map(k=>Math.round(num*k/100)*100).filter(v=>v!==num);
+    ds=shuffle([...new Set(f)]).slice(0,3).map(v=>v.toLocaleString()+'円'+(String(p.p).includes('+tax')?'+tax':''));
+  }else{
+    ds=shuffle(allP().filter(x=>x.id!==p.id).map(x=>x.p)).slice(0,3);
+  }
+  const choices=shuffle([p.p,...ds]);
+  return{id:p.id,cat:'price',sub:'売価',q:`「${p.n}」の価格は？${p.note?'（'+p.note+'）':''}`,choices,answer:choices.indexOf(p.p),exp:`${p.p}${p.note?'／'+p.note:''}`};
+}
+function startExam(){
+  const plan=[['chrome',4],['goros',2],['apparel',8],['basic',4],['watch',2],['bag',2],['jewelry',2],['price',6]];
+  let list=[],missing=[];
+  plan.forEach(([cid,n])=>{
+    if(cid==='price'){
+      const ps=shuffle(allP().slice()).slice(0,n).map(priceMCQ);
+      list=list.concat(ps); if(ps.length<n)missing.push('売価');
+      return;
+    }
+    const pool=shuffle(allQ().filter(x=>x.cat===cid).concat(photoMCQs(cid))).slice(0,n).map(shuffledQ);
+    list=list.concat(pool);
+    if(pool.length<n)missing.push(CATS.find(c=>c.id===cid).name);
+  });
+  // 問題不足カテゴリは自動スキップ（confirm はこの環境でブロックされるため使わない）
+  exam={list:shuffle(list),i:0,res:{}};
+  CATS.forEach(c=>exam.res[c.id]={ok:0,n:0});
+  document.getElementById('examMenu').style.display='none';
+  document.getElementById('examResult').style.display='none';
+  document.getElementById('examPlay').style.display='block';
+  renderE();
+}
+function renderE(){
+  const x=exam.list[exam.i];
+  document.getElementById('eProg').textContent=`${exam.i+1} / ${exam.list.length}`;
+  document.getElementById('eCat').textContent=CATS.find(c=>c.id===x.cat).name;
+  showImg('eImg',x.img);
+  document.getElementById('eText').textContent=x.q;
+  const cw=document.getElementById('eChoices'), iw=document.getElementById('eInputWrap');
+  if(x.input){
+    cw.innerHTML='';cw.style.display='none';
+    iw.style.display='block';
+    const inp=document.getElementById('eInput');inp.value='';inp.disabled=false;
+  }else{
+    iw.style.display='none';cw.style.display='block';
+    cw.innerHTML=x.choices.map((c,i)=>`<button class="choice" onclick="eAnswer(${i})">${c}</button>`).join('');
+  }
+  document.getElementById('eJudge').style.display='none';
+  document.getElementById('eExp').style.display='none';
+  document.getElementById('eNextRow').style.display='none';
+  document.getElementById('eFixBtn').style.display='none';
+}
+function eSubmitInput(){
+  const x=exam.list[exam.i];
+  if(!x.input)return;
+  const inp=document.getElementById('eInput');
+  if(inp.disabled)return;
+  const ok=judgeInput(inp.value,x.ans);
+  inp.disabled=true;
+  exam.res[x.cat].n++; if(ok)exam.res[x.cat].ok++;
+  record(x.id,ok);
+  const jd=document.getElementById('eJudge');
+  jd.textContent=ok?'正解':'不正解';jd.className='judge '+(ok?'ok':'ng');jd.style.display='block';
+  const ex=document.getElementById('eExp');
+  ex.textContent=x.exp||('正解：'+x.ans);ex.className='exp'+(ok?'':' ng');ex.style.display='block';
+  document.getElementById('eNextRow').style.display='flex';
+  document.getElementById('eFixBtn').style.display=ok?'none':'block';
+}
+function eFixToCorrect(){
+  const x=exam.list[exam.i];
+  const s=stat(x.id);s.w=Math.max(0,s.w-1);s.c++;s.streak=1;DB.stats[x.id]=s;saveDB();
+  exam.res[x.cat].ok++;
+  const jd=document.getElementById('eJudge');
+  jd.textContent='正解（自己採点）';jd.className='judge ok';
+  document.getElementById('eExp').className='exp';
+  document.getElementById('eFixBtn').style.display='none';
+}
+function eNext(){
+  exam.i++;
+  if(exam.i>=exam.list.length){finishExam();return}
+  renderE();window.scrollTo(0,0);
+}
+function eAnswer(i){
+  const x=exam.list[exam.i], ok=i===x.answer;
+  exam.res[x.cat].n++; if(ok)exam.res[x.cat].ok++;
+  if(x.cat!=='price')record(x.id,ok);else{DB.pstats[x.id]=ok?1:0;saveDB();}
+  exam.i++;
+  if(exam.i>=exam.list.length){finishExam();return}
+  renderE();window.scrollTo(0,0);
+}
+function finishExam(){
+  let score=0,rows='';
+  CATS.forEach(c=>{
+    const r=exam.res[c.id];
+    const rate=r.n?r.ok/r.n:null;
+    if(rate!==null)score+=c.pts*rate;
+    rows+=`<div class="res-line"><span>${c.name}（${c.pts}点）</span><b>${rate===null?'未出題':`${r.ok}/${r.n} → ${Math.round(c.pts*rate)}点`}</b></div>`;
+  });
+  score=Math.round(score);
+  document.getElementById('eScore').textContent=score;
+  document.getElementById('eBreak').innerHTML=rows;
+  document.getElementById('examPlay').style.display='none';
+  document.getElementById('examResult').style.display='block';
+  DB.history.unshift({d:new Date().toLocaleDateString('ja-JP'),s:score});
+  DB.history=DB.history.slice(0,20);saveDB();
+}
+function quitExam(){
+  document.getElementById('examPlay').style.display='none';
+  document.getElementById('examResult').style.display='none';
+  document.getElementById('examMenu').style.display='block';
+  renderExamHistory();renderHome();
+}
+function renderExamHistory(){
+  const h=DB.history;
+  document.getElementById('examHistory').innerHTML=h.length
+    ?h.map(x=>`<div class="res-line"><span>${x.d}</span><b>${x.s} /150点換算</b></div>`).join('')
+    :'<p class="small">まだ受験履歴がありません。</p>';
+}
+
+/* ============ 取込（写真） ============ */
+let pendPhotos=[];
+function readFileAsDataURL(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=()=>rej(new Error('read fail'));
+    r.readAsDataURL(file);
+  });
+}
+async function compressImage(file){
+  const dataURL=await readFileAsDataURL(file);
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        const MAX=900;
+        let w=img.width,h=img.height;
+        if(!w||!h){rej(new Error('decode fail'));return}
+        if(Math.max(w,h)>MAX){const k=MAX/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k);}
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        res(cv.toDataURL('image/jpeg',0.82));
+      }catch(e){rej(e)}
+    };
+    img.onerror=()=>rej(new Error('decode fail'));
+    img.src=dataURL;
+  });
+}
+async function pickPhotos(input){
+  const msg=document.getElementById('phMsg');
+  msg.textContent='読み込み中…';msg.className='msg ok';
+  const files=Array.from(input.files||[]);
+  if(!files.length){msg.className='msg';return}
+  let ok=0,ng=0;
+  for(const f of files){
+    try{
+      const data=await compressImage(f);
+      if(data.length>4500000){ng++;continue}
+      pendPhotos.push({data,name:'',note:''});ok++;
+    }catch(e){console.error('photo import error:',e);ng++;}
+  }
+  input.value='';
+  renderPending();
+  if(ok&&!ng){msg.textContent=`${ok}枚読み込みました。モデル名を入力して保存してください。`;msg.className='msg ok';}
+  else if(ok&&ng){msg.textContent=`${ok}枚読み込み、${ng}枚は形式非対応のためスキップしました（HEIC等はスクリーンショットかJPEGでお試しください）。`;msg.className='msg ok';}
+  else{msg.textContent=`読み込めませんでした（${ng}枚失敗）。iPhoneの写真（HEIC）が原因の場合は、その写真をスクリーンショットして選ぶか、設定→カメラ→フォーマットを「互換性優先」にすると読み込めます。`;msg.className='msg err';}
+}
+function renderPending(){
+  const box=document.getElementById('phPending');
+  box.innerHTML=pendPhotos.map((p,i)=>`<div class="ph-pend">
+    <img src="${p.data}">
+    <div class="flds">
+      <input type="text" placeholder="モデル名（正解）" value="${p.name.replace(/"/g,'&quot;')}" oninput="pendPhotos[${i}].name=this.value">
+      <input type="text" placeholder="メモ（任意：定価・年代など）" value="${p.note.replace(/"/g,'&quot;')}" oninput="pendPhotos[${i}].note=this.value">
+      <button class="btn ghost" style="width:auto;padding:4px 10px;margin:0;font-size:12px" onclick="pendPhotos.splice(${i},1);renderPending()">取り消し</button>
+    </div>
+  </div>`).join('');
+  document.getElementById('phSave').style.display=pendPhotos.length?'block':'none';
+}
+async function savePhotos(){
+  const msg=document.getElementById('phMsg');
+  const cat=document.getElementById('phCat').value;
+  const ready=pendPhotos.filter(p=>p.name.trim());
+  if(!ready.length){msg.textContent='モデル名を入力してください。';msg.className='msg err';return}
+  let saved=0;
+  for(const p of ready){
+    const id='ph'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    try{
+      await window.storage.set(IMGKEY(id),p.data);
+      imgCache[id]=p.data;
+      DB.photos.push({id,cat,name:p.name.trim(),note:p.note.trim()});
+      saved++;
+    }catch(e){
+      console.error(e);
+      msg.textContent='保存容量の上限に達した可能性があります。不要な写真を削除してください。';msg.className='msg err';
+      break;
+    }
+  }
+  if(saved){
+    saveDB();
+    pendPhotos=pendPhotos.filter(p=>!p.name.trim());
+    renderPending();renderPhotoList();renderHome();renderImportStats();
+    msg.textContent=`${saved}枚を写真問題として保存しました。`;msg.className='msg ok';
+  }
+}
+async function renderPhotoList(){
+  const box=document.getElementById('phList');
+  if(!DB.photos.length){box.innerHTML='';return}
+  const items=await Promise.all(DB.photos.map(async p=>{
+    const d=await getImg(p.id);
+    return `<div class="ph-item">${d?`<img src="${d}">`:'<div style="aspect-ratio:1;background:var(--surface2);border-radius:9px"></div>'}<button class="del" onclick="delPhoto('${p.id}',this)">×</button><div class="nm">${p.name}</div></div>`;
+  }));
+  box.innerHTML=items.join('');
+}
+async function delPhoto(id,btn){
+  if(btn&&btn.dataset.c!=='1'){
+    btn.dataset.c='1';btn.textContent='？';
+    setTimeout(()=>{if(btn){btn.dataset.c='';btn.textContent='×'}},1800);
+    return;
+  }
+  try{await window.storage.delete(IMGKEY(id));}catch(e){}
+  delete imgCache[id];
+  DB.photos=DB.photos.filter(p=>p.id!==id);
+  delete DB.stats[id];
+  saveDB();renderPhotoList();renderHome();renderImportStats();
+}
+
+/* ============ 取込（AI生成） ============ */
+function renderImportStats(){
+  document.getElementById('statQ').textContent=allQ().length+DB.photos.length;
+  document.getElementById('statC').textContent=DB.custom.length;
+  document.getElementById('statP').textContent=allP().length;
+  document.getElementById('statPh').textContent=DB.photos.length;
+  const sel=document.getElementById('genCat');
+  if(!sel.options.length)sel.innerHTML=CATS.filter(c=>c.id!=='price').map(c=>`<option value="${c.id}">${c.name}（${c.pts}点）</option>`).join('');
+  const psel=document.getElementById('phCat');
+  if(!psel.options.length)psel.innerHTML=CATS.filter(c=>c.id!=='price').map(c=>`<option value="${c.id}">${c.name}（${c.pts}点）</option>`).join('');
+  renderPhotoList();
+  renderExamHistory();
+}
+let genBuf=[];
+async function genQuestions(){
+  const txt=document.getElementById('genText').value.trim();
+  const cat=document.getElementById('genCat').value;
+  const msg=document.getElementById('genMsg');
+  msg.className='msg';genBuf=[];
+  document.getElementById('genPreview').innerHTML='';
+  document.getElementById('genSave').style.display='none';
+  if(txt.length<50){msg.textContent='本文が短すぎます。マニュアルのページ本文を貼り付けてください。';msg.className='msg err';return}
+  document.getElementById('genLoading').style.display='block';
+  try{
+    const prompt=`あなたはブランド知識テストの出題者です。以下のブランドマニュアル本文だけを根拠に、4択クイズを5問作成してください。
+ルール：
+- 本文に明記されている事実のみ出題（推測禁止）
+- 数字・年号・固有名詞・見分けポイントを優先
+- 誤答選択肢はもっともらしく
+- 必ずJSON配列のみを出力（前置き・コードブロック記号は禁止）
+形式: [{"q":"問題文","choices":["A","B","C","D"],"answer":正解のindex(0-3),"exp":"短い解説","sub":"小分類"}]
+
+本文:
+${txt.slice(0,6000)}`;
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await res.json();
+    const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const clean=text.replace(/```json|```/g,'').trim();
+    const arr=JSON.parse(clean.slice(clean.indexOf('['),clean.lastIndexOf(']')+1));
+    genBuf=arr.filter(x=>x.q&&Array.isArray(x.choices)&&x.choices.length===4&&x.answer>=0&&x.answer<=3)
+      .map(x=>({id:'c'+Date.now()+Math.random().toString(36).slice(2,6),cat,sub:x.sub||'',q:x.q,choices:x.choices,answer:x.answer,exp:x.exp||''}));
+    if(!genBuf.length)throw new Error('empty');
+    document.getElementById('genPreview').innerHTML=genBuf.map((x,i)=>`<div class="g"><span class="tag">Q${i+1}</span>${x.q}<br><span class="small">→ ${x.choices[x.answer]}</span></div>`).join('');
+    document.getElementById('genSave').style.display='block';
+    msg.textContent=`${genBuf.length}問を生成しました。内容を確認して保存してください。`;msg.className='msg ok';
+  }catch(e){
+    console.error(e);
+    msg.textContent='生成に失敗しました。本文を少し短くして再度試してください。';msg.className='msg err';
+  }
+  document.getElementById('genLoading').style.display='none';
+}
+function saveGen(){
+  DB.custom=DB.custom.concat(genBuf);saveDB();
+  genBuf=[];
+  document.getElementById('genPreview').innerHTML='';
+  document.getElementById('genSave').style.display='none';
+  document.getElementById('genText').value='';
+  const msg=document.getElementById('genMsg');
+  msg.textContent='保存しました。演習・模擬テストに反映されます。';msg.className='msg ok';
+  renderImportStats();renderHome();
+}
+function importPrices(){
+  const lines=document.getElementById('pText').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const msg=document.getElementById('pMsg');
+  let added=0;
+  lines.forEach(l=>{
+    const m=l.match(/^(.+?)[\s　]+([¥￥]?[\d,]+円?(?:\+tax)?)$/);
+    if(m){
+      let price=m[2].replace(/[¥￥]/g,'');
+      if(!price.includes('円'))price=parseInt(price.replace(/,/g,''),10).toLocaleString()+'円';
+      DB.prices.push({id:'cp'+Date.now()+Math.random().toString(36).slice(2,5),n:m[1],p:price,note:'EC売価'});
+      added++;
+    }
+  });
+  if(added){saveDB();document.getElementById('pText').value='';msg.textContent=`${added}件を売価カードに追加しました。`;msg.className='msg ok';cardOrder=[];}
+  else{msg.textContent='読み取れる行がありませんでした。「商品名 価格」の形式で貼り付けてください。';msg.className='msg err';}
+  renderImportStats();renderHome();
+}
+function twoTap(btn,label){
+  if(btn.dataset.c==='1'){btn.dataset.c='';btn.textContent=btn.dataset.orig;return true}
+  btn.dataset.orig=btn.textContent;btn.dataset.c='1';btn.textContent=label;
+  setTimeout(()=>{if(btn.dataset.c==='1'){btn.dataset.c='';btn.textContent=btn.dataset.orig}},2200);
+  return false;
+}
+function resetStats(btn){
+  if(!twoTap(btn,'もう一度タップで実行'))return;
+  DB.stats={};DB.pstats={};DB.history=[];saveDB();renderHome();renderImportStats();
+}
+async function resetAll(btn){
+  if(!twoTap(btn,'もう一度タップで全削除'))return;
+  for(const p of DB.photos){try{await window.storage.delete(IMGKEY(p.id));}catch(e){} delete imgCache[p.id];}
+  DB.custom=[];DB.prices=[];DB.photos=[];saveDB();cardOrder=[];renderHome();renderImportStats();
+}
+
+/* ============ 起動 ============ */
+(async()=>{
+  await loadDB();renderHome();renderImportStats();
+  /* ペースト・ドロップで画像取込 */
+  const pz=document.getElementById('pasteZone');
+  if(pz){
+    pz.addEventListener('paste',async e=>{
+      e.preventDefault();
+      const items=e.clipboardData&&e.clipboardData.items;
+      if(!items)return;
+      let found=0;
+      for(const item of items){
+        if(item.type.startsWith('image/')){
+          const blob=item.getAsFile();
+          if(blob)try{
+            const data=await compressImage(blob);
+            if(data.length<=4500000){pendPhotos.push({data,name:'',note:''});found++;}
+          }catch(ex){console.error(ex)}
+        }
+      }
+      pz.textContent=found?`${found}枚読み込み — モデル名を入力して保存`:'画像が見つかりませんでした。写真アプリでコピーしてからペーストしてください。';
+      if(found){renderPending();const msg=document.getElementById('phMsg');msg.textContent=`${found}枚取り込みました。`;msg.className='msg ok';}
+    });
+    pz.addEventListener('input',()=>{
+      /* contenteditableへのテキスト入力はクリア */
+      const imgs=pz.querySelectorAll('img');
+      if(!imgs.length){setTimeout(()=>{if(!pz.querySelector('img'))pz.textContent='ここをタップしてペースト';},200)}
+    });
+    pz.addEventListener('drop',async e=>{
+      e.preventDefault();
+      const files=e.dataTransfer&&e.dataTransfer.files;
+      if(!files||!files.length)return;
+      let found=0;
+      for(const f of files){
+        if(!f.type.startsWith('image/'))continue;
+        try{
+          const data=await compressImage(f);
+          if(data.length<=4500000){pendPhotos.push({data,name:'',note:''});found++;}
+        }catch(ex){console.error(ex)}
+      }
+      if(found){pz.textContent=`${found}枚読み込み`;renderPending();const msg=document.getElementById('phMsg');msg.textContent=`${found}枚取り込みました。`;msg.className='msg ok';}
+    });
+    pz.addEventListener('dragover',e=>{e.preventDefault()});
+  }
+})();
+</script>
+</body>
+</html>

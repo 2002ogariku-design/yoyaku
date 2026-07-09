@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>来店予約</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --ink:#1a1a1a;--ink-light:#555;--ink-muted:#888;
+    --paper:#faf9f6;--accent:#8b4513;--line:#d8d2c4;
+    --success:#2d6a4f;--error:#9b2226;
+  }
+  body{font-family:'Noto Sans JP',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:3rem 1rem 4rem}
+  .header{text-align:center;margin-bottom:3rem}
+  .header .brand{font-family:'Shippori Mincho',serif;font-size:.75rem;letter-spacing:.35em;color:var(--accent);text-transform:uppercase;margin-bottom:1rem}
+  .header h1{font-family:'Shippori Mincho',serif;font-size:2rem;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem}
+  .header p{font-size:.8rem;color:var(--ink-muted);letter-spacing:.05em;line-height:1.8}
+  .divider{width:40px;height:1px;background:var(--accent);margin:1.2rem auto;opacity:.5}
+  .form-card{background:#fff;border:.5px solid var(--line);border-radius:2px;padding:2.5rem;width:100%;max-width:520px;box-shadow:0 2px 24px rgba(0,0,0,.04)}
+  .field{margin-bottom:1.6rem}
+  .field label{display:block;font-size:.72rem;font-weight:500;letter-spacing:.12em;color:var(--ink-light);margin-bottom:.5rem}
+  .field label .req{color:var(--accent);margin-left:3px}
+  .field input,.field select,.field textarea{width:100%;border:none;border-bottom:1px solid var(--line);background:transparent;padding:.5rem 0;font-size:.95rem;font-family:'Noto Sans JP',sans-serif;color:var(--ink);outline:none;transition:border-color .2s;appearance:none}
+  .field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 4px center;padding-right:20px;cursor:pointer}
+  .field textarea{resize:vertical;min-height:72px;line-height:1.7}
+  .field input:focus,.field select:focus,.field textarea:focus{border-bottom-color:var(--accent)}
+  .field input::placeholder,.field textarea::placeholder{color:var(--ink-muted);font-size:.85rem}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+  .submit-btn{width:100%;background:var(--ink);color:#fff;border:none;padding:.9rem;font-size:.82rem;font-family:'Noto Sans JP',sans-serif;font-weight:500;letter-spacing:.2em;cursor:pointer;border-radius:1px;margin-top:.8rem;transition:background .2s,transform .1s}
+  .submit-btn:hover{background:var(--accent)}
+  .submit-btn:active{transform:scale(.99)}
+  .submit-btn:disabled{background:#aaa;cursor:not-allowed}
+  .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(120%);background:var(--success);color:#fff;padding:.8rem 1.8rem;border-radius:2px;font-size:.82rem;letter-spacing:.08em;transition:transform .4s cubic-bezier(.22,1,.36,1);z-index:100;white-space:nowrap}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .toast.error-toast{background:var(--error)}
+  .error-msg{font-size:.72rem;color:var(--error);margin-top:.3rem;letter-spacing:.04em;display:none}
+  .field.invalid input,.field.invalid select{border-bottom-color:var(--error)}
+  .field.invalid .error-msg{display:block}
+  .section-label{font-size:.65rem;letter-spacing:.25em;color:var(--ink-muted);margin:1.8rem 0 1.2rem;padding-bottom:.4rem;border-bottom:.5px solid var(--line)}
+  .footer-note{margin-top:2rem;text-align:center;font-size:.72rem;color:var(--ink-muted);letter-spacing:.06em;line-height:1.8}
+  .hint{font-size:.72rem;color:var(--ink-muted);margin-top:.4rem;letter-spacing:.04em;line-height:1.7}
+  @media(max-width:480px){.form-card{padding:1.8rem 1.4rem}.row{grid-template-columns:1fr;gap:0}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand" id="header-brand">Visit Appointment</div>
+  <h1 id="header-title">来店予約フォーム</h1>
+  <div class="divider"></div>
+  <p id="header-sub">ご来店の日時とご担当スタッフをお選びください<br>確認後、担当よりご連絡いたします</p>
+</div>
+
+<div class="form-card">
+  <!-- 言語切替 -->
+  <div style="text-align:right;margin-bottom:1rem">
+    <button onclick="setLang('ja')" id="btn-ja" style="background:var(--ink);color:#fff;border:none;padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:'Noto Sans JP',sans-serif;cursor:pointer;margin-right:4px">日本語</button>
+    <button onclick="setLang('en')" id="btn-en" style="background:transparent;color:var(--ink-muted);border:.5px solid var(--line);padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:'Noto Sans JP',sans-serif;cursor:pointer">English</button>
+  </div>
+
+  <div class="section-label" id="label-customer">お客様情報</div>
+
+  <div class="field" id="f-name">
+    <label id="lbl-name">お名前<span class="req">*</span></label>
+    <input type="text" id="name" placeholder="山田 太郎" autocomplete="name">
+    <div class="error-msg" id="err-name">お名前を入力してください</div>
+  </div>
+
+  <div class="field" id="f-phone">
+    <label id="lbl-phone">電話番号</label>
+    <input type="tel" id="phone" placeholder="090-0000-0000" autocomplete="tel">
+  </div>
+
+  <div class="section-label" id="label-visit">ご来店情報</div>
+
+  <div class="field" id="f-purpose">
+    <label id="lbl-purpose">ご来店の目的<span class="req">*</span></label>
+    <select id="purpose"></select>
+    <div class="error-msg" id="err-purpose">ご来店目的を選択してください</div>
+  </div>
+
+  <!-- ① スタッフを先に選ぶ -->
+  <div class="field" id="f-staff">
+    <label id="lbl-staff">ご希望のスタッフ<span class="req">*</span></label>
+    <select id="staff" onchange="onStaffChange()">
+      <option value="">読み込み中...</option>
+    </select>
+    <div class="error-msg" id="err-staff">担当スタッフを選択してください</div>
+    <p class="hint" id="hint-staff">※ 状況によっては別のスタッフが担当させていただく場合がございます。あらかじめご了承ください。</p>
+  </div>
+
+  <!-- ② 日付を選ぶ -->
+  <div class="field" id="f-date">
+    <label id="lbl-date">ご来店日<span class="req">*</span></label>
+    <input type="date" id="date" onchange="onDateChange()">
+    <div class="error-msg" id="err-date">日付を選択してください</div>
+  </div>
+
+  <!-- ③ 時間を選ぶ（スタッフの予約済みをグレーアウト） -->
+  <div class="field" id="f-time">
+    <label id="lbl-time">ご来店時間<span class="req">*</span></label>
+    <select id="time">
+      <option value="">先にスタッフと日付を選択してください</option>
+    </select>
+    <div class="error-msg" id="err-time">時間を選択してください</div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-note">備考・ご要望</label>
+    <textarea id="note" placeholder="ご質問やご要望があればお書きください"></textarea>
+  </div>
+
+  <button class="submit-btn" id="submit-btn" onclick="submitForm()">予　約　を　送　信</button>
+</div>
+
+<div class="footer-note" id="footer-note">
+  ※ ご予約内容は管理画面にてスタッフが確認いたします
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbxDj6onTV4kVOZx7kCYpY_iruTIawKFIeF7PFFDABaNRQrlTaHgYsC6tS5LfYehNQ51/exec';
+
+const DEFAULT_STAFF = [
+  '福原 涼太 ( Ryota Fukuhara )',
+  '安齋 亮 ( Ryo Anzai )',
+  '齋藤 蒼一郎 ( Soichiro Saito )',
+  '井上 凱 ( Kai Inoue )',
+  '芹澤 澄人 ( Sumito Serizawa )',
+  '山本 李江 ( Rie Yamamoto )',
+  '小笠原 陸斗 ( Rikuto Ogasawara )',
+  '永井 悠真 ( Yuma Nagai )',
+  '石沢 拓哉 ( Takuya Ishizawa )',
+  '髙久 和也 ( Kazuya Takaku )',
+  '田口 鈴之介 ( Suzunosuke Taguchi )',
+  '佐竹 海誓 ( Kaisei Satake )',
+  '宮下 和大 ( Kazuhiro Miyashita )',
+  '石井 朝陽 ( Asahi Ishii )',
+  '大塚 栞南 ( Kanna Otsuka )'
+];
+
+const SLOTS_WEEKDAY = ['12:30〜13:30', '13:30〜15:00', '15:00〜16:30', '16:30〜18:00', '18:00〜19:30'];
+const SLOTS_WEEKEND = ['12:00〜13:30', '13:30〜15:00', '15:00〜16:30', '16:30〜18:00', '18:00〜19:30'];
+
+let existingBookings = [];
+
+// 言語設定
+const LANG = {
+  ja: {
+    headerTitle: '来店予約フォーム',
+    headerSub: 'ご来店の日時とご担当スタッフをお選びください<br>確認後、担当よりご連絡いたします',
+    labelCustomer: 'お客様情報',
+    labelVisit: 'ご来店情報',
+    lblName: 'お名前', lblPhone: '電話番号', lblPurpose: 'ご来店の目的',
+    lblStaff: 'ご希望のスタッフ', lblDate: 'ご来店日', lblTime: 'ご来店時間', lblNote: '備考・ご要望',
+    errName: 'お名前を入力してください', errPurpose: 'ご来店目的を選択してください',
+    errStaff: '担当スタッフを選択してください', errDate: '日付を選択してください', errTime: '時間を選択してください',
+    hintStaff: '※ 状況によっては別のスタッフが担当させていただく場合がございます。あらかじめご了承ください。',
+    namePlaceholder: '山田 太郎', phonePlaceholder: '090-0000-0000', notePlaceholder: 'ご質問やご要望があればお書きください',
+    submitBtn: '予　約　を　送　信', footerNote: '※ ご予約内容は管理画面にてスタッフが確認いたします',
+    purposes: [
+      { value: '', text: '-- お選びください --' },
+      { value: '買取', text: '買取（商品をお探しの方）' },
+      { value: '販売', text: '販売（商品をお売りになりたい方）' },
+      { value: '両方', text: '両方' },
+    ],
+    staffPlaceholder: '-- スタッフを選択してください --',
+    timePlaceholder: '先にスタッフと日付を選択してください',
+    timeLabel: (l) => `-- 時間帯を選択（${l}）--`,
+    weekdayLabel: '平日 12:30〜20:00', weekendLabel: '土日祝 12:00〜20:00',
+    taken: '（予約済）', sending: '送信中...',
+    successMsg: '✓ ご予約を受け付けました。ありがとうございます。',
+    errorMsg: '送信に失敗しました。もう一度お試しください。',
+    networkErr: '通信エラーが発生しました。もう一度お試しください。',
+  },
+  en: {
+    headerTitle: 'Store Visit Reservation',
+    headerSub: 'Please select your preferred staff, date and time.<br>We will contact you after confirming your booking.',
+    labelCustomer: 'Your Information',
+    labelVisit: 'Visit Details',
+    lblName: 'Full Name', lblPhone: 'Phone Number', lblPurpose: 'Purpose of Visit',
+    lblStaff: 'Preferred Staff', lblDate: 'Visit Date', lblTime: 'Visit Time', lblNote: 'Notes / Requests',
+    errName: 'Please enter your name.', errPurpose: 'Please select a purpose.',
+    errStaff: 'Please select a staff member.', errDate: 'Please select a date.', errTime: 'Please select a time slot.',
+    hintStaff: '※ Please note that another staff member may assist you depending on availability.',
+    namePlaceholder: 'John Smith', phonePlaceholder: '+1-000-000-0000', notePlaceholder: 'Any questions or requests?',
+    submitBtn: 'Submit Reservation', footerNote: '※ Your reservation will be reviewed by our staff.',
+    purposes: [
+      { value: '', text: '-- Please select --' },
+      { value: '買取 (Purchase)', text: 'Purchase — Looking for an item to buy' },
+      { value: '販売 (Sell)', text: 'Sell — Would like to sell an item' },
+      { value: '両方 (Both)', text: 'Both' },
+    ],
+    staffPlaceholder: '-- Select a staff member --',
+    timePlaceholder: 'Please select staff and date first',
+    timeLabel: (l) => `-- Select time (${l}) --`,
+    weekdayLabel: 'Weekday 12:30–20:00', weekendLabel: 'Weekend/Holiday 12:00–20:00',
+    taken: ' (Booked)', sending: 'Sending...',
+    successMsg: '✓ Your reservation has been received. Thank you!',
+    errorMsg: 'Failed to submit. Please try again.',
+    networkErr: 'Network error. Please try again.',
+  }
+};
+
+let currentLang = 'ja';
+
+function setLang(lang) {
+  currentLang = lang;
+  const L = LANG[lang];
+  document.getElementById('btn-ja').style.cssText = lang==='ja' ? 'background:var(--ink);color:#fff;border:none;padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:inherit;cursor:pointer;margin-right:4px' : 'background:transparent;color:var(--ink-muted);border:.5px solid var(--line);padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:inherit;cursor:pointer;margin-right:4px';
+  document.getElementById('btn-en').style.cssText = lang==='en' ? 'background:var(--ink);color:#fff;border:none;padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:inherit;cursor:pointer' : 'background:transparent;color:var(--ink-muted);border:.5px solid var(--line);padding:4px 12px;border-radius:2px;font-size:.72rem;font-family:inherit;cursor:pointer';
+  document.getElementById('header-title').textContent = L.headerTitle;
+  document.getElementById('header-sub').innerHTML = L.headerSub;
+  document.getElementById('label-customer').textContent = L.labelCustomer;
+  document.getElementById('label-visit').textContent = L.labelVisit;
+  document.getElementById('lbl-name').innerHTML = L.lblName + '<span class="req">*</span>';
+  document.getElementById('lbl-phone').textContent = L.lblPhone;
+  document.getElementById('lbl-purpose').innerHTML = L.lblPurpose + '<span class="req">*</span>';
+  document.getElementById('lbl-staff').innerHTML = L.lblStaff + '<span class="req">*</span>';
+  document.getElementById('lbl-date').innerHTML = L.lblDate + '<span class="req">*</span>';
+  document.getElementById('lbl-time').innerHTML = L.lblTime + '<span class="req">*</span>';
+  document.getElementById('lbl-note').textContent = L.lblNote;
+  document.getElementById('err-name').textContent = L.errName;
+  document.getElementById('err-purpose').textContent = L.errPurpose;
+  document.getElementById('err-staff').textContent = L.errStaff;
+  document.getElementById('err-date').textContent = L.errDate;
+  document.getElementById('err-time').textContent = L.errTime;
+  document.getElementById('hint-staff').textContent = L.hintStaff;
+  document.getElementById('name').placeholder = L.namePlaceholder;
+  document.getElementById('phone').placeholder = L.phonePlaceholder;
+  document.getElementById('note').placeholder = L.notePlaceholder;
+  document.getElementById('submit-btn').textContent = L.submitBtn;
+  document.getElementById('footer-note').textContent = L.footerNote;
+  const purposeSel = document.getElementById('purpose');
+  purposeSel.innerHTML = '';
+  L.purposes.forEach(p => { const o = document.createElement('option'); o.value=p.value; o.textContent=p.text; purposeSel.appendChild(o); });
+  updateTimeSlots();
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error-toast' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// スタッフ一覧を読み込む
+async function loadStaff() {
+  const sel = document.getElementById('staff');
+  let staffList = DEFAULT_STAFF;
+  try {
+    const res = await fetch(API_URL + '?action=getStaff');
+    const data = await res.json();
+    if (data.staff && data.staff.length) staffList = data.staff;
+  } catch {}
+  const L = LANG[currentLang];
+  sel.innerHTML = `<option value="">${L.staffPlaceholder}</option>`;
+  staffList.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+}
+
+// 既存予約を読み込む
+async function loadExistingBookings() {
+  try {
+    const res = await fetch(API_URL + '?action=getRecords&t=' + Date.now());
+    const data = await res.json();
+    existingBookings = (data.records || []).filter(r => r.status !== 'キャンセル');
+  } catch {}
+}
+
+function isHoliday(date) {
+  const m = date.getMonth() + 1, d = date.getDate();
+  return [[1,1],[1,2],[1,3],[2,11],[2,23],[3,20],[4,29],[5,3],[5,4],[5,5],
+    [7,15],[8,11],[9,21],[10,13],[11,3],[11,23],[12,31]].some(([fm,fd]) => fm===m && fd===d);
+}
+
+function isWeekendOrHoliday(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getDay() === 0 || d.getDay() === 6 || isHoliday(d);
+}
+
+// スタッフが変わったら時間帯を再描画
+function onStaffChange() {
+  updateTimeSlots();
+}
+
+// 日付が変わったら時間帯を再描画
+function onDateChange() {
+  updateTimeSlots();
+}
+
+// 日付を YYYY-MM-DD 形式に正規化する
+function normalizeDate(str) {
+  if (!str || str === 'undefined') return '';
+  // すでに YYYY-MM-DD 形式
+  if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
+  // Date文字列（例: Sat May 23 2026 00:00:00 GMT+0900）
+  const d = new Date(str);
+  if (!isNaN(d)) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  return str;
+}
+
+// 時間帯を描画（選んだスタッフが予約済みの時間はグレーアウト）
+function updateTimeSlots() {
+  const staffVal = document.getElementById('staff').value;
+  const dateVal  = document.getElementById('date').value;
+  const sel      = document.getElementById('time');
+  const L = LANG[currentLang];
+
+  if (!staffVal || !dateVal) {
+    sel.innerHTML = `<option value="">${L.timePlaceholder}</option>`;
+    return;
+  }
+
+  const slots = isWeekendOrHoliday(dateVal) ? SLOTS_WEEKEND : SLOTS_WEEKDAY;
+  const label = isWeekendOrHoliday(dateVal) ? L.weekendLabel : L.weekdayLabel;
+  sel.innerHTML = `<option value="">${L.timeLabel(label)}</option>`;
+
+  slots.forEach(s => {
+    const taken = existingBookings.some(b =>
+      b.staff === staffVal && normalizeDate(b.date) === dateVal && b.time === s
+    );
+    const o = document.createElement('option');
+    o.value = s;
+    o.textContent = taken ? s + L.taken : s;
+    o.disabled = taken;
+    sel.appendChild(o);
+  });
+}
+
+function setMinDate() {
+  document.getElementById('date').min = new Date().toISOString().split('T')[0];
+}
+
+function validate() {
+  let ok = true;
+  [['name','f-name'],['purpose','f-purpose'],['staff','f-staff'],['date','f-date'],['time','f-time']].forEach(([id,fid]) => {
+    const el = document.getElementById(id);
+    const fe = document.getElementById(fid);
+    if (!el.value.trim()) { fe.classList.add('invalid'); ok = false; }
+    else fe.classList.remove('invalid');
+  });
+  return ok;
+}
+
+async function submitForm() {
+  if (!validate()) return;
+  const L = LANG[currentLang];
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = L.sending;
+
+  const payload = {
+    name:    document.getElementById('name').value.trim(),
+    phone:   document.getElementById('phone').value.trim(),
+    purpose: document.getElementById('purpose').value,
+    staff:   document.getElementById('staff').value,
+    date:    document.getElementById('date').value,
+    time:    document.getElementById('time').value,
+    note:    document.getElementById('note').value.trim()
+  };
+
+  try {
+    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.result === 'ok') {
+      ['name','phone','note'].forEach(id => document.getElementById(id).value = '');
+      ['purpose','staff','date'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('time').innerHTML = `<option value="">${L.timePlaceholder}</option>`;
+      showToast(L.successMsg);
+      loadExistingBookings();
+    } else {
+      showToast(L.errorMsg, true);
+    }
+  } catch {
+    showToast(L.networkErr, true);
+  } finally {
+    btn.disabled = false; btn.textContent = L.submitBtn;
+  }
+}
+
+loadStaff();
+setMinDate();
+loadExistingBookings();
+setLang('ja');
+</script>
+</body>
+</html>

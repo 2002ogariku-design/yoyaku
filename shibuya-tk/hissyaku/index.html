@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6e1f2b">
+<title>必着未販売管理｜渋谷店</title>
+<style>
+  :root{
+    --bg:#f3ecdf;--panel:#fffcf5;--panel2:#ece1c8;--line:#d8c6a0;
+    --gold:#9c7a35;--gold-dim:#c4a25f;--text:#241e19;--text-dim:#7a6a52;
+    --danger:#8c2f2f;--danger-bg:#f3e1da;--warn:#8a5d12;--warn-bg:#f6e8c8;
+    --ok:#395c3c;--ok-bg:#e2ecdd;
+    --accent:#6e1f2b;--accent-dim:#a85f64;--accent-bg:#f1ddd9;
+    --font-d:"Hiragino Mincho ProN","Yu Mincho",serif;
+    --font-b:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:14px;}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 16px 60px;}
+  header{border-bottom:2px solid var(--accent);padding-bottom:14px;margin-bottom:16px;}
+  .eyebrow{font-size:11px;letter-spacing:.22em;color:var(--accent);font-weight:700;text-transform:uppercase;}
+  h1{margin:2px 0 4px;font-size:21px;font-weight:700;font-family:var(--font-d);}
+  .sub{font-size:12px;color:var(--text-dim);}
+  .btn{border-radius:7px;padding:8px 14px;font-size:12.5px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:600;}
+  .btn:hover{border-color:var(--accent-dim);}
+  .btn.primary{background:var(--accent);color:#fff8f0;border-color:var(--accent);}
+  .btn.primary:hover{background:#8a2935;}
+  .btn.sm{padding:5px 10px;font-size:11.5px;}
+
+  /* tabs */
+  .tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--accent);}
+  .tab{padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text-dim);border-bottom:3px solid transparent;margin-bottom:-2px;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-badge{display:inline-block;background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:5px;font-weight:700;}
+  .tab.active .tab-badge{background:var(--accent);}
+
+  /* toolbar */
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  .toolbar input{padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;flex:1;min-width:160px;}
+  .toolbar select{padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;}
+
+  /* stats */
+  .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px;text-align:center;min-width:90px;}
+  .stat .num{font-size:20px;font-weight:700;color:var(--gold);}
+  .stat.danger .num{color:var(--danger);}
+  .stat.warn .num{color:var(--warn);}
+  .stat.ok .num{color:var(--ok);}
+  .stat .lbl{font-size:10.5px;color:var(--text-dim);}
+
+  /* items */
+  .item-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;}
+  .item-card.danger{border-left:4px solid var(--danger);}
+  .item-card.warn{border-left:4px solid var(--warn);}
+  .item-card.ok{border-left:4px solid var(--ok);opacity:.7;}
+  .item-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .item-title{font-size:14.5px;font-weight:700;font-family:var(--font-d);}
+  .item-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .chip.danger{background:var(--danger-bg);color:var(--danger);}
+  .chip.warn{background:var(--warn-bg);color:var(--warn);}
+  .chip.ok{background:var(--ok-bg);color:var(--ok);}
+  .chip.neutral{background:var(--panel2);color:var(--text-dim);}
+  .item-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+  @media(max-width:600px){.item-grid{grid-template-columns:1fr 1fr;}}
+  .item-field{font-size:12px;}
+  .item-field .k{color:var(--text-dim);margin-bottom:2px;}
+  .item-field .v{font-weight:600;}
+  .item-field .v.empty{color:var(--danger);font-weight:400;}
+
+  /* input form inside card */
+  .input-form{background:var(--panel2);border-radius:8px;padding:12px;margin-top:8px;}
+  .input-form .form-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;}
+  .input-form .form-row:last-child{margin-bottom:0;}
+  .input-form label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;font-weight:600;}
+  .input-form select,.input-form input{padding:7px 9px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:13px;width:100%;}
+  .form-col{flex:1;min-width:130px;}
+  .open-sheet-btn{
+    display:inline-flex;align-items:center;gap:5px;
+    background:var(--panel);border:1px solid var(--accent);color:var(--accent);
+    border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;
+    text-decoration:none;white-space:nowrap;
+  }
+  .open-sheet-btn:hover{background:var(--accent);color:#fff;}
+
+  #errorBanner{display:none;background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;line-height:1.6;}
+  .loading{text-align:center;padding:40px;color:var(--text-dim);font-size:14px;}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--text-dim);}
+
+  @media(max-width:600px){
+    h1{font-size:18px;}
+    .tab{padding:8px 12px;font-size:12px;}
+    .item-card{padding:12px;}
+    .stats{gap:6px;}
+    .stat{min-width:70px;padding:7px 10px;}
+    .stat .num{font-size:17px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">RINKAN 渋谷店</div>
+  <h1>必着未販売商品 管理ツール</h1>
+  <div class="sub" id="lastUpdated">読み込み中...</div>
+</header>
+
+<div id="errorBanner"></div>
+
+<div class="tabs">
+  <div class="tab active" id="tab1" onclick="switchTab(1)">
+    ① 期限切れ未販売 <span class="tab-badge" id="badge1">—</span>
+  </div>
+  <div class="tab" id="tab2" onclick="switchTab(2)">
+    ② 3日経過分 <span class="tab-badge" id="badge2">—</span>
+  </div>
+</div>
+
+<!-- Sheet 1 -->
+<div id="view1">
+  <div class="stats" id="stats1"></div>
+  <div class="toolbar">
+    <input type="text" id="search1" placeholder="🔍 名前・商品名・状態で検索" oninput="renderSheet1()">
+    <select id="filter1Status" onchange="renderSheet1()">
+      <option value="">状態：すべて</option>
+      <option value="未対応">未対応のみ</option>
+      <option value="保留">保留のみ</option>
+      <option value="対応済み">対応済みのみ</option>
+    </select>
+    <button class="btn" onclick="loadAll()">🔄 最新を取得</button>
+    <a href="https://docs.google.com/spreadsheets/d/1cIMIaEBupvmtGkaZB5gpyjThlr7Wf-evPnqxqu0ea1M/edit#gid=145307840" target="_blank" class="btn">↗ スプレッドシートを開く</a>
+  </div>
+  <div id="list1"><div class="loading">読み込み中...</div></div>
+</div>
+
+<!-- Sheet 2 -->
+<div id="view2" style="display:none;">
+  <div class="stats" id="stats2"></div>
+  <div class="toolbar">
+    <input type="text" id="search2" placeholder="🔍 名前・商品名で検索" oninput="renderSheet2()">
+    <button class="btn" onclick="loadAll()">🔄 最新を取得</button>
+    <a href="https://docs.google.com/spreadsheets/d/1cIMIaEBupvmtGkaZB5gpyjThlr7Wf-evPnqxqu0ea1M/" target="_blank" class="btn">↗ スプレッドシートを開く</a>
+  </div>
+  <div id="list2"><div class="loading">読み込み中...</div></div>
+</div>
+
+</div>
+
+<script>
+const SHEET_ID = "1cIMIaEBupvmtGkaZB5gpyjThlr7Wf-evPnqxqu0ea1M";
+const SHEET1 = "★店舗確認用★期限切れ未販売";
+const SHEET2 = "★店舗確認用★3日経過分";
+const SHIBUYA_KW = "渋谷";
+
+let data1 = [], data2 = [];
+let cols1 = {}, cols2 = {};
+
+function showError(msg){
+  const el = document.getElementById("errorBanner");
+  el.style.display = "block"; el.innerHTML = msg;
+}
+
+async function fetchSheet(name){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(name)}&t=${Date.now()}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  const text = await res.text();
+  const start = text.indexOf('{'), end = text.lastIndexOf('}');
+  if(start < 0) throw new Error("データの形式が不正です");
+  const json = JSON.parse(text.slice(start, end+1));
+  if(json.status === "error") throw new Error(json.errors ? json.errors.map(e=>e.message).join(", ") : "スプレッドシートの読み込みエラー");
+  return json.table;
+}
+
+function buildColMap(cols){
+  const map = {};
+  cols.forEach((c,i)=>{ if(c.label) map[c.label.trim()] = i; });
+  return map;
+}
+
+function cellVal(row, idx){
+  if(idx == null || !row.c || !row.c[idx]) return "";
+  const v = row.c[idx].v;
+  if(v == null) return "";
+  if(row.c[idx].f) return row.c[idx].f; // formatted value (for dates etc)
+  return String(v);
+}
+
+function escapeHtml(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function isShibuya(row, colMap){
+  // Check multiple columns for 渋谷 keyword
+  return Object.values(colMap).some(idx => cellVal(row, idx).includes(SHIBUYA_KW));
+}
+
+function switchTab(n){
+  document.getElementById("view1").style.display = n===1?"block":"none";
+  document.getElementById("view2").style.display = n===2?"block":"none";
+  document.getElementById("tab1").className = "tab" + (n===1?" active":"");
+  document.getElementById("tab2").className = "tab" + (n===2?" active":"");
+}
+
+async function loadAll(){
+  document.getElementById("list1").innerHTML = '<div class="loading">読み込み中...</div>';
+  document.getElementById("list2").innerHTML = '<div class="loading">読み込み中...</div>';
+  document.getElementById("errorBanner").style.display = "none";
+  try{
+    const [t1, t2] = await Promise.all([
+      fetchSheet(SHEET1),
+      fetchSheet(SHEET2)
+    ]);
+    cols1 = buildColMap(t1.cols);
+    data1 = t1.rows || [];
+    cols2 = buildColMap(t2.cols);
+    data2 = t2.rows || [];
+    document.getElementById("lastUpdated").textContent = "最終取得: " + new Date().toLocaleTimeString("ja-JP");
+    renderSheet1();
+    renderSheet2();
+  }catch(e){
+    console.error(e);
+    showError("スプレッドシートの読み込みに失敗しました。シートが閲覧可能な状態か確認してください。<br>詳細: " + (e && e.message ? e.message : e));
+    document.getElementById("list1").innerHTML = "";
+    document.getElementById("list2").innerHTML = "";
+  }
+}
+
+function getStatusChip(status){
+  if(!status || status === "未対応") return `<span class="chip danger">未対応</span>`;
+  if(status === "保留") return `<span class="chip warn">保留</span>`;
+  if(status === "対応済み") return `<span class="chip ok">対応済み</span>`;
+  return `<span class="chip neutral">${escapeHtml(status)}</span>`;
+}
+function cardClass(status){
+  if(!status || status === "未対応") return "danger";
+  if(status === "保留") return "warn";
+  return "ok";
+}
+
+function renderSheet1(){
+  const q = (document.getElementById("search1").value || "").toLowerCase();
+  const statusFilter = document.getElementById("filter1Status").value;
+
+  // Find key columns - adapt based on what labels exist
+  const colStatus = cols1["状態"] ?? cols1["M"] ?? null;
+  const colReason = cols1["保留理由"] ?? cols1["N"] ?? null;
+  const colPerson = cols1["対応者"] ?? cols1["O"] ?? null;
+
+  // Find identifying columns by scanning for common names
+  const allKeys = Object.keys(cols1);
+  const colItem  = allKeys.find(k => k.includes("商品") || k.includes("品番") || k.includes("品名"));
+  const colDate  = allKeys.find(k => k.includes("来店") || k.includes("日付") || k.includes("期限") || k.includes("日"));
+  const colStaff = allKeys.find(k => k.includes("担当") || k.includes("スタッフ"));
+  const colStore = allKeys.find(k => k.includes("店舗") || k.includes("店"));
+
+  const shibuyaRows = data1.map((row, i) => ({row, rowNum: i+2}))
+    .filter(({row}) => isShibuya(row, cols1));
+
+  const filtered = shibuyaRows.filter(({row}) => {
+    const status = colStatus != null ? cellVal(row, colStatus) : "";
+    if(statusFilter && !status.includes(statusFilter)) return false;
+    if(q){
+      const hay = Object.values(cols1).map(idx => cellVal(row, idx)).join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const undone = shibuyaRows.filter(({row}) => {
+    const s = colStatus != null ? cellVal(row, colStatus) : "";
+    return !s || s === "未対応";
+  }).length;
+  const hold = shibuyaRows.filter(({row}) => {
+    const s = colStatus != null ? cellVal(row, colStatus) : "";
+    return s === "保留";
+  }).length;
+  const done = shibuyaRows.length - undone - hold;
+
+  document.getElementById("badge1").textContent = undone + hold;
+  document.getElementById("stats1").innerHTML = `
+    <div class="stat"><div class="num">${shibuyaRows.length}</div><div class="lbl">渋谷関連 全件</div></div>
+    <div class="stat danger"><div class="num">${undone}</div><div class="lbl">未対応</div></div>
+    <div class="stat warn"><div class="num">${hold}</div><div class="lbl">保留</div></div>
+    <div class="stat ok"><div class="num">${done}</div><div class="lbl">対応済み</div></div>
+  `;
+
+  if(!shibuyaRows.length){
+    document.getElementById("list1").innerHTML = '<div class="empty-state">渋谷店関連の商品が見つかりませんでした。<br>スプレッドシートの担当者列に「渋谷」の文字が含まれている必要があります。</div>';
+    return;
+  }
+  if(!filtered.length){
+    document.getElementById("list1").innerHTML = '<div class="empty-state">条件に一致するアイテムがありません</div>';
+    return;
+  }
+
+  document.getElementById("list1").innerHTML = filtered.map(({row, rowNum}) => {
+    const status = colStatus != null ? cellVal(row, colStatus) : "";
+    const reason = colReason != null ? cellVal(row, colReason) : "";
+    const person = colPerson != null ? cellVal(row, colPerson) : "";
+    const itemName = colItem ? cellVal(row, cols1[colItem]) : "";
+    const visitDate = colDate ? cellVal(row, cols1[colDate]) : "";
+    const staffName = colStaff ? cellVal(row, cols1[colStaff]) : "";
+    const storeName = colStore ? cellVal(row, cols1[colStore]) : "";
+
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=145307840&range=M${rowNum}`;
+
+    const allValues = Object.entries(cols1)
+      .filter(([k]) => !["状態","保留理由","対応者"].includes(k))
+      .map(([k,idx]) => {
+        const v = cellVal(row, idx);
+        if(!v) return "";
+        return `<div class="item-field"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`;
+      }).filter(Boolean);
+
+    return `
+    <div class="item-card ${cardClass(status)}">
+      <div class="item-header">
+        <div>
+          <div class="item-title">${escapeHtml(itemName || `行 ${rowNum}`)}</div>
+          <div class="item-meta" style="margin-top:4px;">
+            ${getStatusChip(status)}
+            ${visitDate ? `<span class="chip neutral">来店予定: ${escapeHtml(visitDate)}</span>` : ""}
+            ${staffName ? `<span class="chip neutral">担当: ${escapeHtml(staffName)}</span>` : ""}
+            ${storeName ? `<span class="chip neutral">${escapeHtml(storeName)}</span>` : ""}
+          </div>
+        </div>
+        <a href="${sheetUrl}" target="_blank" class="open-sheet-btn">↗ シートで開く（M${rowNum}列）</a>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-bottom:10px;">
+        ${allValues.slice(0,6).join("")}
+      </div>
+
+      <div class="input-form">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;font-weight:700;">▼ 入力内容（確認してシートに転記）</div>
+        <div class="form-row">
+          <div class="form-col">
+            <label>M列 状態</label>
+            <select id="s1_status_${rowNum}">
+              <option value="">選択...</option>
+              <option value="対応済み" ${status==="対応済み"?"selected":""}>対応済み</option>
+              <option value="保留" ${status==="保留"?"selected":""}>保留</option>
+            </select>
+          </div>
+          <div class="form-col" style="flex:2;">
+            <label>N列 保留理由（保留の場合は日付と理由）</label>
+            <input type="text" id="s1_reason_${rowNum}" placeholder="例）6/30来店日変更" value="${escapeHtml(reason)}">
+          </div>
+          <div class="form-col">
+            <label>O列 対応者</label>
+            <input type="text" id="s1_person_${rowNum}" placeholder="自分の名前" value="${escapeHtml(person)}">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn primary sm" onclick="copyToClipboard1(${rowNum})">📋 入力内容をコピー</button>
+          <span id="copied1_${rowNum}" style="font-size:11px;color:var(--ok);opacity:0;transition:opacity .4s;"></span>
+        </div>
+      </div>
+    </div>
+    `;
+  }).join("");
+}
+
+function renderSheet2(){
+  const q = (document.getElementById("search2").value || "").toLowerCase();
+  const allKeys2 = Object.keys(cols2);
+  const colItem = allKeys2.find(k => k.includes("商品") || k.includes("品番") || k.includes("品名"));
+  const colDate = allKeys2.find(k => k.includes("来店") || k.includes("日付") || k.includes("日"));
+  const colStore = allKeys2.find(k => k.includes("振り先") || k.includes("元店舗") || k.includes("振先"));
+  const colStaff = allKeys2.find(k => k.includes("担当") || k.includes("スタッフ"));
+  const colStatus = allKeys2.find(k => k.includes("状態") || k.includes("ステータス"));
+
+  const shibuyaRows = data2.map((row,i) => ({row, rowNum:i+2}))
+    .filter(({row}) => isShibuya(row, cols2));
+
+  const filtered = shibuyaRows.filter(({row}) => {
+    if(q){
+      const hay = Object.values(cols2).map(idx => cellVal(row, idx)).join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById("badge2").textContent = filtered.length;
+  document.getElementById("stats2").innerHTML = `
+    <div class="stat"><div class="num">${shibuyaRows.length}</div><div class="lbl">渋谷関連 全件</div></div>
+    <div class="stat danger"><div class="num">${filtered.length}</div><div class="lbl">要対応</div></div>
+  `;
+
+  if(!filtered.length){
+    document.getElementById("list2").innerHTML = '<div class="empty-state">渋谷店関連の対象商品が見つかりませんでした</div>';
+    return;
+  }
+
+  const sheetBaseUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=145307840`;
+
+  document.getElementById("list2").innerHTML = filtered.map(({row, rowNum}) => {
+    const itemName = colItem ? cellVal(row, cols2[colItem]) : "";
+    const visitDate = colDate ? cellVal(row, cols2[colDate]) : "";
+    const storeDest = colStore ? cellVal(row, cols2[colStore]) : "";
+    const staffName = colStaff ? cellVal(row, cols2[colStaff]) : "";
+    const status = colStatus ? cellVal(row, cols2[colStatus]) : "";
+
+    const allValues = Object.entries(cols2).map(([k,idx]) => {
+      const v = cellVal(row, idx);
+      if(!v) return "";
+      return `<div class="item-field"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`;
+    }).filter(Boolean);
+
+    return `
+    <div class="item-card danger">
+      <div class="item-header">
+        <div>
+          <div class="item-title">${escapeHtml(itemName || `行 ${rowNum}`)}</div>
+          <div class="item-meta" style="margin-top:4px;">
+            ${status ? `<span class="chip warn">${escapeHtml(status)}</span>` : ""}
+            ${visitDate ? `<span class="chip neutral">来店予定: ${escapeHtml(visitDate)}</span>` : ""}
+            ${staffName ? `<span class="chip neutral">担当: ${escapeHtml(staffName)}</span>` : ""}
+            ${storeDest ? `<span class="chip danger">振り先: ${escapeHtml(storeDest)}</span>` : ""}
+          </div>
+        </div>
+        <a href="${sheetBaseUrl}&range=R${rowNum}" target="_blank" class="open-sheet-btn">↗ R${rowNum}列を開く</a>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-bottom:10px;">
+        ${allValues.slice(0,8).join("")}
+      </div>
+      <div class="input-form">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;font-weight:700;">▼ R列入力内容（スプレッドシートに転記）</div>
+        <div class="form-row">
+          <div class="form-col" style="flex:2;">
+            <label>R列 取り置きスタッフ名・店舗名・振り先</label>
+            <input type="text" id="s2_r_${rowNum}" placeholder="例）山本 渋谷 新宿" value="">
+          </div>
+          <button class="btn primary sm" onclick="copyToClipboard2(${rowNum})" style="align-self:flex-end;">📋 コピー</button>
+          <span id="copied2_${rowNum}" style="font-size:11px;color:var(--ok);opacity:0;transition:opacity .4s;align-self:flex-end;"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);">
+          ※原則当日中に元店舗（振り先: <b>${escapeHtml(storeDest||"—")}</b>）への戻し処理を行ってください
+        </div>
+      </div>
+    </div>
+    `;
+  }).join("");
+}
+
+function copyToClipboard1(rowNum){
+  const status = document.getElementById(`s1_status_${rowNum}`)?.value || "";
+  const reason = document.getElementById(`s1_reason_${rowNum}`)?.value || "";
+  const person = document.getElementById(`s1_person_${rowNum}`)?.value || "";
+  const text = `M列: ${status}\nN列: ${reason}\nO列: ${person}`;
+  navigator.clipboard.writeText(text).catch(()=>{ const ta = document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); });
+  const el = document.getElementById(`copied1_${rowNum}`);
+  el.textContent = "コピーしました";
+  el.style.opacity = "1";
+  setTimeout(()=>{ el.style.opacity = "0"; }, 2000);
+}
+
+function copyToClipboard2(rowNum){
+  const r = document.getElementById(`s2_r_${rowNum}`)?.value || "";
+  navigator.clipboard.writeText(r).catch(()=>{ const ta = document.createElement("textarea"); ta.value=r; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); });
+  const el = document.getElementById(`copied2_${rowNum}`);
+  el.textContent = "✓";
+  el.style.opacity = "1";
+  setTimeout(()=>{ el.style.opacity = "0"; }, 2000);
+}
+
+loadAll();
+</script>
+</body>
+</html>

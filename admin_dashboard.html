@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>来店予約 管理画面</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --ink:#1a1a1a;--ink-light:#444;--ink-muted:#888;
+    --paper:#f5f4f1;--white:#fff;--accent:#8b4513;--line:#e0dbd0;
+    --pending-bg:#fff8e6;--pending-text:#7a5000;
+    --confirmed-bg:#e6f4ee;--confirmed-text:#1d5c3a;
+    --done-bg:#ececec;--done-text:#555;
+    --cancelled-bg:#fce8e8;--cancelled-text:#8b2020;
+    --sidebar:#1a1a1a;
+  }
+  body{font-family:'Noto Sans JP',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex}
+  .sidebar{width:220px;background:var(--sidebar);min-height:100vh;padding:1.8rem 0;flex-shrink:0;display:flex;flex-direction:column}
+  .sidebar-logo{padding:0 1.4rem 1.8rem;border-bottom:.5px solid rgba(255,255,255,.1)}
+  .sidebar-logo .s{font-size:.6rem;letter-spacing:.3em;color:rgba(255,255,255,.4);margin-bottom:.3rem}
+  .sidebar-logo h2{font-family:'Shippori Mincho',serif;color:#fff;font-size:.95rem;letter-spacing:.08em;font-weight:400}
+  .nav{padding:1.2rem 0;flex:1}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:.65rem 1.4rem;color:rgba(255,255,255,.7);cursor:pointer;font-size:.8rem;letter-spacing:.04em;transition:background .15s,color .15s;border-left:2px solid transparent}
+  .nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
+  .nav-item.active{background:rgba(255,255,255,.12);color:#fff;border-left-color:#f7ede0}
+  .sidebar-bottom{padding:1rem 1.4rem;border-top:.5px solid rgba(255,255,255,.1);font-size:.72rem;color:rgba(255,255,255,.3);letter-spacing:.06em}
+  .main{flex:1;padding:2rem 2.5rem;overflow-x:hidden}
+  .page-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1.8rem;padding-bottom:1.2rem;border-bottom:.5px solid var(--line)}
+  .page-header h1{font-family:'Shippori Mincho',serif;font-size:1.5rem;font-weight:700;letter-spacing:.06em}
+  .page-header p{font-size:.75rem;color:var(--ink-muted);margin-top:.2rem;letter-spacing:.04em}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:.5rem 1rem;border:.5px solid var(--line);background:var(--white);color:var(--ink-light);border-radius:2px;font-size:.75rem;font-family:'Noto Sans JP',sans-serif;cursor:pointer;letter-spacing:.06em;transition:background .15s,border-color .15s}
+  .btn:hover{background:var(--paper);border-color:var(--ink-muted)}
+  .btn-primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn-primary:hover{background:var(--accent);border-color:var(--accent)}
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.8rem}
+  .stat-card{background:var(--white);border:.5px solid var(--line);border-radius:2px;padding:1rem 1.2rem}
+  .stat-card .label{font-size:.68rem;letter-spacing:.12em;color:var(--ink-muted);margin-bottom:.4rem}
+  .stat-card .value{font-size:1.7rem;font-weight:300;color:var(--ink)}
+  .stat-card .sub{font-size:.65rem;color:var(--ink-muted);margin-top:.2rem;letter-spacing:.06em}
+  .filter-bar{display:flex;gap:.7rem;align-items:center;margin-bottom:1.2rem;flex-wrap:wrap}
+  .filter-bar input,.filter-bar select{border:.5px solid var(--line);background:var(--white);padding:.42rem .8rem;border-radius:2px;font-size:.75rem;font-family:'Noto Sans JP',sans-serif;color:var(--ink);outline:none;transition:border-color .15s}
+  .filter-bar input:focus,.filter-bar select:focus{border-color:var(--ink-muted)}
+  .filter-bar input{width:210px}
+  .table-wrap{background:var(--white);border:.5px solid var(--line);border-radius:2px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:.78rem}
+  thead th{text-align:left;padding:.8rem 1rem;font-size:.65rem;font-weight:500;letter-spacing:.14em;color:var(--ink-muted);border-bottom:.5px solid var(--line);background:#faf9f6;white-space:nowrap}
+  tbody tr{border-bottom:.5px solid var(--line);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:hover{background:#faf9f6}
+  tbody td{padding:.75rem 1rem;vertical-align:middle}
+  .badge{display:inline-block;padding:3px 9px;border-radius:1px;font-size:.65rem;letter-spacing:.08em;font-weight:500;white-space:nowrap}
+  .badge-pending{background:var(--pending-bg);color:var(--pending-text)}
+  .badge-confirmed{background:var(--confirmed-bg);color:var(--confirmed-text)}
+  .badge-done{background:var(--done-bg);color:var(--done-text)}
+  .badge-cancelled{background:var(--cancelled-bg);color:var(--cancelled-text)}
+  .action-select{border:.5px solid var(--line);background:var(--white);padding:.28rem .5rem;border-radius:2px;font-size:.7rem;font-family:'Noto Sans JP',sans-serif;color:var(--ink);cursor:pointer;outline:none}
+  .td-name{font-weight:500;color:var(--ink)}
+  .td-phone{color:var(--ink-light)}
+  .td-note{color:var(--ink-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .empty-state{text-align:center;padding:3rem;color:var(--ink-muted);font-size:.8rem;letter-spacing:.08em}
+  .staff-section{display:none}
+  .staff-mgmt{max-width:480px}
+  .staff-mgmt h2{font-family:'Shippori Mincho',serif;font-size:1.2rem;margin-bottom:.5rem}
+  .staff-mgmt p{font-size:.78rem;color:var(--ink-muted);margin-bottom:1.4rem}
+  .staff-list{background:var(--white);border:.5px solid var(--line);border-radius:2px;margin-bottom:1.4rem}
+  .staff-item{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:.5px solid var(--line);font-size:.82rem}
+  .staff-item:last-child{border-bottom:none}
+  .staff-item .del-btn{background:none;border:none;color:var(--ink-muted);cursor:pointer;font-size:.7rem;padding:2px 6px;border-radius:2px;transition:background .15s,color .15s;font-family:'Noto Sans JP',sans-serif;letter-spacing:.04em}
+  .staff-item .del-btn:hover{background:var(--cancelled-bg);color:var(--cancelled-text)}
+  .add-staff-row{display:flex;gap:.6rem}
+  .add-staff-row input{flex:1;border:.5px solid var(--line);background:var(--white);padding:.5rem .8rem;border-radius:2px;font-size:.82rem;font-family:'Noto Sans JP',sans-serif;color:var(--ink);outline:none}
+  .add-staff-row input:focus{border-color:var(--accent)}
+  .detail-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center}
+  .detail-overlay.open{display:flex}
+  .detail-box{background:var(--white);border-radius:2px;padding:2rem;width:460px;max-width:90vw;position:relative}
+  .detail-box h3{font-family:'Shippori Mincho',serif;font-size:1.1rem;margin-bottom:1.2rem}
+  .detail-row{display:flex;border-bottom:.5px solid var(--line);padding:.6rem 0;font-size:.8rem}
+  .detail-row:last-of-type{border-bottom:none}
+  .detail-row .dl{width:100px;color:var(--ink-muted);flex-shrink:0}
+  .detail-row .dd{flex:1;color:var(--ink);line-height:1.6}
+  .close-btn{position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--ink-muted);line-height:1}
+  .close-btn:hover{color:var(--ink)}
+  .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#2d6a4f;margin-right:6px;animation:pulse 2s infinite;vertical-align:middle}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .loading-row td{text-align:center;color:var(--ink-muted);padding:2rem;font-size:.82rem;letter-spacing:.06em}
+  .config-notice{background:#fff8e6;border:.5px solid #f0d080;border-radius:2px;padding:1rem 1.2rem;margin-bottom:1.5rem;font-size:.8rem;color:#7a5000;letter-spacing:.04em;line-height:1.8}
+  @media(max-width:860px){.sidebar{width:180px}.main{padding:1.4rem 1.2rem}.stats-row{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.sidebar{display:none}.stats-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="s">ADMIN</div>
+    <h2>来店予約 管理</h2>
+  </div>
+  <div class="nav">
+    <div class="nav-item active" onclick="showSection('view')">📋 予約一覧</div>
+    <div class="nav-item" onclick="showSection('staff')">👤 スタッフ管理</div>
+  </div>
+  <div class="sidebar-bottom"><span class="live-dot"></span>自動更新中</div>
+</nav>
+
+<main class="main">
+
+  <!-- 予約一覧 -->
+  <div id="sec-view">
+    <div class="page-header">
+      <div>
+        <h1>予約一覧</h1>
+        <p id="last-updated">読み込み中...</p>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn" onclick="exportCSV()">📥 CSV出力</button>
+        <button class="btn btn-primary" onclick="loadData()">🔄 更新</button>
+      </div>
+    </div>
+
+    <div id="api-notice" class="config-notice" style="display:none">
+      ⚠ <strong>API_URLが未設定です。</strong>このファイルの先頭にある <code>API_URL</code> にApps ScriptのURLを貼り付けてください。
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="label">全予約</div><div class="value" id="stat-total">—</div><div class="sub">件</div></div>
+      <div class="stat-card"><div class="label">未確認</div><div class="value" id="stat-pending">—</div><div class="sub">件</div></div>
+      <div class="stat-card"><div class="label">確定済</div><div class="value" id="stat-confirmed">—</div><div class="sub">件</div></div>
+      <div class="stat-card"><div class="label">本日の来店</div><div class="value" id="stat-today">—</div><div class="sub">件</div></div>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="search" placeholder="🔍 名前・電話・スタッフで検索" oninput="renderTable()">
+      <select id="filter-status" onchange="renderTable()">
+        <option value="">全ステータス</option>
+        <option value="未確認">未確認</option>
+        <option value="確定">確定</option>
+        <option value="完了">完了</option>
+        <option value="キャンセル">キャンセル</option>
+      </select>
+      <select id="filter-staff" onchange="renderTable()">
+        <option value="">全スタッフ</option>
+      </select>
+      <input type="date" id="filter-date" onchange="renderTable()">
+      <button class="btn" onclick="clearFilters()">クリア</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>受付日時</th><th>お客様名</th><th>電話番号</th>
+            <th>目的</th><th>来店日時</th><th>担当スタッフ</th><th>備考</th>
+            <th>ステータス</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr class="loading-row"><td colspan="8">読み込み中...</td></tr>
+        </tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none">予約データがありません</div>
+    </div>
+  </div>
+
+  <!-- スタッフ管理 -->
+  <div class="staff-section" id="sec-staff">
+    <div class="page-header">
+      <div><h1>スタッフ管理</h1><p>予約フォームに表示されるスタッフを管理します</p></div>
+    </div>
+    <div class="staff-mgmt">
+      <h2>登録スタッフ</h2>
+      <p>フォームで選択可能なスタッフ一覧です。変更後は「保存」を押してください。</p>
+      <div class="staff-list" id="staff-list"></div>
+      <div class="add-staff-row">
+        <input type="text" id="new-staff" placeholder="新しいスタッフ名を入力" onkeydown="if(event.key==='Enter')addStaff()">
+        <button class="btn btn-primary" onclick="addStaff()">追加</button>
+      </div>
+      <div style="margin-top:1rem">
+        <button class="btn btn-primary" onclick="saveStaff()">💾 スタッフ一覧を保存</button>
+        <span id="staff-save-msg" style="margin-left:.8rem;font-size:.75rem;color:#2d6a4f;display:none">✓ 保存しました</span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- 詳細モーダル -->
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail(event)">
+  <div class="detail-box" id="detail-box">
+    <button class="close-btn" onclick="closeDetailBtn()">✕</button>
+    <h3>予約詳細</h3>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+// ===================================================
+// ★ ここにApps ScriptのURLを貼り付けてください ★
+const API_URL = 'https://script.google.com/macros/s/AKfycbxDj6onTV4kVOZx7kCYpY_iruTIawKFIeF7PFFDABaNRQrlTaHgYsC6tS5LfYehNQ51/exec';
+// ===================================================
+
+const STATUS_BADGE = { '未確認':'badge-pending','確定':'badge-confirmed','完了':'badge-done','キャンセル':'badge-cancelled' };
+let allData = [];
+
+// ---- データ取得 ----
+async function loadData() {
+  if (API_URL === 'YOUR_APPS_SCRIPT_URL') {
+    document.getElementById('api-notice').style.display = 'block';
+    document.querySelector('.live-dot').style.background = '#c00';
+    return;
+  }
+  try {
+    const res = await fetch(API_URL + '?action=getRecords&t=' + Date.now());
+    const data = await res.json();
+    allData = data.records || [];
+    updateStats();
+    renderTable();
+    populateStaffFilter();
+    document.getElementById('last-updated').textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+  } catch (e) {
+    document.getElementById('last-updated').textContent = '⚠ 取得失敗 — 再接続中...';
+  }
+}
+
+function updateStats() {
+  const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'/');
+  document.getElementById('stat-total').textContent = allData.length;
+  document.getElementById('stat-pending').textContent = allData.filter(d=>d.status==='未確認').length;
+  document.getElementById('stat-confirmed').textContent = allData.filter(d=>d.status==='確定').length;
+  const todayStr = new Date().toISOString().split('T')[0];
+  document.getElementById('stat-today').textContent = allData.filter(d=>d.date===todayStr).length;
+}
+
+function populateStaffFilter() {
+  const sel = document.getElementById('filter-staff');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全スタッフ</option>';
+  [...new Set(allData.map(d=>d.staff).filter(Boolean))].forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    if(s===cur) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+
+function getFiltered() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const st = document.getElementById('filter-status').value;
+  const sf = document.getElementById('filter-staff').value;
+  const dt = document.getElementById('filter-date').value;
+  return allData.filter(d => {
+    if(q && !`${d.name}${d.phone}${d.staff}${d.note}`.toLowerCase().includes(q)) return false;
+    if(st && d.status!==st) return false;
+    if(sf && d.staff!==sf) return false;
+    if(dt && d.date!==dt) return false;
+    return true;
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('table-body');
+  const empty = document.getElementById('empty-state');
+  tbody.innerHTML = '';
+  if(!filtered.length){ empty.style.display='block'; return; }
+  empty.style.display='none';
+  filtered.forEach(d => {
+    // 来店日を見やすく表示
+    let dateDisp = '—';
+    if (d.date && d.date !== 'undefined') {
+      // "2026-05-23" 形式
+      if (d.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const parts = d.date.split('-');
+        dateDisp = `${parts[0]}/${parts[1]}/${parts[2]}`;
+      // "Fri May 22 2026..." など Date文字列形式
+      } else {
+        const parsed = new Date(d.date);
+        if (!isNaN(parsed)) {
+          const y = parsed.getFullYear();
+          const mo = String(parsed.getMonth()+1).padStart(2,'0');
+          const day = String(parsed.getDate()).padStart(2,'0');
+          dateDisp = `${y}/${mo}/${day}`;
+        } else {
+          dateDisp = d.date;
+        }
+      }
+    }
+
+    // 同じ日時・同じスタッフの予約が他にあるか確認（重複警告）
+    const conflict = allData.some(other =>
+      other.id !== d.id &&
+      other.date === d.date &&
+      other.time === d.time &&
+      other.staff === d.staff &&
+      other.status !== 'キャンセル'
+    );
+    const conflictBadge = conflict ? `<span style="color:#9b2226;font-size:.65rem;font-weight:700;margin-left:4px">⚠ 重複</span>` : '';
+
+    const tr = document.createElement('tr');
+    if (conflict) tr.style.background = '#fff5f5';
+    tr.innerHTML = `
+      <td style="white-space:nowrap;font-size:.72rem;color:var(--ink-muted)">${formatDate(d.createdAt)}</td>
+      <td class="td-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:#ccc" onclick="showDetail('${esc(d.id)}')">${esc(d.name)}</td>
+      <td class="td-phone">${esc(d.phone)||'—'}</td>
+      <td style="white-space:nowrap">${esc(d.purpose)||'—'}</td>
+      <td style="white-space:nowrap">${dateDisp}<br><span style="font-size:.72rem;color:var(--ink-muted)">${esc(d.time)}</span>${conflictBadge}</td>
+      <td>${esc(d.staff)}</td>
+      <td class="td-note" title="${esc(d.note)}">${esc(d.note)||'—'}</td>
+      <td><span class="badge ${STATUS_BADGE[d.status]||'badge-pending'}">${esc(d.status)||'未確認'}</span></td>
+      <td>
+        <select class="action-select" onchange="updateStatus('${esc(d.id)}',this.value)">
+          <option ${d.status==='未確認'?'selected':''}>未確認</option>
+          <option ${d.status==='確定'?'selected':''}>確定</option>
+          <option ${d.status==='完了'?'selected':''}>完了</option>
+          <option ${d.status==='キャンセル'?'selected':''}>キャンセル</option>
+        </select>
+        <button onclick="deleteRecord('${esc(d.id)}','${esc(d.name)}')" style="margin-top:4px;display:block;background:none;border:.5px solid #e0c0c0;color:#9b2226;border-radius:2px;font-size:.65rem;padding:2px 7px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;letter-spacing:.04em;width:100%">削除</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function formatDate(str) {
+  if (!str) return '—';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  const y = d.getFullYear();
+  const mo = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${y}/${mo}/${day} ${h}:${mi}`;
+}
+
+function formatDetailDate(str) {
+  if (!str || str === 'undefined') return '—';
+  // YYYY-MM-DD 形式
+  if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = str.split('-');
+    return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+  }
+  // Date文字列形式
+  const d = new Date(str);
+  if (!isNaN(d)) {
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  }
+  return str;
+}
+
+function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function updateStatus(id, newStatus) {
+  const local = allData.find(d=>d.id===id);
+  if(local) local.status = newStatus;
+  renderTable(); updateStats();
+  try {
+    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'updateStatus', id, status:newStatus }) });
+  } catch(e) { alert('ステータス更新に失敗しました。再度お試しください。'); }
+}
+
+async function deleteRecord(id, name) {
+  if (!confirm(`「${name}」の予約を削除しますか？\nこの操作は元に戻せません。`)) return;
+  allData = allData.filter(d => d.id !== id);
+  renderTable(); updateStats();
+  try {
+    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'deleteRecord', id }) });
+  } catch(e) { alert('削除に失敗しました。再度お試しください。'); }
+}
+
+function showDetail(id) {
+  const d = allData.find(r=>r.id===id); if(!d) return;
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-row"><span class="dl">お名前</span><span class="dd">${esc(d.name)}</span></div>
+    <div class="detail-row"><span class="dl">電話番号</span><span class="dd">${esc(d.phone)||'—'}</span></div>
+    <div class="detail-row"><span class="dl">ご来店目的</span><span class="dd">${esc(d.purpose)||'—'}</span></div>
+    <div class="detail-row"><span class="dl">来店日</span><span class="dd">${formatDetailDate(d.date)}</span></div>
+    <div class="detail-row"><span class="dl">来店時間</span><span class="dd">${esc(d.time)||'—'}</span></div>
+    <div class="detail-row"><span class="dl">担当</span><span class="dd">${esc(d.staff)}</span></div>
+    <div class="detail-row"><span class="dl">備考</span><span class="dd">${esc(d.note)||'—'}</span></div>
+    <div class="detail-row"><span class="dl">受付日時</span><span class="dd">${formatDate(d.createdAt)}</span></div>
+    <div class="detail-row"><span class="dl">ステータス</span><span class="dd"><span class="badge ${STATUS_BADGE[d.status]||'badge-pending'}">${esc(d.status)||'未確認'}</span></span></div>`;
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetail(e){ if(e.target===document.getElementById('detail-overlay')) closeDetailBtn(); }
+function closeDetailBtn(){ document.getElementById('detail-overlay').classList.remove('open'); }
+
+function clearFilters(){
+  ['search','filter-status','filter-staff','filter-date'].forEach(id=>document.getElementById(id).value='');
+  renderTable();
+}
+
+function exportCSV(){
+  const rows = [['受付日時','名前','電話','メール','来店日','来店時間','担当','備考','ステータス']];
+  getFiltered().forEach(d=>rows.push([d.createdAt,d.name,d.phone,d.email,d.date,d.time,d.staff,d.note,d.status]));
+  const csv = rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = `予約一覧_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
+// ---- スタッフ管理 ----
+let staffList = [];
+
+async function loadStaffForAdmin(){
+  try {
+    const res = await fetch(API_URL + '?action=getStaff&t=' + Date.now());
+    const data = await res.json();
+    staffList = data.staff || [];
+  } catch { staffList = [
+    '福原 涼太 ( Ryota Fukuhara )',
+    '安齋 亮 ( Ryo Anzai )',
+    '齋藤 蒼一郎 ( Soichiro Saito )',
+    '井上 凱 ( Kai Inoue )',
+    '芹澤 澄人 ( Sumito Serizawa )',
+    '山本 李江 ( Rie Yamamoto )',
+    '小笠原 陸斗 ( Rikuto Ogasawara )',
+    '永井 悠真 ( Yuma Nagai )',
+    '石沢 拓哉 ( Takuya Ishizawa )',
+    '髙久 和也 ( Kazuya Takaku )',
+    '田口 鈴之介 ( Suzunosuke Taguchi )',
+    '佐竹 海誓 ( Kaisei Satake )',
+    '宮下 和大 ( Kazuhiro Miyashita )',
+    '石井 朝陽 ( Asahi Ishii )',
+    '大塚 栞南 ( Kanna Otsuka )'
+  ]; }
+  renderStaffList();
+}
+
+function renderStaffList(){
+  const el = document.getElementById('staff-list');
+  el.innerHTML = '';
+  if(!staffList.length){ el.innerHTML='<div class="staff-item" style="color:var(--ink-muted)">スタッフが登録されていません</div>'; return; }
+  staffList.forEach((s,i)=>{
+    const div = document.createElement('div');
+    div.className='staff-item';
+    div.innerHTML=`<span>${esc(s)}</span><button class="del-btn" onclick="removeStaff(${i})">削除</button>`;
+    el.appendChild(div);
+  });
+}
+
+function addStaff(){
+  const input = document.getElementById('new-staff');
+  const name = input.value.trim();
+  if(!name) return;
+  if(staffList.includes(name)){ alert('このスタッフは既に登録されています'); return; }
+  staffList.push(name); input.value=''; renderStaffList();
+}
+
+function removeStaff(i){
+  if(!confirm(`「${staffList[i]}」を削除しますか？`)) return;
+  staffList.splice(i,1); renderStaffList();
+}
+
+async function saveStaff(){
+  try {
+    await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'saveStaff', staff:staffList }) });
+    const msg = document.getElementById('staff-save-msg');
+    msg.style.display='inline'; setTimeout(()=>msg.style.display='none', 2500);
+  } catch { alert('保存に失敗しました。'); }
+}
+
+function showSection(s){
+  ['sec-view','sec-staff'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+    el.classList.remove('staff-section');
+  });
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  if(s==='view'){
+    document.getElementById('sec-view').style.display='block';
+    document.querySelectorAll('.nav-item')[0].classList.add('active');
+    loadData();
+  } else {
+    document.getElementById('sec-staff').style.display='block';
+    document.querySelectorAll('.nav-item')[1].classList.add('active');
+    loadStaffForAdmin();
+  }
+}
+
+loadData();
+setInterval(loadData, 20000);
+</script>
+</body>
+</html>

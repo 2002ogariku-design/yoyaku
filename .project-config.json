@@ -1,0 +1,44 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [
+    "db",
+    "server",
+    "user"
+  ],
+  "dev_command": "pnpm run dev",
+  "env_vars": {
+    "DATABASE_URL": "mysql://2sNjUMtviVBUboz.7c1e10aa46d6:6g2LoNnnLcD7f60sz9re@gateway06.us-east-1.prod.aws.tidbcloud.com:4000/PeB7qTEREdFbUQYjrnqjCf?ssl={\"rejectUnauthorized\":true}",
+    "DRIZZLE_DATABASE_URL": "mysql://2sNjUMtviVBUboz.7c1e10aa46d6:6g2LoNnnLcD7f60sz9re@gateway06.us-east-1.prod.aws.tidbcloud.com:4000/PeB7qTEREdFbUQYjrnqjCf?ssl={\"rejectUnauthorized\":true}"
+  },
+  "experiments": null,
+  "git_remote": {
+    "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663432683624/PeB7qTEREdFbUQYjrnqjCf",
+    "access_key_id": "ASIAZV3A2ECZPIM6CNAT",
+    "secret_access_key": "sbk05dL5wDPsGriEc9RgYN5SFSPNsDScyBv/CCXu",
+    "session_token": "IQoJb3JpZ2luX2VjENL//////////wEaCXVzLWVhc3QtMSJHMEUCIHrI+dDLF1VoFhjQJgwEenkV6ZI3/i9puHzmErc/FMUmAiEAm627sdTQn7k/61dCc6P5wF4cQWakTUyDuRgvC59A+BUq/wMIm///////////ARAEGgw2NjUzODYwOTg4NjYiDEoGt4FIb89IWcjtwSrTA900m+BsmeEWzhRypKcxJE9Im33ZaAWDcOJYXrEiNmfJFdHRw96WgEjCYpuk31EwC2sG6qLL/lLw3aglD2ivw195a62m9LKV7rSrlZh9uPD9q0u74EeEcv4c+6BEMLaoRvJxi8glH9dXpTp5tCnRsab1CHIPYQHg//kkxZV+lIwsXkhvkzBMpIbeWeunWmW/jIhRIiQpqAiiQBEBUBrXmgTwEQBs15wz9BD/ZWiCuXp25jm37wuMr9FJx/dPq23bojdP7p0tGq//sxTtjl0OV8UsVj4KQsM4HNqJQzMeXDim/aBNhHzCNJ2yarfIwqUOzV3jaFTETgYBSnICUu+oit1TgkC0i9Mdt3e845lGohIOPRL3TjA7ddpYC6LQdm8hA0WANL6uMwvdShgubOLB6o9IC8lrNPBNX4u49vg9f3dcbQ19yeTG8JEqvc1aSnHWOLtxM2dlr/jdr3g0ujHh/JryiM+aOe4CUgcjZ/XFTe+84WWhcE8V5kUe+5cHeZ8VDlypDAaRs3AtcOC8An9TabacEy6vsWh4DIThAj5BWpE7A48qvONzkOr6124dLKbqRzcj/lQGAJWCRNkPyNKa2GsRL803GuldI69eqC2nIyriCENyMLzYvdIGOp0BPhTj+jRii8tnWW2Gs/EEu+dzHx/yZakg9H4KcH4F5O4wJGgm3QQyxT+C0UXdEs1eGo/OJICGpVViR5plJYql5fEemnwQsgdltchhCXBbi2X0d7QYhnPpo8OQOaeigyi6QiBw4w/nH6WrZF0fchatnZ69qK2pJpXr8H9SKyGkwDKRqppL1tTqqEHHgyuxwcOfU3cbLTRT91Wnk7ryZw==",
+    "expiration": "2026-07-09T21:39:08.000Z",
+    "backend": "GIT_BACKEND_S3"
+  },
+  "name": "rinkan-tool",
+  "path": "/home/ubuntu/rinkan-tool",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "ndPuxDnKCfHvr5wvoMpHjW",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "GITHUB_TOKEN": "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",
+    "JWT_SECRET": "nDMvNAu8A3f4AHDZ6mSVka",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "てんこもり",
+    "OWNER_OPEN_ID": "ARc6o4pxBwezsiwPmGnSmA",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "dd3f569c-d0be-416a-80ee-e04def2925df",
+    "VITE_APP_ID": "PeB7qTEREdFbUQYjrnqjCf",
+    "VITE_APP_LOGO": "https://files.manuscdn.com/user_upload_by_module/web_dev_logo/310519663432683624/XrfJcylOOYRErxQh.png",
+    "VITE_APP_TITLE": "RINKAN 買取管理ツール",
+    "VITE_FRONTEND_FORGE_API_KEY": "3D9KTxoSrgw5NRag7d7Z5d",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-static",
+  "test_command": "pnpm test"
+}
