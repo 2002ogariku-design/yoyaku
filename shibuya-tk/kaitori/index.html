@@ -120,6 +120,7 @@ tbody tr:hover td{background:#fafafa;}
   </div>
   <div class="right">
     <span class="count" id="hCount">0点</span>
+    <div id="uploadInfo" style="display:none;font-size:11px;color:#a1a1aa;"></div>
     <button class="help-btn" onclick="document.getElementById('helpModal').style.display='flex'">使い方</button>
   </div>
 </header>
@@ -265,17 +266,67 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const LS_KEY="kaitori-items-v1";
+const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_DATA_PATH="shibuya-tk/kaitori-data.json";
+const GH_DATA_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_DATA_PATH}`;
+const GH_TOKEN_KEY="tk-gh-token",STAFFNAME_KEY="tk-staffname";
 let items=[];
-try{items=JSON.parse(localStorage.getItem(LS_KEY)||"[]");}catch(e){items=[];}
+let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
+let ghDataSha=null;
+
+function getGhToken(){
+  let t;try{t=localStorage.getItem(GH_TOKEN_KEY);}catch(e){}
+  if(!t){t=prompt("共有アクセスキーを入力してください（他のツールと同じキーです）");if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}}
+  return t;
+}
+function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
+function utf8B64(s){return btoa(unescape(encodeURIComponent(s)));}
+function b64Utf8(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))));}
+
+async function ghLoadData(){
+  const token=getGhToken();if(!token)return;
+  try{
+    const r=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+    if(r.status===404){ghDataSha=null;return;}
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();ghDataSha=d.sha;
+    const parsed=JSON.parse(b64Utf8(d.content));
+    items=parsed.items||[];
+    uploadMeta={uploadedAt:parsed.uploadedAt||null,uploadedBy:parsed.uploadedBy||null,filename:parsed.filename||null};
+  }catch(e){console.error(e);toast("データの読み込みに失敗："+e.message);}
+}
+
+async function ghSaveData(){
+  const token=getGhToken();if(!token){toast("アクセスキーが未設定です");return;}
+  const payload={items,uploadedAt:uploadMeta.uploadedAt,uploadedBy:uploadMeta.uploadedBy,filename:uploadMeta.filename};
+  for(let a=0;a<3;a++){
+    try{
+      const h=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+      if(h.ok)ghDataSha=(await h.json()).sha;else if(h.status===404)ghDataSha=null;
+    }catch(e){}
+    const body={message:"kaitori update "+new Date().toISOString(),content:utf8B64(JSON.stringify(payload))};
+    if(ghDataSha)body.sha=ghDataSha;
+    const r=await fetch(GH_DATA_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(r.ok){ghDataSha=(await r.json()).content.sha;return;}
+    if(r.status===409&&a<2){await new Promise(r=>setTimeout(r,400));continue;}
+    throw new Error("保存失敗 HTTP "+r.status);
+  }
+}
+
+function updateUploadInfo(){
+  const el=document.getElementById("uploadInfo");
+  if(!el)return;
+  if(uploadMeta.uploadedAt){
+    const d=new Date(uploadMeta.uploadedAt);
+    const ds=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    el.textContent=`最終更新: ${ds}${uploadMeta.uploadedBy?` by ${uploadMeta.uploadedBy}`:""}${uploadMeta.filename?`（${uploadMeta.filename}）`:""}`;
+    el.style.display="block";
+  }else{el.style.display="none";}
+}
 
 const yen=n=>"¥"+Number(n||0).toLocaleString("ja-JP");
 const yenMan=n=>{const m=Number(n||0)/10000;return "¥"+(m>=10000?(m/10000).toFixed(1)+"億":m.toLocaleString("ja-JP",{maximumFractionDigits:1})+"万");};
 const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.opacity="1";clearTimeout(t.__x);t.__x=setTimeout(()=>t.style.opacity="0",2400);}
-function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(items));}catch(e){toast("保存失敗（容量超過の可能性）");}}
-
-/* ===== tabs ===== */
 document.querySelectorAll("nav button").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
@@ -301,6 +352,7 @@ const HEADER_MAP=[
   ["buyer",["バイヤー","担当"]],
   ["comment",["コメント","備考"]],
   ["acc",["付属"]],
+  ["date",["日付","買取日","仕入日","取引日","登録日"]],
 ];
 function importWorkbook(wb){
   let added=0;
@@ -342,6 +394,7 @@ function importWorkbook(wb){
         price:num("price"), cost:num("cost")||num("price"),
         store:get("store"), buyer:get("buyer"),
         comment:get("comment"), acc:get("acc"),
+        date:get("date"),
       };
       it.__key=[it.brand,it.name,it.size,it.price,it.store,it.buyer].join("|");
       if(seen.has(it.__key))continue;
@@ -354,7 +407,14 @@ function importWorkbook(wb){
   renderAll();
   toast(added?`${added}点を追加しました（合計 ${items.length}点）`:"追加できる新しい行が見つかりませんでした");
 }
+async function save(){
+  try{await ghSaveData();}catch(e){console.error(e);toast("共有保存に失敗："+e.message);}
+  updateUploadInfo();
+}
 function handleXlsxFile(file){
+  uploadMeta.filename=file.name;
+  uploadMeta.uploadedAt=new Date().toISOString();
+  uploadMeta.uploadedBy=getStaffName()||"不明";
   const fr=new FileReader();
   fr.onload=e=>{
     try{importWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:"array"}));}
@@ -368,9 +428,11 @@ xi.addEventListener("change",e=>{if(e.target.files[0])handleXlsxFile(e.target.fi
 ["dragover","dragenter"].forEach(ev=>xd.addEventListener(ev,e=>{e.preventDefault();xd.classList.add("over");}));
 ["dragleave","drop"].forEach(ev=>xd.addEventListener(ev,e=>{e.preventDefault();xd.classList.remove("over");}));
 xd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)handleXlsxFile(f);});
-document.getElementById("resetBtn").addEventListener("click",()=>{
-  if(!confirm("すべてのデータを削除します。よろしいですか？"))return;
-  items=[];save();renderAll();toast("リセットしました");
+document.getElementById("resetBtn").addEventListener("click",async ()=>{
+  if(!confirm("すべてのデータを削除します。全員の画面からデータが消えます。よろしいですか？"))return;
+  items=[];uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
+  try{await ghSaveData();}catch(e){toast("リセット失敗："+e.message);}
+  renderAll();toast("リセットしました");
 });
 
 /* ===== list ===== */
@@ -633,9 +695,12 @@ document.getElementById("dlBtn").addEventListener("click",()=>{
 });
 
 /* ===== init ===== */
-function renderAll(){fillFilters();renderList();if(document.getElementById("v-anal").classList.contains("on"))renderAnal();}
-renderAll();
-drawStory();
+async function renderAll(){fillFilters();renderList();updateUploadInfo();if(document.getElementById("v-anal").classList.contains("on"))renderAnal();}
+(async function init(){
+  await ghLoadData();
+  renderAll();
+  drawStory();
+})();
 </script>
 </body>
 </html>
