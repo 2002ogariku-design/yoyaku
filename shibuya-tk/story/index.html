@@ -222,6 +222,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       <div class="f"><label>ウェブサイトタップ</label><input type="number" min="0" id="iWeb" placeholder="0"></div>
       <div class="f"><label>DM件数</label><input type="number" min="0" id="iDM" placeholder="0"></div>
     </div>
+    <div style="font-size:11px;font-weight:700;color:var(--champagne-dim);margin:14px 0 8px;letter-spacing:.1em;">── インスタ経由の販売実績</div>
+    <div class="fgrid">
+      <div class="f"><label>販売 客数</label><input type="number" min="0" id="iSaleClients" placeholder="0"></div>
+      <div class="f"><label>販売 点数</label><input type="number" min="0" id="iSaleItems" placeholder="0"></div>
+      <div class="f"><label>販売 金額（円）</label><input type="number" min="0" id="iSaleAmount" placeholder="0"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--champagne-dim);margin:14px 0 8px;letter-spacing:.1em;">── インスタ経由の買取実績</div>
+    <div class="fgrid">
+      <div class="f"><label>買取 客数</label><input type="number" min="0" id="iBuyClients" placeholder="0"></div>
+      <div class="f"><label>買取 点数</label><input type="number" min="0" id="iBuyItems" placeholder="0"></div>
+      <div class="f"><label>買取 金額（円）</label><input type="number" min="0" id="iBuyAmount" placeholder="0"></div>
+    </div>
     <button class="btn ig w" id="saveInsight">インサイトを記録</button>
     <div class="tick" id="tickInsight">✓ 記録しました</div>
     <p style="font-size:10.5px;color:var(--text-faint);margin-top:10px;line-height:1.6;">Instagramアプリの「プロフェッショナルダッシュボード」の数値を1日1回転記してください。同じ日付で再保存すると上書きされます。</p>
@@ -396,6 +408,12 @@ async function saveInsight(){
     profileVisits:Number(document.getElementById("iProfile").value)||0,
     webTaps:Number(document.getElementById("iWeb").value)||0,
     dm:Number(document.getElementById("iDM").value)||0,
+    saleClients:Number(document.getElementById("iSaleClients").value)||0,
+    saleItems:Number(document.getElementById("iSaleItems").value)||0,
+    saleAmount:Number(document.getElementById("iSaleAmount").value)||0,
+    buyClients:Number(document.getElementById("iBuyClients").value)||0,
+    buyItems:Number(document.getElementById("iBuyItems").value)||0,
+    buyAmount:Number(document.getElementById("iBuyAmount").value)||0,
     by:name, savedAt:new Date().toISOString()
   };
   if(!e.followers){alert("フォロワー数を入力してください");return;}
@@ -406,7 +424,7 @@ async function saveInsight(){
     DB.insights.sort((a,b)=>a.date<b.date?-1:1);
     await ghSet(DB);
     const t=document.getElementById("tickInsight");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
-    ["iFollowers","iReach","iImp","iProfile","iWeb","iDM"].forEach(id=>document.getElementById(id).value="");
+    ["iFollowers","iReach","iImp","iProfile","iWeb","iDM","iSaleClients","iSaleItems","iSaleAmount","iBuyClients","iBuyItems","iBuyAmount"].forEach(id=>document.getElementById(id).value="");
     renderAll();
   }catch(x){err("保存失敗："+x.message);}
 }
@@ -487,11 +505,19 @@ function renderKpis(){
   const profSum=ins7.reduce((s,i)=>s+i.profileVisits,0);
   const inq=posts7.filter(p=>p.inquiry&&p.inquiry!=="なし").length;
   const rate=posts7.length?Math.round(inq/posts7.length*100):0;
+  const saleAmt=ins7.reduce((s,i)=>s+(i.saleAmount||0),0);
+  const saleCli=ins7.reduce((s,i)=>s+(i.saleClients||0),0);
+  const buyAmt=ins7.reduce((s,i)=>s+(i.buyAmount||0),0);
+  const buyCli=ins7.reduce((s,i)=>s+(i.buyClients||0),0);
   document.getElementById("kpiRow").innerHTML=`
     <div class="kpi"><div class="k-num">${posts7.length}</div><div class="k-lbl">投稿数 / 7日</div></div>
     <div class="kpi"><div class="k-num">${nf(reachAvg)}</div><div class="k-lbl">平均リーチ / 日</div></div>
-    <div class="kpi"><div class="k-num">${nf(profSum)}</div><div class="k-lbl">プロフ访問 / 7日</div></div>
+    <div class="kpi"><div class="k-num">${nf(profSum)}</div><div class="k-lbl">プロフ訪問 / 7日</div></div>
     <div class="kpi"><div class="k-num">${rate}%</div><div class="k-lbl">問合せ率 / 7日</div></div>
+    <div class="kpi"><div class="k-num">${saleCli}</div><div class="k-lbl">販売客数 / 7日</div></div>
+    <div class="kpi"><div class="k-num">¥${nf(saleAmt)}</div><div class="k-lbl">販売金額 / 7日</div></div>
+    <div class="kpi"><div class="k-num">${buyCli}</div><div class="k-lbl">買取客数 / 7日</div></div>
+    <div class="kpi"><div class="k-num">¥${nf(buyAmt)}</div><div class="k-lbl">買取金額 / 7日</div></div>
   `;
 }
 
@@ -669,6 +695,11 @@ function renderInsights(){
         <span>🚪 <b>${nf(i.profileVisits)}</b></span>
         <span>🔗 <b>${nf(i.webTaps)}</b></span>
         <span>✉️ <b>${nf(i.dm)}</b></span>
+      </div>
+      ${(i.saleClients||i.buyClients)?`<div class="metrics-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;">
+        <span style="color:var(--ok);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span>
+        <span style="color:#60a5fa;">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span>
+      </div>`:""}
       </div>
     </div>
   `).join("");
