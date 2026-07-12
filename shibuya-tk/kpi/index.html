@@ -374,7 +374,8 @@ async function ghGet(){
 
 async function ghSet(arr){
   const token=getGhToken(); if(!token) throw new Error("アクセスキー未設定");
-  for(let attempt=0;attempt<3;attempt++){
+  for(let attempt=0;attempt<4;attempt++){
+    // Always re-fetch SHA before every attempt
     try{
       const head=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
       if(head.ok){ghSha=(await head.json()).sha;}else if(head.status===404){ghSha=null;}
@@ -383,7 +384,7 @@ async function ghSet(arr){
     if(ghSha) body.sha=ghSha;
     const res=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
     if(res.ok){const d=await res.json();ghSha=d.content.sha;return;}
-    if(res.status===409&&attempt<2){await new Promise(r=>setTimeout(r,400+attempt*300));continue;}
+    if(res.status===409&&attempt<3){await new Promise(r=>setTimeout(r,500+attempt*500));continue;}
     throw new Error(`保存失敗 HTTP ${res.status}`);
   }
 }
@@ -411,17 +412,25 @@ async function saveTodayEntry(){
   const entry={date, staff:name, savedAt:new Date().toISOString()};
   FIELD_IDS.forEach((id,i)=>{entry[FIELD_KEYS[i]]=Number(document.getElementById(id).value)||0;});
   clearError();
+  const btn=document.getElementById("submitBtn");
+  btn.textContent="保存中...";btn.disabled=true;
   try{
-    // Fetch latest first to avoid 409
-    records=await ghGet()||[];
-    const idx=records.findIndex(r=>r.date===entry.date&&r.staff===entry.staff);
-    if(idx>=0) records[idx]=entry; else records.push(entry);
+    // Fetch latest, merge, save
+    const latest=await ghGet()||[];
+    const idx=latest.findIndex(r=>r.date===entry.date&&r.staff===entry.staff);
+    if(idx>=0) latest[idx]=entry; else latest.push(entry);
+    records=latest;
     await ghSet(records);
+    // Verify save succeeded by re-fetching
+    records=await ghGet()||[];
+    const saved=records.find(r=>r.date===entry.date&&r.staff===entry.staff);
+    if(!saved) throw new Error("保存を確認できませんでした。もう一度お試しください。");
     const el=document.getElementById("saveStatus");
     el.style.opacity="1"; setTimeout(()=>{el.style.opacity="0";},2500);
     FIELD_IDS.forEach(id=>{document.getElementById(id).value="";});
     renderToday(); renderAllCharts();
   }catch(e){console.error(e);showError("保存失敗："+e.message);}
+  finally{btn.textContent="保存する";btn.disabled=false;}
 }
 
 function renderToday(){
