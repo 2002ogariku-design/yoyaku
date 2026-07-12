@@ -353,19 +353,28 @@ document.querySelectorAll("nav button").forEach(b=>{
 
 /* ===== Excel import ===== */
 const HEADER_MAP=[
-  ["brand",["ブランド"]],
-  ["name",["商品名","品名","特徴","商品"]],
-  ["item",["アイテム","カテゴリ","種別"]],
+  ["brand",["ブランド名"]],
+  ["collab",["コラボブランド"]],
+  ["model",["モデル名"]],
+  ["feature",["商品特徴"]],
+  ["item",["アイテム名"]],
   ["size",["サイズ"]],
-  ["color",["カラー","色"]],
-  ["rank",["ランク","状態"]],
-  ["price",["売価","販売価格","税込"]],
-  ["cost",["仕入額","仕入金額","仕入価格","買取額","買取金額","買取価格"]],
-  ["store",["仕入店","店舗","仕入先"]],
-  ["buyer",["バイヤー","担当"]],
-  ["comment",["コメント","備考"]],
-  ["acc",["付属"]],
-  ["date",["日付","買取日","仕入日","取引日","登録日"]],
+  ["color",["カラー"]],
+  ["rank",["状態ランク"]],
+  ["priceExTax",["税抜売価"]],
+  ["cost",["原価"]],
+  ["store",["仕入店舗"]],
+  ["buyer",["バイヤー"]],
+  ["buyerComment",["バイヤーコメント"]],
+  ["mdComment",["MDコメント"]],
+  ["acc",["付属品"]],
+  ["date",["買取日付"]],
+  ["itemRank",["アイテムランク"]],
+  ["season",["シーズン"]],
+  ["ref100",["100イキ"]],
+  ["refPrice",["参考定価"]],
+  ["storeCode",["仕入先"]],
+  ["origStore",["元振り先"]],
 ];
 async function importWorkbook(wb){
   let added=0;
@@ -377,7 +386,7 @@ async function importWorkbook(wb){
     let hIdx=-1, map={};
     for(let r=0;r<Math.min(rows.length,10);r++){
       const cells=rows[r].map(c=>String(c||""));
-      if(cells.some(c=>c.includes("ブランド"))){
+      if(cells.some(c=>c.includes("ブランド名")||c==="ブランド")){
         hIdx=r;
         cells.forEach((c,ci)=>{
           for(const [key,kws] of HEADER_MAP){
@@ -398,18 +407,31 @@ async function importWorkbook(wb){
       const get=k=>map[k]!==undefined?String(row[map[k]]??"").trim():"";
       const num=k=>{const v=get(k).replace(/[¥,\s円]/g,"");const n=Number(v);return isNaN(n)?0:n;};
       const brand=get("brand");
-      const name=get("name");
-      if(!brand&&!name)continue;
+      const model=get("model");
+      if(!brand&&!model)continue;
+      const collab=get("collab");
+      const brandFull=collab?`${brand}×${collab}`:brand;
+      const priceExTax=num("priceExTax");
+      const priceTaxIn=priceExTax?Math.round(priceExTax*1.1):0;
       const it={
-        brand, name,
+        brand:brandFull,
+        name:model,
+        feature:get("feature"),
         item:get("item"), size:get("size"), color:get("color"),
         rank:(get("rank")||"").toUpperCase().replace(/[^SABCD]/g,"").slice(0,1),
-        price:num("price"), cost:num("cost")||num("price"),
-        store:get("store"), buyer:get("buyer"),
-        comment:get("comment"), acc:get("acc"),
+        price:priceTaxIn,
+        priceExTax,
+        cost:num("cost"),
+        store:get("store"),
+        origStore:get("origStore"),
+        buyer:get("buyer"),
+        comment:get("buyerComment"),
+        mdComment:get("mdComment"),
+        acc:get("acc"),
         date:get("date"),
+        season:get("season"),
       };
-      it.__key=[it.brand,it.name,it.size,it.price,it.store,it.buyer].join("|");
+      it.__key=[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer].join("|");
       if(seen.has(it.__key))continue;
       seen.add(it.__key);
       items.push(it);
@@ -488,13 +510,14 @@ function renderList(){
   tb.innerHTML=list.slice(0,500).map((i,idx)=>{
     const gq=encodeURIComponent([i.brand,i.name].filter(Boolean).join(" "));
     const rk=i.rank||"";
+    const dateStr=i.date?i.date.split(" ")[0].replace(/-/g,"/"):"";
     return `<tr>
       <td style="font-weight:700;">${esc(i.brand)}</td>
-      <td><div class="iname">${esc(i.name)}</div>${i.comment||i.color?``:``}<div class="isub">${esc(i.acc||"")}</div></td>
+      <td><div class="iname">${esc(i.name)}</div><div class="isub">${esc(i.feature||"")}</div></td>
       <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td>${esc(i.color)||"-"}</td>
       <td>${rk?`<span class="rank ${rk}">${rk}</span>`:`<span class="rank N">-</span>`}</td>
       <td class="price">${i.price?yen(i.price):"-"}</td>
-      <td>${esc(i.store)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
+      <td>${esc(i.store)||esc(i.origStore)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${esc(i.comment)||"-"}</td>
       <td>${esc(i.acc)||"-"}</td>
       <td><a class="g-btn" style="text-decoration:none;display:inline-block;" href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a></td>
@@ -626,7 +649,7 @@ document.getElementById("sItem").addEventListener("change",e=>{
   document.getElementById("sBrand").value=(i.brand||"").toUpperCase();
   document.getElementById("sSize").value=i.size||"";
   document.getElementById("sRank").value=i.rank||"";
-  document.getElementById("sPrice").value=i.price||"";
+  document.getElementById("sPrice").value=i.price||Math.round((i.priceExTax||0)*1.1)||"";
   drawStory();
 });
 window.makeStory=function(idx){
@@ -680,19 +703,19 @@ function drawStory(){
   const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
   const tag=document.getElementById("sTag").value.trim();
 
-  let y=150;
+  let y=220;
   if(brand){ctx.font=`500 72px ${serif}`;ctx.fillText(brand,70,y);y+=86;}
   if(size){ctx.font=`500 58px ${serif}`;ctx.fillText("size:"+size,70,y);y+=74;}
   if(rank){ctx.font=`500 58px ${serif}`;ctx.fillText("RANK:"+rank,70,y);}
 
   if(price){
     ctx.font=`500 74px ${serif}`;
-    ctx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-190);
+    ctx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);
   }
   if(tag){
-    ctx.font=`500 62px ${serif}`;
+    ctx.font=`500 58px ${serif}`;
     const tw=ctx.measureText(tag).width;
-    ctx.fillText(tag,W-tw-60,H-90);
+    ctx.fillText(tag,W-tw-60,H-200);
   }
   ctx.shadowBlur=0;
 }
