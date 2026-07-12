@@ -275,9 +275,13 @@ let ghDataSha=null;
 
 function getGhToken(){
   let t;try{t=localStorage.getItem(GH_TOKEN_KEY);}catch(e){}
-  if(!t){t=prompt("共有アクセスキーを入力してください（他のツールと同じキーです）");if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}}
+  if(!t){
+    t=prompt("共有アクセスキーを入力してください（他のツールと同じキーです）");
+    if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}
+  }
   return t;
 }
+function clearGhToken(){try{localStorage.removeItem(GH_TOKEN_KEY);}catch(e){}}
 function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
 function utf8B64(s){return btoa(unescape(encodeURIComponent(s)));}
 function b64Utf8(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))));}
@@ -286,6 +290,13 @@ async function ghLoadData(){
   const token=getGhToken();if(!token)return;
   try{
     const r=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+    if(r.status===401){
+      clearGhToken();
+      toast("アクセスキーが無効です。再入力してください。");
+      const newToken=prompt("アクセスキーが無効でした。新しいキーを入力してください：");
+      if(newToken){try{localStorage.setItem(GH_TOKEN_KEY,newToken.trim());}catch(e){}}
+      return ghLoadData();
+    }
     if(r.status===404){ghDataSha=null;return;}
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();ghDataSha=d.sha;
@@ -301,12 +312,14 @@ async function ghSaveData(){
   for(let a=0;a<3;a++){
     try{
       const h=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
+      if(h.status===401){clearGhToken();toast("アクセスキーが無効です");return;}
       if(h.ok)ghDataSha=(await h.json()).sha;else if(h.status===404)ghDataSha=null;
     }catch(e){}
     const body={message:"kaitori update "+new Date().toISOString(),content:utf8B64(JSON.stringify(payload))};
     if(ghDataSha)body.sha=ghDataSha;
     const r=await fetch(GH_DATA_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
     if(r.ok){ghDataSha=(await r.json()).content.sha;return;}
+    if(r.status===401){clearGhToken();toast("アクセスキーが無効です");return;}
     if(r.status===409&&a<2){await new Promise(r=>setTimeout(r,400));continue;}
     throw new Error("保存失敗 HTTP "+r.status);
   }
@@ -354,7 +367,7 @@ const HEADER_MAP=[
   ["acc",["付属"]],
   ["date",["日付","買取日","仕入日","取引日","登録日"]],
 ];
-function importWorkbook(wb){
+async function importWorkbook(wb){
   let added=0;
   const seen=new Set(items.map(i=>i.__key));
   for(const sn of wb.SheetNames){
@@ -403,8 +416,8 @@ function importWorkbook(wb){
       added++;
     }
   }
-  save();
-  renderAll();
+  await save();
+  await renderAll();
   toast(added?`${added}点を追加しました（合計 ${items.length}点）`:"追加できる新しい行が見つかりませんでした");
 }
 async function save(){
@@ -416,8 +429,8 @@ function handleXlsxFile(file){
   uploadMeta.uploadedAt=new Date().toISOString();
   uploadMeta.uploadedBy=getStaffName()||"不明";
   const fr=new FileReader();
-  fr.onload=e=>{
-    try{importWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:"array"}));}
+  fr.onload=async e=>{
+    try{await importWorkbook(XLSX.read(new Uint8Array(e.target.result),{type:"array"}));}
     catch(err){console.error(err);toast("読み込みに失敗しました");}
   };
   fr.readAsArrayBuffer(file);
