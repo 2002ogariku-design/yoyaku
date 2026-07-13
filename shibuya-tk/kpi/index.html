@@ -163,11 +163,6 @@ tr:last-child td{border-bottom:none;}
     <div class="sg" id="sgInsta"></div>
   </div>
 
-  <div class="c">
-    <div class="c-title">🏢 公式インスタ</div>
-    <div class="sg" id="sgOff"></div>
-  </div>
-
   <button class="save-btn" id="saveBtn">保存する</button>
   <div class="save-tick" id="saveTick">✓ 保存しました</div>
 </div>
@@ -180,7 +175,7 @@ tr:last-child td{border-bottom:none;}
     <div class="today-scroll"><table><thead><tr>
       <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
       <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th>
-      <th style="color:var(--blue);">DM</th><th style="color:var(--blue);">販問</th><th style="color:var(--blue);">買問</th><th style="color:var(--blue);">販客</th><th style="color:var(--blue);">販点</th><th style="color:var(--blue);">販額</th><th style="color:var(--blue);">買客</th><th style="color:var(--blue);">買点</th>
+
     </tr></thead><tbody id="tBody"></tbody></table></div>
   </div>
 </div>
@@ -191,7 +186,7 @@ tr:last-child td{border-bottom:none;}
     <div class="ctabs">
       <button class="ctab on" data-ct="store">店頭</button>
       <button class="ctab" data-ct="insta">📸 個人</button>
-      <button class="ctab" data-ct="off">🏢 公式</button>
+      
     </div>
     <div class="cpanel on" id="cp-store">
       <div class="toolbar">
@@ -209,19 +204,11 @@ tr:last-child td{border-bottom:none;}
       </div>
       <canvas id="chInsta" height="140"></canvas>
     </div>
-    <div class="cpanel" id="cp-off">
-      <div class="toolbar">
-        <select id="mOff"><option value="offInstaDM">DM</option><option value="offInstaInquirySales">販売問合</option><option value="offInstaInquiryBuy">買取問合</option><option value="offInstaSaleClients">販売客数</option><option value="offInstaSaleItems">販売点数</option><option value="offInstaSaleAmount">販売金額</option><option value="offInstaBuyClients">買取客数</option><option value="offInstaBuyItems">買取点数</option></select>
-        <select id="rOff"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
-        <select id="dOff"><option value="total">全体</option><option value="staff">担当者別</option></select>
-      </div>
-      <canvas id="chOff" height="140"></canvas>
-    </div>
-  </div>
+    
   <div class="c">
     <div class="c-title">🏆 ランキング</div>
     <div class="toolbar">
-      <select id="rkM"><optgroup label="店頭"><option value="approach">アプローチ</option><option value="service">接客</option></optgroup><optgroup label="個人インスタ"><option value="instaSaleAmount">個人販売金額</option></optgroup><optgroup label="公式インスタ"><option value="offInstaSaleAmount">公式販売金額</option></optgroup></select>
+      <select id="rkM"><optgroup label="店頭"><option value="approach">アプローチ</option><option value="service">接客</option></optgroup><optgroup label="個人インスタ"><option value="instaSaleAmount">個人販売金額</option></optgroup></select>
       <select id="rkR"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
     </div>
     <canvas id="chRank" height="140"></canvas>
@@ -241,7 +228,7 @@ const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/kpi-dat
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
 const TK="tk-gh-token",SK="tk-staffname";
 const STAFF=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"];
-const AMT=new Set(["instaSaleAmount","offInstaSaleAmount"]);
+const AMT=new Set(["instaSaleAmount"]);
 const COLORS=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
 
 Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
@@ -264,17 +251,7 @@ const INSTA_FIELDS=[
   {key:"instaBuyClients",label:"買取 客数",color:"green"},
   {key:"instaBuyItems",label:"買取 点数",color:"green"},
 ];
-const OFF_FIELDS=[
-  {key:"offInstaDM",label:"DM件数",color:"teal"},
-  {key:"offInstaInquirySales",label:"販売問合",color:"teal"},
-  {key:"offInstaInquiryBuy",label:"買取問合",color:"teal"},
-  {key:"offInstaSaleClients",label:"販売 客数",color:"purple"},
-  {key:"offInstaSaleItems",label:"販売 点数",color:"purple"},
-  {key:"offInstaSaleAmount",label:"販売 金額",color:"purple",isAmt:true},
-  {key:"offInstaBuyClients",label:"買取 客数",color:"green"},
-  {key:"offInstaBuyItems",label:"買取 点数",color:"green"},
-];
-const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...OFF_FIELDS];
+const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS];
 
 function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力してください");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
 function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
@@ -425,18 +402,17 @@ function renderToday(){
   document.getElementById("todayTitle").textContent=`入力状況（${date}）`;
   const td=records.filter(r=>r.date===date);
   const tb=document.getElementById("tBody");
-  if(!td.length){tb.innerHTML=`<tr><td colspan="23" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
+  if(!td.length){tb.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
   tb.innerHTML=td.map(r=>`<tr>
     <td class="name">${r.staff}</td>
     ${STORE_FIELDS.map(f=>`<td>${r[f.key]||0}</td>`).join("")}
     ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(r[f.key]||0)}</td>`).join("")}
-    ${OFF_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(r[f.key]||0)}</td>`).join("")}
+
   </tr>`).join("");
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=td.reduce((s,r)=>s+(r[f.key]||0),0);});
   document.getElementById("chips").innerHTML=
     STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
-    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("")+
-    OFF_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip bl">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
 }
 
 // charts
@@ -477,7 +453,6 @@ function renderRank(){
 function renderCharts(){
   trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value);
   trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value);
-  trend("chOff",document.getElementById("mOff").value,Number(document.getElementById("rOff").value),document.getElementById("dOff").value);
   renderRank();
 }
 
@@ -487,7 +462,6 @@ document.getElementById("nameCancel").addEventListener("click",closeName);
 document.getElementById("saveBtn").addEventListener("click",doSave);
 ["mStore","rStore","dStore"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value)));
 ["mInsta","rInsta","dInsta"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value)));
-["mOff","rOff","dOff"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chOff",document.getElementById("mOff").value,Number(document.getElementById("rOff").value),document.getElementById("dOff").value)));
 ["rkM","rkR"].forEach(id=>document.getElementById(id).addEventListener("change",renderRank));
 
 (async function init(){
@@ -496,7 +470,6 @@ document.getElementById("saveBtn").addEventListener("click",doSave);
   updBadge();
   buildSteppers("sgStore",STORE_FIELDS);
   buildSteppers("sgInsta",INSTA_FIELDS);
-  buildSteppers("sgOff",OFF_FIELDS);
   await ensureName(true);
   try{records=await ghGet()||[];}catch(e){err("読み込み失敗："+e.message);}
   renderToday();
