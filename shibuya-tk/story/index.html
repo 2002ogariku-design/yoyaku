@@ -2,729 +2,336 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0f0f11">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>公式インスタ分析｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root{
-  --bg:#0f0f11; --panel:#17171a; --panel2:#1f1f24; --line:#2a2a30;
-  --text:#f2f0eb; --text-dim:#a09a8e; --text-faint:#5f5b53;
-  --champagne:#c9c2b4; --champagne-dim:#8a8478;
-  --ok:#4ade80; --ok-bg:rgba(74,222,128,.08);
-  --bad:#f87171; --bad-bg:rgba(248,113,113,.08);
-  --ig-a:#f09433; --ig-b:#dc2743; --ig-c:#bc1888;
-  --ig-grad:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
-  --font:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
-  --tab-h:60px;
+  --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
+  --t1:#1d1d1f;--t2:#6e6e73;--t3:#aeaeb2;
+  --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--pink:#ff2d55;--purple:#af52de;--teal:#5ac8fa;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom));}
-.wrap{max-width:860px;margin:0 auto;padding:18px 14px 30px;}
+body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px;
+  padding-bottom:calc(66px + env(safe-area-inset-bottom));}
+.w{max-width:720px;margin:0 auto;padding:16px 16px 30px;}
+.hd{display:flex;justify-content:space-between;align-items:center;padding:10px 0 18px;}
+.hd h1{font-size:26px;font-weight:800;letter-spacing:-.02em;}
+.hd .sub{font-size:13px;color:var(--t2);margin-top:2px;}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--t1);cursor:pointer;font-family:var(--font);}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 .5px 1px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);}
+.c-title{font-size:13px;font-weight:700;color:var(--t2);margin-bottom:14px;}
+.sep{height:1px;background:var(--line);margin:14px 0;}
 
-/* ── header ── */
-.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
-.hd .eyebrow{font-size:10px;letter-spacing:.28em;color:var(--champagne-dim);text-transform:uppercase;font-weight:600;}
-.hd h1{font-size:19px;font-weight:800;letter-spacing:.01em;margin-top:3px;}
-.hd .sub{font-size:11px;color:var(--text-faint);margin-top:3px;}
-.name-btn{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--champagne);cursor:pointer;white-space:nowrap;}
+/* pulse */
+.pulse{background:linear-gradient(135deg,#007aff,#5856d6);border-radius:16px;padding:22px 18px;color:#fff;margin-bottom:12px;}
+.pulse .lbl{font-size:11px;opacity:.7;letter-spacing:.1em;}
+.pulse .num{font-size:38px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;}
+.pulse .delta{display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:10px;margin-left:12px;}
+.pulse .delta.up{background:rgba(52,199,89,.2);}
+.pulse .delta.dn{background:rgba(255,59,48,.2);}
+.pulse .delta.fl{background:rgba(255,255,255,.15);}
+.pulse .date{font-size:11px;opacity:.6;margin-top:6px;}
 
-/* ── pulse card (signature) ── */
-.pulse{
-  background:var(--panel);border:1px solid var(--line);border-radius:16px;
-  padding:20px 18px;margin-bottom:14px;position:relative;overflow:hidden;
-}
-.pulse::before{
-  content:"";position:absolute;top:0;left:0;right:0;height:2px;
-  background:var(--ig-grad);
-}
-.pulse .p-label{font-size:10px;letter-spacing:.22em;color:var(--text-faint);text-transform:uppercase;font-weight:600;}
-.pulse .p-main{display:flex;align-items:baseline;gap:12px;margin-top:6px;flex-wrap:wrap;}
-.pulse .p-num{font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
-.pulse .p-delta{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;padding:3px 10px;border-radius:12px;}
-.pulse .p-delta.up{color:var(--ok);background:var(--ok-bg);}
-.pulse .p-delta.down{color:var(--bad);background:var(--bad-bg);}
-.pulse .p-delta.flat{color:var(--text-dim);background:var(--panel2);}
-.pulse .p-date{font-size:11px;color:var(--text-faint);margin-top:6px;}
+/* kpi grid */
+.kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+@media(max-width:520px){.kgrid{grid-template-columns:repeat(2,1fr);}}
+.kcard{background:var(--card);border-radius:14px;padding:14px 10px;text-align:center;box-shadow:0 .5px 1px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);}
+.kcard .kn{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;}
+.kcard .kl{font-size:10px;color:var(--t3);margin-top:3px;}
 
-/* ── kpi row ── */
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
-@media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr);}}
-.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 10px;text-align:center;}
-.kpi .k-num{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--champagne);}
-.kpi .k-lbl{font-size:9.5px;color:var(--text-faint);margin-top:3px;letter-spacing:.05em;}
+/* forms */
+.fg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+@media(max-width:420px){.fg{grid-template-columns:1fr;}}
+.fg .full{grid-column:1/-1;}
+.f label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:5px;}
+.f input,.f select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:16px;font-family:var(--font);color:var(--t1);}
+.f input:focus,.f select:focus{outline:none;border-color:var(--blue);}
+.seg{display:flex;background:var(--card2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;}
+.seg button{flex:1;border:none;background:none;color:var(--t2);font-size:12.5px;font-weight:600;padding:9px 4px;border-radius:8px;cursor:pointer;font-family:var(--font);}
+.seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.save-btn{width:100%;padding:16px;border-radius:14px;border:none;background:var(--blue);color:#fff;font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;}
+.save-btn:disabled{opacity:.4;}
+.save-tick{text-align:center;font-size:14px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;}
 
-/* ── cards ── */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 16px;margin-bottom:14px;}
-.c-title{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-.c-title .rule{flex:1;height:1px;background:var(--line);}
+/* post items */
+.pi{padding:12px 0;border-bottom:1px solid var(--line);}
+.pi:last-child{border-bottom:none;}
+.pi .top{display:flex;justify-content:space-between;align-items:flex-start;}
+.pi .brand{font-size:14px;font-weight:700;}
+.pi .item{font-size:12px;color:var(--t2);}
+.pi .del{background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;}
+.pi .del:hover{color:var(--red);}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--card2);color:var(--t2);}
+.chip.hot{background:#fff0f3;color:var(--pink);}
+.chip.win{background:#eafbf0;color:var(--green);}
+.mrow{display:flex;gap:12px;margin-top:6px;font-size:11.5px;color:var(--t2);font-variant-numeric:tabular-nums;}
+.mrow b{color:var(--t1);}
 
-/* ── forms ── */
-.fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
-@media(max-width:420px){.fgrid{grid-template-columns:1fr;}}
-.fgrid .full{grid-column:1/-1;}
-.f label{display:block;font-size:10.5px;font-weight:700;color:var(--text-dim);margin-bottom:5px;letter-spacing:.04em;}
-.f input,.f select{
-  width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--text);font-size:16px;font-family:var(--font);
-}
-.f input:focus,.f select:focus{outline:none;border-color:var(--champagne-dim);}
-.f input[type=number]{font-variant-numeric:tabular-nums;}
-.seg{display:flex;background:var(--panel2);border-radius:10px;padding:3px;gap:3px;margin-bottom:14px;}
-.seg button{flex:1;border:none;background:transparent;color:var(--text-dim);font-size:12.5px;font-weight:700;padding:9px 4px;border-radius:8px;cursor:pointer;font-family:var(--font);}
-.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);}
+/* chart tabs */
+.ctabs{display:flex;background:var(--card2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;}
+.ctab{flex:1;text-align:center;padding:8px 4px;font-size:12px;font-weight:600;color:var(--t2);border-radius:8px;cursor:pointer;font-family:var(--font);border:none;background:none;white-space:nowrap;}
+.ctab.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.cpanel{display:none;}.cpanel.on{display:block;}
+.tbar{display:flex;gap:6px;margin-bottom:10px;}
+.tbar select{padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:12px;color:var(--t1);font-family:var(--font);}
 
-.btn{border-radius:10px;padding:12px 18px;font-size:14px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:700;font-family:var(--font);}
-.btn.ig{background:var(--ig-grad);border:none;color:#fff;}
-.btn.sm{padding:7px 12px;font-size:12px;}
-.btn.w{width:100%;margin-top:14px;}
-.tick{font-size:12px;color:var(--ok);font-weight:700;opacity:0;transition:opacity .4s;text-align:center;margin-top:8px;}
+/* list filters */
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+@media(max-width:420px){.filters{grid-template-columns:1fr;}}
+.filters input,.filters select{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card2);font-size:14px;font-family:var(--font);color:var(--t1);}
 
-/* ── post list ── */
-.post{padding:12px 0;border-bottom:1px solid var(--line);}
-.post:last-child{border-bottom:none;}
-.post .p-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-.post .p-brand{font-size:14px;font-weight:700;}
-.post .p-item{font-size:12px;color:var(--text-dim);font-weight:400;}
-.post .p-del{background:none;border:none;color:var(--text-faint);font-size:11px;cursor:pointer;padding:2px 6px;}
-.post .p-del:hover{color:var(--bad);}
-.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
-.chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:11px;background:var(--panel2);color:var(--text-dim);}
-.chip.hot{background:rgba(220,39,67,.14);color:#f0889a;}
-.chip.win{background:var(--ok-bg);color:var(--ok);}
-.chip.gold{background:rgba(201,194,180,.1);color:var(--champagne);}
-.metrics-row{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
-.metrics-row span b{color:var(--text);}
+/* bottom nav */
+#nav{position:fixed;left:0;right:0;bottom:0;z-index:40;
+  height:calc(66px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+  background:rgba(255,255,255,.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:.5px solid var(--line2);display:flex;}
+#nav button{flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:600;color:var(--t3);font-family:var(--font);}
+#nav button.on{color:var(--blue);}
+#nav button .ico{font-size:22px;}
+.vw{display:none;}.vw.on{display:block;}
 
-/* ── analysis tabs ── */
-.a-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;}
-.a-tab{white-space:nowrap;font-size:12px;font-weight:700;color:var(--text-dim);background:var(--panel2);border:1px solid transparent;border-radius:16px;padding:7px 14px;cursor:pointer;font-family:var(--font);}
-.a-tab.on{color:var(--text);border-color:var(--champagne-dim);}
-.a-panel{display:none;}
-.a-panel.on{display:block;}
-.mini-toolbar{display:flex;gap:8px;margin-bottom:10px;}
-.mini-toolbar select{padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12px;font-family:var(--font);}
-
-/* ── bottom tab bar ── */
-#tabbar{
-  position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--tab-h) + env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);
-  background:rgba(15,15,17,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);
-  display:flex;
-}
-#tabbar button{
-  flex:1;border:none;background:none;color:var(--text-faint);cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  font-size:10px;font-weight:700;font-family:var(--font);
-}
-#tabbar button .ico{font-size:20px;line-height:1;}
-#tabbar button.on{color:var(--text);}
-#tabbar button.on .ico{filter:none;}
-.view{display:none;}
-.view.on{display:block;}
-
-/* ── modal ── */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;align-items:center;justify-content:center;}
-.mbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:330px;width:88%;}
-.mbox .m-title{font-size:15px;font-weight:800;margin-bottom:14px;}
-.mbox select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:16px;font-family:var(--font);}
-.m-actions{display:flex;gap:8px;justify-content:flex-end;}
-#errorBanner{display:none;background:var(--bad-bg);border:1px solid var(--bad);color:var(--bad);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;line-height:1.6;}
-.empty{text-align:center;padding:30px 10px;color:var(--text-faint);font-size:12.5px;line-height:1.7;}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:60;align-items:center;justify-content:center;}
+.mb{background:#fff;border-radius:18px;padding:24px;max-width:320px;width:88%;}
+.mb h3{font-size:17px;font-weight:800;margin-bottom:14px;}
+.mb select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:16px;margin-bottom:16px;font-family:var(--font);background:var(--card2);}
+.mb .acts{display:flex;gap:8px;justify-content:flex-end;}
+.mb .acts button{padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);border:none;}
+.mb .acts .cancel{background:var(--card2);color:var(--t2);}
+.mb .acts .ok{background:var(--blue);color:#fff;}
+#errB{display:none;background:#fff0f0;border:1px solid #fecaca;color:var(--red);border-radius:12px;padding:12px;margin-bottom:12px;font-size:13px;}
+.empty{text-align:center;padding:28px;color:var(--t3);font-size:13px;}
 </style>
 </head>
 <body>
 
-<div class="overlay" id="nameModal">
-  <div class="mbox">
-    <div class="m-title">あなたの名前を選んでください</div>
-    <select id="nameSelect"></select>
-    <div class="m-actions">
-      <button class="btn sm" id="nameCancel" style="display:none;">キャンセル</button>
-      <button class="btn ig sm" id="nameSave">決定</button>
-    </div>
+<div class="ov" id="nameOv">
+  <div class="mb"><h3>名前を選択</h3><select id="nameSel"></select>
+    <div class="acts"><button class="cancel" id="nameCancel">キャンセル</button><button class="ok" id="nameOk">決定</button></div>
   </div>
 </div>
 
-<div class="wrap">
-
+<div class="w">
 <div class="hd">
-  <div>
-    <div class="eyebrow">RINKAN SHIBUYA — OFFICIAL</div>
-    <h1>公式インスタ分析</h1>
-    <div class="sub" id="todayLabel"></div>
-  </div>
-  <button class="name-btn" id="staffBadge">👤 —</button>
+  <div><h1>公式インスタ分析</h1><div class="sub" id="dayLabel"></div></div>
+  <button class="pill" id="badge">👤 —</button>
 </div>
-<div id="errorBanner"></div>
+<div id="errB"></div>
 
-<!-- ============ VIEW: DASHBOARD ============ -->
-<div class="view on" id="view-dash">
-
-  <div class="pulse">
-    <div class="p-label">Followers</div>
-    <div class="p-main">
-      <span class="p-num" id="pulseNum">—</span>
-      <span class="p-delta flat" id="pulseDelta">±0</span>
+<!-- DASHBOARD -->
+<div class="vw on" id="vw-dash">
+  <div class="pulse" id="pulseCard">
+    <div class="lbl">FOLLOWERS</div>
+    <div class="num" id="pNum">—</div>
+    <div class="date" id="pDate">データを記録するとここに表示されます</div>
+  </div>
+  <div class="kgrid" id="kpiGrid"></div>
+  <div class="c"><div class="c-title">フォロワー推移</div>
+    <div class="tbar"><select id="folR"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select></div>
+    <canvas id="chFol" height="130"></canvas>
+  </div>
+  <div class="c"><div class="c-title">リーチ / プロフィール訪問</div><canvas id="chReach" height="130"></canvas></div>
+  <div class="c"><div class="c-title">販売・買取実績（インスタ経由）</div><canvas id="chSales" height="130"></canvas></div>
+  <div class="c"><div class="c-title">投稿分析</div>
+    <div class="ctabs">
+      <button class="ctab on" data-ap="brand">ブランド</button>
+      <button class="ctab" data-ap="cat">カテゴリ</button>
+      <button class="ctab" data-ap="price">価格帯</button>
+      <button class="ctab" data-ap="best">ベスト</button>
     </div>
-    <div class="p-date" id="pulseDate">インサイトを記録するとここに表示されます</div>
+    <div class="cpanel on" id="ap-brand"><canvas id="chBrand" height="170"></canvas></div>
+    <div class="cpanel" id="ap-cat"><canvas id="chCat" height="150"></canvas></div>
+    <div class="cpanel" id="ap-price"><canvas id="chPrice" height="150"></canvas></div>
+    <div class="cpanel" id="ap-best"><div id="bestList"></div></div>
   </div>
-
-  <div class="kpis" id="kpiRow"></div>
-
-  <div class="card">
-    <div class="c-title">フォロワー推移<span class="rule"></span>
-      <select id="folRange" class="btn sm" style="padding:5px 8px;font-size:11px;background:var(--panel2);">
-        <option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option>
-      </select>
-    </div>
-    <canvas id="folChart" height="130"></canvas>
-  </div>
-
-  <div class="card">
-    <div class="c-title">リーチ / プロフィールアクセス<span class="rule"></span></div>
-    <canvas id="reachChart" height="130"></canvas>
-  </div>
-
-  <div class="card">
-    <div class="c-title">投稿分析<span class="rule"></span></div>
-    <div class="a-tabs">
-      <button class="a-tab on" data-ap="brand">ブランド別</button>
-      <button class="a-tab" data-ap="cat">カテゴリ別</button>
-      <button class="a-tab" data-ap="price">価格帯別</button>
-      <button class="a-tab" data-ap="best">ベスト投稿</button>
-    </div>
-    <div class="a-panel on" id="ap-brand"><canvas id="brandChart" height="170"></canvas></div>
-    <div class="a-panel" id="ap-cat"><canvas id="catChart" height="150"></canvas></div>
-    <div class="a-panel" id="ap-price"><canvas id="priceChart" height="150"></canvas></div>
-    <div class="a-panel" id="ap-best"><div id="bestList"></div></div>
-  </div>
-
 </div>
 
-<!-- ============ VIEW: RECORD ============ -->
-<div class="view" id="view-rec">
-
+<!-- RECORD -->
+<div class="vw" id="vw-rec">
   <div class="seg" id="recSeg">
-    <button class="on" data-mode="insight">📊 日次インサイト</button>
-    <button data-mode="post">📸 投稿の記録</button>
+    <button class="on" data-m="insight">📊 日次インサイト</button>
+    <button data-m="post">📸 投稿の記録</button>
   </div>
-
-  <!-- insight form -->
-  <div class="card" id="form-insight">
-    <div class="c-title">今日のアカウント数値<span class="rule"></span></div>
-    <div class="fgrid">
+  <div class="c" id="fInsight">
+    <div class="c-title">今日のアカウント数値</div>
+    <div class="fg">
       <div class="f full"><label>📅 日付</label><input type="date" id="iDate"></div>
-      <div class="f"><label>フォロワー数</label><input type="number" min="0" id="iFollowers" placeholder="27000"></div>
-      <div class="f"><label>リーチ</label><input type="number" min="0" id="iReach" placeholder="0"></div>
-      <div class="f"><label>インプレッション</label><input type="number" min="0" id="iImp" placeholder="0"></div>
-      <div class="f"><label>プロフィールアクセス</label><input type="number" min="0" id="iProfile" placeholder="0"></div>
-      <div class="f"><label>ウェブサイトタップ</label><input type="number" min="0" id="iWeb" placeholder="0"></div>
-      <div class="f"><label>DM件数</label><input type="number" min="0" id="iDM" placeholder="0"></div>
+      <div class="f"><label>フォロワー数</label><input type="number" min="0" id="iF" placeholder="27000"></div>
+      <div class="f"><label>リーチ</label><input type="number" min="0" id="iR" placeholder="0"></div>
+      <div class="f"><label>インプレッション</label><input type="number" min="0" id="iI" placeholder="0"></div>
+      <div class="f"><label>プロフィールアクセス</label><input type="number" min="0" id="iP" placeholder="0"></div>
+      <div class="f"><label>ウェブサイトタップ</label><input type="number" min="0" id="iW" placeholder="0"></div>
+      <div class="f"><label>DM件数</label><input type="number" min="0" id="iD" placeholder="0"></div>
     </div>
-    <div style="font-size:11px;font-weight:700;color:var(--champagne-dim);margin:14px 0 8px;letter-spacing:.1em;">── インスタ経由の販売実績</div>
-    <div class="fgrid">
-      <div class="f"><label>販売 客数</label><input type="number" min="0" id="iSaleClients" placeholder="0"></div>
-      <div class="f"><label>販売 点数</label><input type="number" min="0" id="iSaleItems" placeholder="0"></div>
-      <div class="f"><label>販売 金額（円）</label><input type="number" min="0" id="iSaleAmount" placeholder="0"></div>
+    <div class="sep"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.1em;margin-bottom:10px;">インスタ経由の実績</div>
+    <div class="fg">
+      <div class="f"><label>販売 客数</label><input type="number" min="0" id="iSC" placeholder="0"></div>
+      <div class="f"><label>販売 点数</label><input type="number" min="0" id="iSI" placeholder="0"></div>
+      <div class="f"><label>販売 金額（円）</label><input type="number" min="0" id="iSA" placeholder="0"></div>
+      <div class="f"><label>買取 客数</label><input type="number" min="0" id="iBC" placeholder="0"></div>
+      <div class="f"><label>買取 点数</label><input type="number" min="0" id="iBI" placeholder="0"></div>
+      <div class="f"><label>買取 金額（円）</label><input type="number" min="0" id="iBA" placeholder="0"></div>
     </div>
-    <div style="font-size:11px;font-weight:700;color:var(--champagne-dim);margin:14px 0 8px;letter-spacing:.1em;">── インスタ経由の買取実績</div>
-    <div class="fgrid">
-      <div class="f"><label>買取 客数</label><input type="number" min="0" id="iBuyClients" placeholder="0"></div>
-      <div class="f"><label>買取 点数</label><input type="number" min="0" id="iBuyItems" placeholder="0"></div>
-      <div class="f"><label>買取 金額（円）</label><input type="number" min="0" id="iBuyAmount" placeholder="0"></div>
-    </div>
-    <button class="btn ig w" id="saveInsight">インサイトを記録</button>
-    <div class="tick" id="tickInsight">✓ 記録しました</div>
-    <p style="font-size:10.5px;color:var(--text-faint);margin-top:10px;line-height:1.6;">Instagramアプリの「プロフェッショナルダッシュボード」の数値を1日1回転記してください。同じ日付で再保存すると上書きされます。</p>
+    <button class="save-btn" id="saveI">インサイトを記録</button>
+    <div class="save-tick" id="tickI">✓ 記録しました</div>
   </div>
-
-  <!-- post form -->
-  <div class="card" id="form-post" style="display:none;">
-    <div class="c-title">投稿・ストーリーの記録<span class="rule"></span></div>
-    <div class="fgrid">
-      <div class="f"><label>📅 日付</label><input type="date" id="pDate"></div>
-      <div class="f"><label>種類</label>
-        <select id="pType"><option>ストーリー</option><option>フィード</option><option>リール</option></select>
-      </div>
-      <div class="f"><label>ブランド *</label><input type="text" id="pBrand" placeholder="HERMES" list="brandDl"></div>
-      <div class="f"><label>カテゴリ *</label>
-        <select id="pCat"><option value="">選択...</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select>
-      </div>
-      <div class="f full"><label>商品名（任意）</label><input type="text" id="pItem" placeholder="シェーヌダンクル TGM"></div>
-      <div class="f"><label>価格帯</label>
-        <select id="pPrice"><option value="">選択...</option><option>〜3万</option><option>3〜5万</option><option>5〜10万</option><option>10〜30万</option><option>30〜50万</option><option>50万〜</option></select>
-      </div>
-      <div class="f"><label>閲覧数（ストーリーはビュー数）</label><input type="number" min="0" id="pViews" placeholder="0"></div>
-      <div class="f"><label>いいね</label><input type="number" min="0" id="pLikes" placeholder="0"></div>
-      <div class="f"><label>保存</label><input type="number" min="0" id="pSaves" placeholder="0"></div>
-      <div class="f"><label>コメント</label><input type="number" min="0" id="pComments" placeholder="0"></div>
-      <div class="f"><label>シェア/リンクタップ</label><input type="number" min="0" id="pShares" placeholder="0"></div>
-      <div class="f"><label>問い合わせ</label>
-        <select id="pInq"><option value="なし">なし</option><option value="販売問合">販売の問い合わせ</option><option value="買取問合">買取の問い合わせ</option><option value="詳細問合">詳細DMあり</option></select>
-      </div>
-      <div class="f"><label>成果</label>
-        <select id="pConv"><option value="なし">なし / まだ</option><option value="取り置き">取り置き</option><option value="来店">来店</option><option value="郵送販売">郵送販売</option><option value="買取成立">買取成立</option></select>
-      </div>
-      <div class="f full"><label>備考（任意）</label><input type="text" id="pNote" placeholder=""></div>
+  <div class="c" id="fPost" style="display:none;">
+    <div class="c-title">投稿・ストーリーの記録</div>
+    <div class="fg">
+      <div class="f"><label>📅 日付</label><input type="date" id="pDt"></div>
+      <div class="f"><label>種類</label><select id="pTy"><option>ストーリー</option><option>フィード</option><option>リール</option></select></div>
+      <div class="f"><label>ブランド *</label><input type="text" id="pBr" placeholder="HERMES" list="bDl"></div>
+      <div class="f"><label>カテゴリ *</label><select id="pCa"><option value="">選択...</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select></div>
+      <div class="f full"><label>商品名</label><input type="text" id="pNm" placeholder="シェーヌダンクル TGM"></div>
+      <div class="f"><label>価格帯</label><select id="pPr"><option value="">選択...</option><option>〜3万</option><option>3〜5万</option><option>5〜10万</option><option>10〜30万</option><option>30〜50万</option><option>50万〜</option></select></div>
+      <div class="f"><label>閲覧数</label><input type="number" min="0" id="pVw" placeholder="0"></div>
+      <div class="f"><label>いいね</label><input type="number" min="0" id="pLk" placeholder="0"></div>
+      <div class="f"><label>保存</label><input type="number" min="0" id="pSv" placeholder="0"></div>
+      <div class="f"><label>コメント</label><input type="number" min="0" id="pCm" placeholder="0"></div>
+      <div class="f"><label>シェア</label><input type="number" min="0" id="pSh" placeholder="0"></div>
+      <div class="f"><label>問い合わせ</label><select id="pIq"><option value="なし">なし</option><option value="販売問合">販売</option><option value="買取問合">買取</option><option value="詳細問合">詳細DM</option></select></div>
+      <div class="f"><label>成果</label><select id="pCv"><option value="なし">なし</option><option value="取り置き">取り置き</option><option value="来店">来店</option><option value="郵送販売">郵送販売</option><option value="買取成立">買取成立</option></select></div>
+      <div class="f full"><label>備考</label><input type="text" id="pNo" placeholder=""></div>
     </div>
-    <button class="btn ig w" id="savePost">投稿を記録</button>
-    <div class="tick" id="tickPost">✓ 記録しました</div>
-    <datalist id="brandDl"></datalist>
-  </div>
-
-</div>
-
-<!-- ============ VIEW: LIST ============ -->
-<div class="view" id="view-list">
-  <div class="card">
-    <div class="c-title">投稿一覧<span class="rule"></span>
-      <button class="btn sm" id="refreshBtn">🔄</button>
-    </div>
-    <div class="fgrid" style="margin-bottom:12px;">
-      <div class="f full"><input type="text" id="qSearch" placeholder="🔍 ブランド・商品名で検索"></div>
-      <div class="f"><select id="qCat"><option value="">カテゴリ：すべて</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select></div>
-      <div class="f"><select id="qInq"><option value="">問合：すべて</option><option value="あり">問合あり</option><option value="なし">問合なし</option></select></div>
-    </div>
-    <div id="postList"><div class="empty">まだ記録がありません</div></div>
-  </div>
-
-  <div class="card">
-    <div class="c-title">日次インサイト履歴<span class="rule"></span></div>
-    <div id="insightList"><div class="empty">まだ記録がありません</div></div>
+    <button class="save-btn" id="saveP">投稿を記録</button>
+    <div class="save-tick" id="tickP">✓ 記録しました</div>
+    <datalist id="bDl"></datalist>
   </div>
 </div>
 
-</div><!-- /wrap -->
+<!-- LIST -->
+<div class="vw" id="vw-list">
+  <div class="c">
+    <div class="c-title">投稿一覧<button class="pill" id="refreshBtn" style="float:right;font-size:12px;padding:5px 12px;">🔄</button></div>
+    <div class="filters">
+      <input type="text" id="qS" placeholder="🔍 ブランド・商品名で検索">
+      <select id="qC"><option value="">カテゴリ：すべて</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select>
+    </div>
+    <div id="postList"></div>
+  </div>
+  <div class="c"><div class="c-title">日次インサイト履歴</div><div id="insList"></div></div>
+</div>
 
-<div id="tabbar">
-  <button class="on" data-view="dash"><span class="ico">📊</span>分析</button>
-  <button data-view="rec"><span class="ico">✏️</span>記録</button>
-  <button data-view="list"><span class="ico">📋</span>一覧</button>
+</div>
+
+<div id="nav">
+  <button class="on" data-v="dash"><span class="ico">📊</span>分析</button>
+  <button data-v="rec"><span class="ico">✏️</span>記録</button>
+  <button data-v="list"><span class="ico">📋</span>一覧</button>
 </div>
 
 <script>
-const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/story-data.json";
-const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+const GH_O="2002ogariku-design",GH_R="yoyaku",GH_P="shibuya-tk/story-data.json";
+const GH_API=`https://api.github.com/repos/${GH_O}/${GH_R}/contents/${GH_P}`;
 const TK="tk-gh-token",SK="tk-staffname";
 const STAFF=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"];
-const CHAMP="#c9c2b4", IGPINK="#dc2743", OK="#4ade80", BLUE="#60a5fa";
+const CC=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
+Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
 
-Chart.defaults.color="#a09a8e";
-Chart.defaults.borderColor="#2a2a30";
-Chart.defaults.font.family='"Hiragino Sans","Yu Gothic",sans-serif';
-
-function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力してください");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
+function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
 function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
 function setName(n){try{localStorage.setItem(SK,n)}catch(e){}}
-function badge(){document.getElementById("staffBadge").textContent=getName()?`👤 ${getName()}`:"👤 名前を設定";}
-function err(m){const el=document.getElementById("errorBanner");el.style.display="block";el.textContent=m;}
+function updBadge(){document.getElementById("badge").textContent=getName()?`👤 ${getName()}`:"👤 —";}
+function err(m){document.getElementById("errB").style.display="block";document.getElementById("errB").textContent=m;}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function nf(n){return Number(n||0).toLocaleString("ja-JP");}
 function u2b(s){return btoa(unescape(encodeURIComponent(s)))}
 function b2u(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))))}
-function dl(days){const t=new Date(),r=[];for(let i=days-1;i>=0;i--){const d=new Date(t);d.setDate(d.getDate()-i);r.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);}return r;}
-function nf(n){return Number(n||0).toLocaleString("ja-JP");}
+function dl(d){const t=new Date(),r=[];for(let i=d-1;i>=0;i--){const x=new Date(t);x.setDate(x.getDate()-i);r.push(`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`);}return r;}
 
-// ── name modal ──
-function openName(force){
-  document.getElementById("nameSelect").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");
-  const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSelect").value=c;
-  document.getElementById("nameCancel").style.display=force?"none":"";
-  document.getElementById("nameModal").style.display="flex";
-}
-function closeName(){document.getElementById("nameModal").style.display="none";}
-function ensureName(force){
-  return new Promise(r=>{
-    if(getName()&&!force){r(getName());return;}
-    openName(force);
-    const b=document.getElementById("nameSave");
-    const h=()=>{setName(document.getElementById("nameSelect").value);badge();closeName();b.removeEventListener("click",h);r(getName());};
-    b.addEventListener("click",h);
-  });
-}
+function openName(f){document.getElementById("nameSel").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSel").value=c;document.getElementById("nameCancel").style.display=f?"none":"";document.getElementById("nameOv").style.display="flex";}
+function closeName(){document.getElementById("nameOv").style.display="none";}
+function ensureName(f){return new Promise(r=>{if(getName()&&!f){r(getName());return;}openName(f);const b=document.getElementById("nameOk");const h=()=>{setName(document.getElementById("nameSel").value);updBadge();closeName();b.removeEventListener("click",h);r(getName());};b.addEventListener("click",h);});}
 
-// ── storage ──
 let ghSha=null, DB={insights:[],posts:[]};
-async function ghGet(){
-  const t=getToken();if(!t)return DB;
-  const r=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
-  if(r.status===404){ghSha=null;return{insights:[],posts:[]};}
-  if(!r.ok)throw new Error("HTTP "+r.status);
-  const d=await r.json();ghSha=d.sha;
-  const raw=JSON.parse(b2u(d.content)||"[]");
-  // migrate old array format → {insights, posts}
-  if(Array.isArray(raw))return{insights:[],posts:raw};
-  return{insights:raw.insights||[],posts:raw.posts||[]};
-}
-async function ghSet(db){
-  const t=getToken();if(!t)throw new Error("キー未設定");
-  for(let a=0;a<3;a++){
-    try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}
-    const body={message:"insta "+new Date().toISOString(),content:u2b(JSON.stringify(db))};
-    if(ghSha)body.sha=ghSha;
-    const r=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(r.ok){ghSha=(await r.json()).content.sha;return;}
-    if(r.status===409&&a<2){await new Promise(r=>setTimeout(r,400));continue;}
-    throw new Error("保存失敗 HTTP "+r.status);
-  }
-}
+async function ghGet(){const t=getToken();if(!t)return DB;const r=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(r.status===401){try{localStorage.removeItem(TK)}catch(e){}const nt=prompt("キーが無効です。新しいキーを入力：");if(nt)try{localStorage.setItem(TK,nt.trim())}catch(e){}return ghGet();}if(r.status===404){ghSha=null;return{insights:[],posts:[]};}if(!r.ok)throw new Error("HTTP "+r.status);const d=await r.json();ghSha=d.sha;const raw=JSON.parse(b2u(d.content)||"[]");if(Array.isArray(raw))return{insights:[],posts:raw};return{insights:raw.insights||[],posts:raw.posts||[]};}
+async function ghSet(db){const t=getToken();if(!t)throw new Error("キー未設定");for(let a=0;a<4;a++){try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}const body={message:"insta "+new Date().toISOString(),content:u2b(JSON.stringify(db))};if(ghSha)body.sha=ghSha;const r=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});if(r.ok){ghSha=(await r.json()).content.sha;return;}if(r.status===409&&a<3){await new Promise(r=>setTimeout(r,500+a*500));continue;}throw new Error("保存失敗 "+r.status);}}
 
-// ── view switching ──
-document.querySelectorAll("#tabbar button").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll("#tabbar button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on");
-    document.querySelectorAll(".view").forEach(v=>v.classList.remove("on"));
-    document.getElementById("view-"+b.dataset.view).classList.add("on");
-    if(b.dataset.view==="dash")renderDash();
-  });
-});
-document.querySelectorAll("#recSeg button").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll("#recSeg button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on");
-    document.getElementById("form-insight").style.display=b.dataset.mode==="insight"?"":"none";
-    document.getElementById("form-post").style.display=b.dataset.mode==="post"?"":"none";
-  });
-});
-document.querySelectorAll(".a-tab").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll(".a-tab").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on");
-    document.querySelectorAll(".a-panel").forEach(p=>p.classList.remove("on"));
-    document.getElementById("ap-"+b.dataset.ap).classList.add("on");
-  });
-});
+// nav
+document.querySelectorAll("#nav button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));document.getElementById("vw-"+b.dataset.v).classList.add("on");if(b.dataset.v==="dash")renderDash();});});
+document.querySelectorAll("#recSeg button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#recSeg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.getElementById("fInsight").style.display=b.dataset.m==="insight"?"":"none";document.getElementById("fPost").style.display=b.dataset.m==="post"?"":"none";});});
+document.querySelectorAll(".ctab").forEach(b=>{b.addEventListener("click",()=>{b.closest(".c").querySelectorAll(".ctab").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".c").querySelectorAll(".cpanel").forEach(p=>p.classList.remove("on"));document.getElementById("ap-"+b.dataset.ap).classList.add("on");});});
 
-// ── save insight ──
-async function saveInsight(){
+// save insight
+document.getElementById("saveI").addEventListener("click",async()=>{
   const name=await ensureName(false);if(!name)return;
-  const e={
-    date:document.getElementById("iDate").value||today(),
-    followers:Number(document.getElementById("iFollowers").value)||0,
-    reach:Number(document.getElementById("iReach").value)||0,
-    impressions:Number(document.getElementById("iImp").value)||0,
-    profileVisits:Number(document.getElementById("iProfile").value)||0,
-    webTaps:Number(document.getElementById("iWeb").value)||0,
-    dm:Number(document.getElementById("iDM").value)||0,
-    saleClients:Number(document.getElementById("iSaleClients").value)||0,
-    saleItems:Number(document.getElementById("iSaleItems").value)||0,
-    saleAmount:Number(document.getElementById("iSaleAmount").value)||0,
-    buyClients:Number(document.getElementById("iBuyClients").value)||0,
-    buyItems:Number(document.getElementById("iBuyItems").value)||0,
-    buyAmount:Number(document.getElementById("iBuyAmount").value)||0,
-    by:name, savedAt:new Date().toISOString()
-  };
+  const e={date:document.getElementById("iDate").value||today(),followers:Number(document.getElementById("iF").value)||0,reach:Number(document.getElementById("iR").value)||0,impressions:Number(document.getElementById("iI").value)||0,profileVisits:Number(document.getElementById("iP").value)||0,webTaps:Number(document.getElementById("iW").value)||0,dm:Number(document.getElementById("iD").value)||0,saleClients:Number(document.getElementById("iSC").value)||0,saleItems:Number(document.getElementById("iSI").value)||0,saleAmount:Number(document.getElementById("iSA").value)||0,buyClients:Number(document.getElementById("iBC").value)||0,buyItems:Number(document.getElementById("iBI").value)||0,buyAmount:Number(document.getElementById("iBA").value)||0,by:name,savedAt:new Date().toISOString()};
   if(!e.followers){alert("フォロワー数を入力してください");return;}
-  try{
-    DB=await ghGet();
-    const i=DB.insights.findIndex(x=>x.date===e.date);
-    if(i>=0)DB.insights[i]=e;else DB.insights.push(e);
-    DB.insights.sort((a,b)=>a.date<b.date?-1:1);
-    await ghSet(DB);
-    const t=document.getElementById("tickInsight");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
-    ["iFollowers","iReach","iImp","iProfile","iWeb","iDM","iSaleClients","iSaleItems","iSaleAmount","iBuyClients","iBuyItems","iBuyAmount"].forEach(id=>document.getElementById(id).value="");
-    renderAll();
-  }catch(x){err("保存失敗："+x.message);}
-}
+  const btn=document.getElementById("saveI");btn.textContent="保存中...";btn.disabled=true;
+  try{DB=await ghGet();const i=DB.insights.findIndex(x=>x.date===e.date);if(i>=0)DB.insights[i]=e;else DB.insights.push(e);DB.insights.sort((a,b)=>a.date<b.date?-1:1);await ghSet(DB);const t=document.getElementById("tickI");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["iF","iR","iI","iP","iW","iD","iSC","iSI","iSA","iBC","iBI","iBA"].forEach(id=>document.getElementById(id).value="");renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="インサイトを記録";btn.disabled=false;}
+});
 
-// ── save post ──
-async function savePost(){
+// save post
+document.getElementById("saveP").addEventListener("click",async()=>{
   const name=await ensureName(false);if(!name)return;
-  const brand=document.getElementById("pBrand").value.trim();
-  const cat=document.getElementById("pCat").value;
-  if(!brand||!cat){alert("ブランドとカテゴリは必須です");return;}
-  const e={
-    id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-    date:document.getElementById("pDate").value||today(),
-    type:document.getElementById("pType").value,
-    brand, category:cat,
-    itemName:document.getElementById("pItem").value.trim(),
-    priceRange:document.getElementById("pPrice").value,
-    views:Number(document.getElementById("pViews").value)||0,
-    likes:Number(document.getElementById("pLikes").value)||0,
-    saves:Number(document.getElementById("pSaves").value)||0,
-    comments:Number(document.getElementById("pComments").value)||0,
-    shares:Number(document.getElementById("pShares").value)||0,
-    inquiry:document.getElementById("pInq").value,
-    conversion:document.getElementById("pConv").value,
-    note:document.getElementById("pNote").value.trim(),
-    by:name, savedAt:new Date().toISOString()
-  };
-  try{
-    DB=await ghGet();
-    DB.posts.push(e);
-    await ghSet(DB);
-    const t=document.getElementById("tickPost");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
-    ["pBrand","pItem","pNote","pViews","pLikes","pSaves","pComments","pShares"].forEach(id=>document.getElementById(id).value="");
-    ["pCat","pPrice"].forEach(id=>document.getElementById(id).value="");
-    document.getElementById("pInq").value="なし";document.getElementById("pConv").value="なし";
-    brandDl();renderAll();
-  }catch(x){err("保存失敗："+x.message);}
-}
+  const br=document.getElementById("pBr").value.trim(),ca=document.getElementById("pCa").value;
+  if(!br||!ca){alert("ブランドとカテゴリは必須");return;}
+  const e={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:document.getElementById("pDt").value||today(),type:document.getElementById("pTy").value,brand:br,category:ca,itemName:document.getElementById("pNm").value.trim(),priceRange:document.getElementById("pPr").value,views:Number(document.getElementById("pVw").value)||0,likes:Number(document.getElementById("pLk").value)||0,saves:Number(document.getElementById("pSv").value)||0,comments:Number(document.getElementById("pCm").value)||0,shares:Number(document.getElementById("pSh").value)||0,inquiry:document.getElementById("pIq").value,conversion:document.getElementById("pCv").value,note:document.getElementById("pNo").value.trim(),by:name,savedAt:new Date().toISOString()};
+  const btn=document.getElementById("saveP");btn.textContent="保存中...";btn.disabled=true;
+  try{DB=await ghGet();DB.posts.push(e);await ghSet(DB);const t=document.getElementById("tickP");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["pBr","pNm","pNo","pVw","pLk","pSv","pCm","pSh"].forEach(id=>document.getElementById(id).value="");["pCa","pPr"].forEach(id=>document.getElementById(id).value="");document.getElementById("pIq").value="なし";document.getElementById("pCv").value="なし";updBrandDl();renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="投稿を記録";btn.disabled=false;}
+});
 
-async function delPost(id){
-  if(!confirm("削除しますか？"))return;
-  DB.posts=DB.posts.filter(p=>p.id!==id);
-  try{await ghSet(DB);renderAll();}catch(x){err("削除失敗："+x.message);}
-}
+async function delPost(id){if(!confirm("削除しますか？"))return;DB.posts=DB.posts.filter(p=>p.id!==id);try{await ghSet(DB);renderPosts();renderDash();}catch(x){err(x.message);}}
+function updBrandDl(){document.getElementById("bDl").innerHTML=[...new Set(DB.posts.map(p=>p.brand).filter(Boolean))].sort().map(b=>`<option value="${esc(b)}">`).join("");}
 
-function brandDl(){
-  const bs=[...new Set(DB.posts.map(p=>p.brand).filter(Boolean))].sort();
-  document.getElementById("brandDl").innerHTML=bs.map(b=>`<option value="${esc(b)}">`).join("");
-}
-
-// ── dashboard ──
-let CH={};
-function kill(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
-
+// dashboard
+let CH={};function kill(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
 function renderPulse(){
   const ins=[...DB.insights].sort((a,b)=>a.date<b.date?-1:1);
-  if(!ins.length){
-    document.getElementById("pulseNum").textContent="—";
-    document.getElementById("pulseDelta").textContent="±0";
-    document.getElementById("pulseDelta").className="p-delta flat";
-    document.getElementById("pulseDate").textContent="インサイトを記録するとここに表示されます";
-    return;
-  }
-  const last=ins[ins.length-1], prev=ins.length>1?ins[ins.length-2]:null;
-  document.getElementById("pulseNum").textContent=nf(last.followers);
-  const d=prev?last.followers-prev.followers:0;
-  const el=document.getElementById("pulseDelta");
-  el.textContent=(d>0?"+":"")+nf(d);
-  el.className="p-delta "+(d>0?"up":d<0?"down":"flat");
-  document.getElementById("pulseDate").textContent=`${last.date} 時点${prev?`（前回 ${prev.date} 比）`:""}`;
+  if(!ins.length){document.getElementById("pNum").textContent="—";document.getElementById("pDate").textContent="データを記録するとここに表示されます";return;}
+  const last=ins[ins.length-1],prev=ins.length>1?ins[ins.length-2]:null;
+  document.getElementById("pNum").innerHTML=nf(last.followers)+(prev?`<span class="delta ${last.followers>prev.followers?"up":last.followers<prev.followers?"dn":"fl"}">${last.followers>=prev.followers?"+":""}${nf(last.followers-prev.followers)}</span>`:"");
+  document.getElementById("pDate").textContent=`${last.date}${prev?` (前回比)`:""}`; 
 }
-
 function renderKpis(){
-  const days=dl(7);
-  const ins7=DB.insights.filter(i=>days.includes(i.date));
-  const posts7=DB.posts.filter(p=>days.includes(p.date));
+  const days=dl(7),ins7=DB.insights.filter(i=>days.includes(i.date)),posts7=DB.posts.filter(p=>days.includes(p.date));
   const reachAvg=ins7.length?Math.round(ins7.reduce((s,i)=>s+i.reach,0)/ins7.length):0;
   const profSum=ins7.reduce((s,i)=>s+i.profileVisits,0);
   const inq=posts7.filter(p=>p.inquiry&&p.inquiry!=="なし").length;
   const rate=posts7.length?Math.round(inq/posts7.length*100):0;
   const saleAmt=ins7.reduce((s,i)=>s+(i.saleAmount||0),0);
-  const saleCli=ins7.reduce((s,i)=>s+(i.saleClients||0),0);
   const buyAmt=ins7.reduce((s,i)=>s+(i.buyAmount||0),0);
-  const buyCli=ins7.reduce((s,i)=>s+(i.buyClients||0),0);
-  document.getElementById("kpiRow").innerHTML=`
-    <div class="kpi"><div class="k-num">${posts7.length}</div><div class="k-lbl">投稿数 / 7日</div></div>
-    <div class="kpi"><div class="k-num">${nf(reachAvg)}</div><div class="k-lbl">平均リーチ / 日</div></div>
-    <div class="kpi"><div class="k-num">${nf(profSum)}</div><div class="k-lbl">プロフ訪問 / 7日</div></div>
-    <div class="kpi"><div class="k-num">${rate}%</div><div class="k-lbl">問合せ率 / 7日</div></div>
-    <div class="kpi"><div class="k-num">${saleCli}</div><div class="k-lbl">販売客数 / 7日</div></div>
-    <div class="kpi"><div class="k-num">¥${nf(saleAmt)}</div><div class="k-lbl">販売金額 / 7日</div></div>
-    <div class="kpi"><div class="k-num">${buyCli}</div><div class="k-lbl">買取客数 / 7日</div></div>
-    <div class="kpi"><div class="k-num">¥${nf(buyAmt)}</div><div class="k-lbl">買取金額 / 7日</div></div>
+  document.getElementById("kpiGrid").innerHTML=`
+    <div class="kcard"><div class="kn">${posts7.length}</div><div class="kl">投稿数 / 7日</div></div>
+    <div class="kcard"><div class="kn">${nf(reachAvg)}</div><div class="kl">平均リーチ</div></div>
+    <div class="kcard"><div class="kn">${rate}%</div><div class="kl">問合せ率</div></div>
+    <div class="kcard"><div class="kn">${nf(profSum)}</div><div class="kl">プロフ訪問</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--green);">¥${nf(saleAmt)}</div><div class="kl">販売金額 / 7日</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--blue);">¥${nf(buyAmt)}</div><div class="kl">買取金額 / 7日</div></div>
   `;
 }
+function renderFolChart(){kill("chFol");const days=Number(document.getElementById("folR").value),list=dl(days),map={};DB.insights.forEach(i=>map[i.date]=i);let last=null;const data=list.map(d=>{if(map[d]){last=map[d].followers;return last;}return last;});CH["chFol"]=new Chart(document.getElementById("chFol"),{type:"line",data:{labels:list.map(d=>d.slice(5)),datasets:[{data,borderColor:CC[0],backgroundColor:"rgba(0,122,255,.06)",fill:true,tension:.35,pointRadius:2,spanGaps:true}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function renderReachChart(){kill("chReach");const list=dl(Number(document.getElementById("folR").value)),map={};DB.insights.forEach(i=>map[i.date]=i);CH["chReach"]=new Chart(document.getElementById("chReach"),{type:"bar",data:{labels:list.map(d=>d.slice(5)),datasets:[{label:"リーチ",data:list.map(d=>map[d]?map[d].reach:0),backgroundColor:"rgba(0,122,255,.25)",borderColor:CC[0],borderWidth:1,borderRadius:4},{label:"プロフ訪問",data:list.map(d=>map[d]?map[d].profileVisits:0),backgroundColor:"rgba(255,45,85,.2)",borderColor:CC[1],borderWidth:1,borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function renderSalesChart(){kill("chSales");const list=dl(Number(document.getElementById("folR").value)),map={};DB.insights.forEach(i=>map[i.date]=i);CH["chSales"]=new Chart(document.getElementById("chSales"),{type:"bar",data:{labels:list.map(d=>d.slice(5)),datasets:[{label:"販売金額",data:list.map(d=>map[d]?(map[d].saleAmount||0):0),backgroundColor:"rgba(52,199,89,.25)",borderColor:CC[3],borderWidth:1,borderRadius:4},{label:"買取金額",data:list.map(d=>map[d]?(map[d].buyAmount||0):0),backgroundColor:"rgba(0,122,255,.2)",borderColor:CC[0],borderWidth:1,borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function eng(p){return(p.likes||0)+(p.saves||0)*2+(p.comments||0)*2+(p.shares||0);}
+function renderBrand(){kill("chBrand");const m={};DB.posts.forEach(p=>{if(!m[p.brand])m[p.brand]={n:0,inq:0};m[p.brand].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.brand].inq++;});const top=Object.entries(m).sort((a,b)=>b[1].n-a[1].n).slice(0,12);CH["chBrand"]=new Chart(document.getElementById("chBrand"),{type:"bar",data:{labels:top.map(t=>t[0]),datasets:[{label:"投稿",data:top.map(t=>t[1].n),backgroundColor:"rgba(0,122,255,.25)",borderColor:CC[0],borderWidth:1,borderRadius:4},{label:"問合",data:top.map(t=>t[1].inq),backgroundColor:"rgba(255,45,85,.2)",borderColor:CC[1],borderWidth:1,borderRadius:4}]},options:{responsive:true,indexAxis:"y",plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderCat(){kill("chCat");const m={};DB.posts.forEach(p=>{const c=p.category||"不明";if(!m[c])m[c]={n:0,inq:0,conv:0};m[c].n++;if(p.inquiry&&p.inquiry!=="なし")m[c].inq++;if(p.conversion&&p.conversion!=="なし")m[c].conv++;});const ks=Object.keys(m);CH["chCat"]=new Chart(document.getElementById("chCat"),{type:"bar",data:{labels:ks,datasets:[{label:"投稿",data:ks.map(k=>m[k].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:ks.map(k=>m[k].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4},{label:"成果",data:ks.map(k=>m[k].conv),backgroundColor:"rgba(52,199,89,.25)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderPrice(){kill("chPrice");const O=["〜3万","3〜5万","5〜10万","10〜30万","30〜50万","50万〜"],m={};O.forEach(o=>m[o]={n:0,inq:0});DB.posts.forEach(p=>{if(p.priceRange&&m[p.priceRange]){m[p.priceRange].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.priceRange].inq++;}});CH["chPrice"]=new Chart(document.getElementById("chPrice"),{type:"bar",data:{labels:O,datasets:[{label:"投稿",data:O.map(o=>m[o].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:O.map(o=>m[o].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderBest(){const scored=[...DB.posts].map(p=>({...p,score:eng(p)+(p.inquiry!=="なし"?10:0)+(p.conversion!=="なし"?20:0)})).sort((a,b)=>b.score-a.score).slice(0,8);const el=document.getElementById("bestList");if(!scored.length){el.innerHTML='<div class="empty">投稿を記録するとランキング表示</div>';return;}el.innerHTML=scored.map((p,i)=>`<div class="pi"><div class="top"><div><span style="color:var(--orange);font-weight:800;margin-right:6px;">${i+1}</span><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div></div><div class="chips"><span class="chip">${p.date}</span>${p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div><div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span></div></div>`).join("");}
+function renderDash(){renderPulse();renderKpis();renderFolChart();renderReachChart();renderSalesChart();renderBrand();renderCat();renderPrice();renderBest();}
 
-function renderFolChart(){
-  kill("folChart");
-  const days=Number(document.getElementById("folRange").value);
-  const list=dl(days);
-  const map={};DB.insights.forEach(i=>map[i.date]=i);
-  // carry-forward for smooth line
-  let lastVal=null;
-  const data=list.map(d=>{if(map[d]){lastVal=map[d].followers;return lastVal;}return lastVal;});
-  CH["folChart"]=new Chart(document.getElementById("folChart"),{
-    type:"line",
-    data:{labels:list.map(d=>d.slice(5)),datasets:[{
-      label:"フォロワー",data,borderColor:CHAMP,backgroundColor:"rgba(201,194,180,.06)",
-      fill:true,tension:.3,pointRadius:2,spanGaps:true
-    }]},
-    options:{responsive:true,plugins:{legend:{display:false}},
-      scales:{y:{ticks:{callback:v=>nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}
-  });
-}
+// list
+function renderPosts(){const q=(document.getElementById("qS").value||"").toLowerCase(),cat=document.getElementById("qC").value;let list=[...DB.posts].reverse();if(q)list=list.filter(p=>[p.brand,p.itemName,p.note].join(" ").toLowerCase().includes(q));if(cat)list=list.filter(p=>p.category===cat);const el=document.getElementById("postList");if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.slice(0,50).map(p=>`<div class="pi"><div class="top"><div><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><button class="del" onclick="delPost('${p.id}')">✕</button></div><div class="chips"><span class="chip">${p.date}</span><span class="chip">${esc(p.type)}</span>${p.priceRange?`<span class="chip">${esc(p.priceRange)}</span>`:""}${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div>${(p.views||p.likes)?`<div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span></div>`:""}</div>`).join("");}
+function renderInsights(){const el=document.getElementById("insList"),list=[...DB.insights].reverse().slice(0,30);if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.map(i=>`<div class="pi"><div class="top"><span class="brand">${i.date}</span></div><div class="mrow" style="flex-wrap:wrap;gap:8px;">  <span>👥 <b>${nf(i.followers)}</b></span><span>📡 <b>${nf(i.reach)}</b></span><span>👁 <b>${nf(i.impressions)}</b></span><span>🚪 <b>${nf(i.profileVisits)}</b></span><span>✉️ <b>${nf(i.dm)}</b></span></div>${(i.saleClients||i.buyClients)?`<div class="mrow" style="flex-wrap:wrap;gap:8px;margin-top:4px;"><span style="color:var(--green);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span><span style="color:var(--blue);">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span></div>`:""}</div>`).join("");}
 
-function renderReachChart(){
-  kill("reachChart");
-  const list=dl(Number(document.getElementById("folRange").value));
-  const map={};DB.insights.forEach(i=>map[i.date]=i);
-  CH["reachChart"]=new Chart(document.getElementById("reachChart"),{
-    type:"bar",
-    data:{labels:list.map(d=>d.slice(5)),datasets:[
-      {label:"リーチ",data:list.map(d=>map[d]?map[d].reach:0),backgroundColor:"rgba(96,165,250,.35)",borderColor:BLUE,borderWidth:1,borderRadius:3},
-      {label:"プロフ访問",data:list.map(d=>map[d]?map[d].profileVisits:0),backgroundColor:"rgba(220,39,67,.3)",borderColor:IGPINK,borderWidth:1,borderRadius:3}
-    ]},
-    options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:12}}},
-      scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}
-  });
-}
-
-function engagement(p){return (p.likes||0)+(p.saves||0)*2+(p.comments||0)*2+(p.shares||0);}
-
-function renderBrandChart(){
-  kill("brandChart");
-  const m={};
-  DB.posts.forEach(p=>{
-    if(!m[p.brand])m[p.brand]={n:0,inq:0,eng:0};
-    m[p.brand].n++;m[p.brand].eng+=engagement(p);
-    if(p.inquiry&&p.inquiry!=="なし")m[p.brand].inq++;
-  });
-  const top=Object.entries(m).sort((a,b)=>b[1].n-a[1].n).slice(0,12);
-  CH["brandChart"]=new Chart(document.getElementById("brandChart"),{
-    type:"bar",
-    data:{labels:top.map(t=>t[0]),datasets:[
-      {label:"投稿数",data:top.map(t=>t[1].n),backgroundColor:"rgba(201,194,180,.35)",borderColor:CHAMP,borderWidth:1,borderRadius:3},
-      {label:"問合発生",data:top.map(t=>t[1].inq),backgroundColor:"rgba(220,39,67,.35)",borderColor:IGPINK,borderWidth:1,borderRadius:3}
-    ]},
-    options:{responsive:true,indexAxis:"y",plugins:{legend:{labels:{font:{size:10},boxWidth:12}}},
-      scales:{x:{beginAtZero:true,ticks:{precision:0}}}}
-  });
-}
-
-function renderCatChart(){
-  kill("catChart");
-  const m={};
-  DB.posts.forEach(p=>{
-    const c=p.category||"不明";
-    if(!m[c])m[c]={n:0,inq:0,conv:0};
-    m[c].n++;
-    if(p.inquiry&&p.inquiry!=="なし")m[c].inq++;
-    if(p.conversion&&p.conversion!=="なし")m[c].conv++;
-  });
-  const ks=Object.keys(m);
-  CH["catChart"]=new Chart(document.getElementById("catChart"),{
-    type:"bar",
-    data:{labels:ks,datasets:[
-      {label:"投稿",data:ks.map(k=>m[k].n),backgroundColor:"rgba(201,194,180,.35)",borderColor:CHAMP,borderWidth:1,borderRadius:3},
-      {label:"問合",data:ks.map(k=>m[k].inq),backgroundColor:"rgba(220,39,67,.35)",borderColor:IGPINK,borderWidth:1,borderRadius:3},
-      {label:"成果",data:ks.map(k=>m[k].conv),backgroundColor:"rgba(74,222,128,.3)",borderColor:OK,borderWidth:1,borderRadius:3}
-    ]},
-    options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:12}}},
-      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
-  });
-}
-
-function renderPriceChart(){
-  kill("priceChart");
-  const ORDER=["〜3万","3〜5万","5〜10万","10〜30万","30〜50万","50万〜"];
-  const m={};ORDER.forEach(o=>m[o]={n:0,inq:0});
-  DB.posts.forEach(p=>{if(p.priceRange&&m[p.priceRange]){m[p.priceRange].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.priceRange].inq++;}});
-  CH["priceChart"]=new Chart(document.getElementById("priceChart"),{
-    type:"bar",
-    data:{labels:ORDER,datasets:[
-      {label:"投稿",data:ORDER.map(o=>m[o].n),backgroundColor:"rgba(201,194,180,.35)",borderColor:CHAMP,borderWidth:1,borderRadius:3},
-      {label:"問合",data:ORDER.map(o=>m[o].inq),backgroundColor:"rgba(220,39,67,.35)",borderColor:IGPINK,borderWidth:1,borderRadius:3}
-    ]},
-    options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:12}}},
-      scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
-  });
-}
-
-function renderBest(){
-  const scored=[...DB.posts].map(p=>({...p,score:engagement(p)+(p.inquiry!=="なし"?10:0)+(p.conversion!=="なし"?20:0)}));
-  const top=scored.sort((a,b)=>b.score-a.score).slice(0,8);
-  const el=document.getElementById("bestList");
-  if(!top.length){el.innerHTML='<div class="empty">投稿を記録するとランキングが表示されます</div>';return;}
-  el.innerHTML=top.map((p,i)=>`
-    <div class="post">
-      <div class="p-top">
-        <div><span style="color:var(--champagne);font-weight:800;margin-right:8px;">${i+1}</span>
-          <span class="p-brand">${esc(p.brand)}</span>
-          ${p.itemName?`<span class="p-item"> — ${esc(p.itemName)}</span>`:""}
-        </div>
-      </div>
-      <div class="chips">
-        <span class="chip">${p.date}</span><span class="chip">${esc(p.type||"")}</span>
-        ${p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}
-        ${p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}
-      </div>
-      <div class="metrics-row">
-        <span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span>
-        <span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span>
-      </div>
-    </div>
-  `).join("");
-}
-
-function renderDash(){renderPulse();renderKpis();renderFolChart();renderReachChart();renderBrandChart();renderCatChart();renderPriceChart();renderBest();}
-
-// ── list view ──
-function renderPosts(){
-  const q=(document.getElementById("qSearch").value||"").toLowerCase();
-  const cat=document.getElementById("qCat").value;
-  const inq=document.getElementById("qInq").value;
-  let list=[...DB.posts].reverse();
-  if(q)list=list.filter(p=>[p.brand,p.itemName,p.note].join(" ").toLowerCase().includes(q));
-  if(cat)list=list.filter(p=>p.category===cat);
-  if(inq==="あり")list=list.filter(p=>p.inquiry&&p.inquiry!=="なし");
-  if(inq==="なし")list=list.filter(p=>!p.inquiry||p.inquiry==="なし");
-  const el=document.getElementById("postList");
-  if(!list.length){el.innerHTML='<div class="empty">該当する記録がありません</div>';return;}
-  el.innerHTML=list.slice(0,60).map(p=>`
-    <div class="post">
-      <div class="p-top">
-        <div>
-          <span class="p-brand">${esc(p.brand)}</span>
-          ${p.itemName?`<span class="p-item"> — ${esc(p.itemName)}</span>`:""}
-        </div>
-        <button class="p-del" onclick="delPost('${p.id}')">✕</button>
-      </div>
-      <div class="chips">
-        <span class="chip">${p.date}</span>
-        <span class="chip">${esc(p.type||"ストーリー")}</span>
-        <span class="chip gold">${esc(p.category)}</span>
-        ${p.priceRange?`<span class="chip">${esc(p.priceRange)}</span>`:""}
-        ${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}
-        ${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}
-      </div>
-      ${(p.views||p.likes||p.saves)?`<div class="metrics-row">
-        <span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span>
-        <span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span><span>↗ <b>${nf(p.shares)}</b></span>
-      </div>`:""}
-    </div>
-  `).join("");
-}
-
-function renderInsights(){
-  const el=document.getElementById("insightList");
-  const list=[...DB.insights].reverse().slice(0,30);
-  if(!list.length){el.innerHTML='<div class="empty">まだ記録がありません</div>';return;}
-  el.innerHTML=list.map(i=>`
-    <div class="post">
-      <div class="p-top"><span class="p-brand">${i.date}</span></div>
-      <div class="metrics-row" style="flex-wrap:wrap;gap:10px;">
-        <span>👥 <b>${nf(i.followers)}</b></span>
-        <span>📡 <b>${nf(i.reach)}</b></span>
-        <span>👁 <b>${nf(i.impressions)}</b></span>
-        <span>🚪 <b>${nf(i.profileVisits)}</b></span>
-        <span>🔗 <b>${nf(i.webTaps)}</b></span>
-        <span>✉️ <b>${nf(i.dm)}</b></span>
-      </div>
-      ${(i.saleClients||i.buyClients)?`<div class="metrics-row" style="flex-wrap:wrap;gap:10px;margin-top:6px;">
-        <span style="color:var(--ok);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span>
-        <span style="color:#60a5fa;">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span>
-      </div>`:""}
-      </div>
-    </div>
-  `).join("");
-}
-
-function renderAll(){renderDash();renderPosts();renderInsights();}
-
-// ── events ──
-document.getElementById("staffBadge").addEventListener("click",()=>openName(false));
+document.getElementById("badge").addEventListener("click",()=>openName(false));
 document.getElementById("nameCancel").addEventListener("click",closeName);
-document.getElementById("saveInsight").addEventListener("click",saveInsight);
-document.getElementById("savePost").addEventListener("click",savePost);
-document.getElementById("refreshBtn").addEventListener("click",async()=>{try{DB=await ghGet();brandDl();renderAll();}catch(e){err(e.message);}});
-document.getElementById("folRange").addEventListener("change",()=>{renderFolChart();renderReachChart();});
-["qSearch","qCat","qInq"].forEach(id=>document.getElementById(id).addEventListener(id==="qSearch"?"input":"change",renderPosts));
+document.getElementById("refreshBtn").addEventListener("click",async()=>{try{DB=await ghGet();updBrandDl();renderDash();renderPosts();renderInsights();}catch(e){err(e.message);}});
+document.getElementById("folR").addEventListener("change",()=>{renderFolChart();renderReachChart();renderSalesChart();});
+["qS","qC"].forEach(id=>document.getElementById(id).addEventListener(id==="qS"?"input":"change",renderPosts));
 
-(async function init(){
-  document.getElementById("todayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
-  document.getElementById("iDate").value=today();
-  document.getElementById("pDate").value=today();
-  badge();
-  await ensureName(true);
+(async function(){
+  document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
+  document.getElementById("iDate").value=today();document.getElementById("pDt").value=today();
+  updBadge();await ensureName(true);
   try{DB=await ghGet();}catch(e){err("読み込み失敗："+e.message);}
-  brandDl();
-  renderAll();
+  updBrandDl();renderDash();renderPosts();renderInsights();
 })();
 </script>
 </body>
