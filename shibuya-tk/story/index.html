@@ -217,11 +217,58 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
   <div class="c"><div class="c-title">日次インサイト履歴</div><div id="insList"></div></div>
 </div>
 
+<!-- STORY CREATION -->
+<div class="vw" id="vw-story">
+  <div class="c">
+    <div class="c-title">📸 ストーリー画像を作成</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <div class="f"><label>商品写真（縦向き推奨）</label></div>
+        <div id="photoDrop" style="border:2px dashed var(--line);border-radius:12px;padding:20px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;transition:border-color .15s;">
+          📷 タップして選択
+        </div>
+        <input type="file" id="photoIn" accept="image/*" style="display:none;">
+      </div>
+      <div>
+        <div class="f"><label>値札写真（参考用に表示）</label></div>
+        <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:20px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;transition:border-color .15s;">
+          🏷️ タップして選択
+        </div>
+        <input type="file" id="tagIn" accept="image/*" style="display:none;">
+        <img id="tagPreview" style="display:none;width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);">
+      </div>
+    </div>
+    <div class="fg">
+      <div class="f"><label>ブランド</label><input type="text" id="sBrand" placeholder="THEROW"></div>
+      <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="M"></div>
+      <div class="f"><label>ランク</label><input type="text" id="sRank" placeholder="B"></div>
+      <div class="f"><label>価格（税込・数字のみ）</label><input type="text" id="sPrice" placeholder="30800"></div>
+      <div class="f full"><label>下部テキスト</label><input type="text" id="sTag" value="📩DMにて割引可能"></div>
+    </div>
+    <button class="save-btn" id="genBtn" style="background:var(--t1);margin-top:14px;">プレビューを更新</button>
+  </div>
+
+  <div class="c" style="text-align:center;">
+    <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:60vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);"></canvas>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;">
+      <button class="pill" id="shareBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:12px 24px;font-size:15px;">📤 保存・共有</button>
+      <button class="pill" id="dlBtn" style="padding:12px 18px;font-size:14px;">💾 DL</button>
+    </div>
+    <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📁 作成アーカイブ</div>
+    <div id="archiveList"><div class="empty">まだ作成した画像はありません</div></div>
+  </div>
+</div>
+
 </div>
 
 <div id="nav">
   <button class="on" data-v="dash"><span class="ico">📊</span>分析</button>
   <button data-v="rec"><span class="ico">✏️</span>記録</button>
+  <button data-v="story"><span class="ico">📸</span>作成</button>
   <button data-v="list"><span class="ico">📋</span>一覧</button>
 </div>
 
@@ -326,12 +373,136 @@ document.getElementById("refreshBtn").addEventListener("click",async()=>{try{DB=
 document.getElementById("folR").addEventListener("change",()=>{renderFolChart();renderReachChart();renderSalesChart();});
 ["qS","qC"].forEach(id=>document.getElementById(id).addEventListener(id==="qS"?"input":"change",renderPosts));
 
+// ===== STORY CREATION =====
+let photoImg=null, storyArchive=[];
+try{storyArchive=JSON.parse(localStorage.getItem("story-archive")||"[]");}catch(e){}
+const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
+
+// photo drop
+const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
+pd.addEventListener("click",()=>pi.click());
+pi.addEventListener("change",e=>{if(e.target.files[0])loadImg(e.target.files[0],"photo");pi.value="";});
+["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
+pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImg(f,"photo");});
+
+// tag drop
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files[0])loadImg(e.target.files[0],"tag");ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImg(f,"tag");});
+
+function loadImg(file,type){
+  const fr=new FileReader();
+  fr.onload=e=>{
+    if(type==="tag"){
+      document.getElementById("tagPreview").src=e.target.result;
+      document.getElementById("tagPreview").style.display="block";
+      td2.innerHTML="🏷️ 選択済み ✓";
+      return;
+    }
+    const img=new Image();
+    img.onload=()=>{photoImg=img;pd.innerHTML="📷 選択済み ✓";drawStory();};
+    img.src=e.target.result;
+  };
+  fr.readAsDataURL(file);
+}
+
+function drawStory(){
+  const W=1080,H=1920;
+  cx.clearRect(0,0,W,H);
+  if(photoImg){
+    const s=Math.max(W/photoImg.width,H/photoImg.height);
+    const w=photoImg.width*s,h=photoImg.height*s;
+    cx.drawImage(photoImg,(W-w)/2,(H-h)/2,w,h);
+  }else{
+    cx.fillStyle="#1d1d1f";cx.fillRect(0,0,W,H);
+    cx.fillStyle="#aeaeb2";cx.font="500 36px sans-serif";cx.textAlign="center";
+    cx.fillText("写真を選択してください",W/2,H/2);cx.textAlign="left";
+  }
+  const g1=cx.createLinearGradient(0,0,0,500);
+  g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");
+  cx.fillStyle=g1;cx.fillRect(0,0,W,500);
+  const g2=cx.createLinearGradient(0,H-560,0,H);
+  g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,"rgba(0,0,0,.5)");
+  cx.fillStyle=g2;cx.fillRect(0,H-560,W,560);
+  cx.fillStyle="#fff";cx.shadowColor="rgba(0,0,0,.5)";cx.shadowBlur=16;
+  const serif="'Hiragino Mincho ProN','Yu Mincho',serif";
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  let y=220;
+  if(brand){cx.font=`500 72px ${serif}`;cx.fillText(brand,70,y);y+=86;}
+  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
+  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
+  if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
+  if(tag){cx.font=`500 58px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-200);}
+  cx.shadowBlur=0;
+}
+document.getElementById("genBtn").addEventListener("click",drawStory);
+["sBrand","sSize","sRank","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
+
+// share (1-tap save on iOS)
+document.getElementById("shareBtn").addEventListener("click",async()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const fname=`story_${brand}_${Date.now()}.png`;
+  try{
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const file=new File([blob],fname,{type:"image/png"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:fname});
+      archiveStory(brand);
+      const t=document.getElementById("shareTick");t.textContent="✓ 共有しました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+    }else{
+      // fallback: download
+      const a=document.createElement("a");a.download=fname;a.href=cv.toDataURL("image/png");a.click();
+      archiveStory(brand);
+      const t=document.getElementById("shareTick");t.textContent="✓ ダウンロードしました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+    }
+  }catch(e){if(e.name!=="AbortError")console.error(e);}
+});
+document.getElementById("dlBtn").addEventListener("click",()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const a=document.createElement("a");a.download=`story_${brand}_${Date.now()}.png`;a.href=cv.toDataURL("image/png");a.click();
+  archiveStory(brand);
+});
+
+function archiveStory(brand){
+  const thumb=document.createElement("canvas");
+  thumb.width=108;thumb.height=192;
+  thumb.getContext("2d").drawImage(cv,0,0,108,192);
+  storyArchive.unshift({
+    brand,
+    date:today(),
+    thumb:thumb.toDataURL("image/jpeg",0.6),
+    by:getName()
+  });
+  if(storyArchive.length>30)storyArchive=storyArchive.slice(0,30);
+  try{localStorage.setItem("story-archive",JSON.stringify(storyArchive));}catch(e){}
+  renderArchive();
+}
+function renderArchive(){
+  const el=document.getElementById("archiveList");
+  if(!storyArchive.length){el.innerHTML='<div class="empty">まだ作成した画像はありません</div>';return;}
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;">'+
+    storyArchive.map(a=>`<div style="text-align:center;">
+      <img src="${a.thumb}" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+      <div style="font-size:9.5px;color:var(--t3);margin-top:3px;">${esc(a.brand)}<br>${a.date}</div>
+    </div>`).join("")+'</div>';
+}
+
 (async function(){
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
   document.getElementById("iDate").value=today();document.getElementById("pDt").value=today();
   updBadge();await ensureName(true);
   try{DB=await ghGet();}catch(e){err("読み込み失敗："+e.message);}
-  updBrandDl();renderDash();renderPosts();renderInsights();
+  updBrandDl();renderDash();renderPosts();renderInsights();renderArchive();drawStory();
 })();
 </script>
 </body>
