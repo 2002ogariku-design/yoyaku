@@ -2,578 +2,505 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#1a1a2e">
-<title>個人タスク集計ツール｜渋谷店</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>タスク集計｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root{
-  --bg:#f7f8fa; --panel:#ffffff; --panel2:#f0f2f5; --line:#e4e7ed;
-  --text:#1a1a2e; --text-dim:#6b7280; --text-light:#9ca3af;
-  --blue:#2563eb; --blue-dim:#3b82f6; --blue-bg:#eff6ff;
-  --purple:#7c3aed; --purple-bg:#f5f3ff;
-  --pink:#db2777; --pink-bg:#fdf2f8;
-  --green:#059669; --green-bg:#ecfdf5;
-  --amber:#d97706; --amber-bg:#fffbeb;
-  --red:#dc2626; --red-bg:#fef2f2;
-  --font:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+  --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
+  --t1:#1d1d1f;--t2:#6e6e73;--t3:#aeaeb2;
+  --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--pink:#ff2d55;--purple:#af52de;--teal:#5ac8fa;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
 }
-*{box-sizing:border-box; margin:0; padding:0;}
-body{background:var(--bg); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh;}
-.wrap{max-width:1100px; margin:0 auto; padding:20px 16px 80px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px;
+  padding-bottom:calc(66px + env(safe-area-inset-bottom));}
+.w{max-width:720px;margin:0 auto;padding:16px 16px 30px;}
 
 /* header */
-.page-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;}
-.page-header .left .store{font-size:11px; font-weight:700; letter-spacing:.15em; color:var(--blue); text-transform:uppercase;}
-.page-header .left h1{font-size:22px; font-weight:800; color:var(--text); margin-top:2px;}
-.page-header .left .sub{font-size:12px; color:var(--text-dim); margin-top:2px;}
-.name-btn{display:flex; align-items:center; gap:8px; background:var(--panel); border:1.5px solid var(--line); border-radius:20px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer; color:var(--text);}
-.name-btn:hover{border-color:var(--blue);}
+.hd{display:flex;justify-content:space-between;align-items:center;padding:10px 0 18px;}
+.hd h1{font-size:28px;font-weight:800;letter-spacing:-.02em;}
+.hd .sub{font-size:13px;color:var(--t2);margin-top:2px;}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--t1);cursor:pointer;font-family:var(--font);}
 
 /* cards */
-.card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);}
-.card-title{font-size:13px; font-weight:700; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px;}
-.card-title .icon{font-size:15px;}
-.section-label{font-size:11px; font-weight:700; letter-spacing:.08em; padding:6px 10px; border-radius:6px; margin-bottom:10px; display:inline-block;}
-.sl-store{background:var(--panel2); color:var(--text-dim);}
-.sl-insta{background:var(--pink-bg); color:var(--pink);}
-.sl-official{background:var(--blue-bg); color:var(--blue);}
-.section-divider{border:none; border-top:1px solid var(--line); margin:16px 0;}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;
+  box-shadow:0 0.5px 1px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);}
+.c-title{font-size:13px;font-weight:700;color:var(--t2);margin-bottom:14px;letter-spacing:.01em;}
+.sep{height:1px;background:var(--line);margin:16px 0;}
+.sep-label{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.1em;margin-bottom:10px;}
 
-/* form */
-.form-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:4px;}
-@media(max-width:680px){.form-grid{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:420px){.form-grid{grid-template-columns:1fr;}}
-.field label{display:block; font-size:11px; font-weight:700; color:var(--text-dim); margin-bottom:5px; letter-spacing:.03em;}
-.field input{
-  width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);
-  background:var(--bg); color:var(--text); font-size:16px; font-family:var(--font);
-  transition:border-color .15s;
+/* stepper grid */
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+@media(max-width:520px){.sg{grid-template-columns:repeat(2,1fr);}}
+.si{background:var(--card2);border-radius:14px;padding:12px;text-align:center;position:relative;}
+.si .label{font-size:10.5px;font-weight:600;color:var(--t2);margin-bottom:8px;letter-spacing:.02em;}
+.si .val{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--t1);min-height:36px;line-height:36px;}
+.si .btns{display:flex;justify-content:center;gap:8px;margin-top:8px;}
+.si .btns button{
+  width:36px;height:36px;border-radius:50%;border:none;font-size:20px;font-weight:600;
+  cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;
+  transition:transform .1s;
 }
-.field input:focus{outline:none; border-color:var(--blue); background:#fff;}
-.field input[type=date]{font-size:14px;}
-.field input[type=number]{font-family:monospace;}
-.field.pink input:focus{border-color:var(--pink);}
-.field.blue input:focus{border-color:var(--blue);}
-.save-row{display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;}
-.save-tick{font-size:12px; color:var(--green); font-weight:700; opacity:0; transition:opacity .4s;}
+.si .btns button:active{transform:scale(.9);}
+.si .btns .minus{background:#f0f0f5;color:var(--t2);}
+.si .btns .plus{background:var(--blue);color:#fff;}
+.si.pink .btns .plus{background:var(--pink);}
+.si.orange .btns .plus{background:var(--orange);}
+.si.green .btns .plus{background:var(--green);}
+.si.purple .btns .plus{background:var(--purple);}
+.si.teal .btns .plus{background:var(--teal);}
+/* amount input inline */
+.si .amt-input{
+  width:90%;margin:6px auto 0;padding:6px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;font-size:16px;text-align:center;font-variant-numeric:tabular-nums;
+  font-family:var(--font);color:var(--t1);
+}
 
-/* buttons */
-.btn{border-radius:8px; padding:9px 16px; font-size:13px; cursor:pointer; border:1.5px solid var(--line); background:var(--panel2); color:var(--text); font-weight:700; transition:all .15s;}
-.btn:hover{border-color:var(--blue); color:var(--blue);}
-.btn.primary{background:var(--blue); color:#fff; border-color:var(--blue);}
-.btn.primary:hover{background:#1d4ed8;}
-.btn.sm{padding:6px 12px; font-size:12px;}
+/* save button */
+.save-btn{
+  width:100%;padding:16px;border-radius:14px;border:none;
+  background:var(--blue);color:#fff;font-size:17px;font-weight:700;
+  cursor:pointer;font-family:var(--font);margin-top:16px;
+  transition:opacity .15s;
+}
+.save-btn:disabled{opacity:.4;}
+.save-btn:active:not(:disabled){opacity:.7;}
+.save-tick{text-align:center;font-size:14px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;}
 
 /* today table */
-.table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-table{width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;}
-th{padding:7px 10px; text-align:left; font-size:10.5px; font-weight:700; color:var(--text-dim); border-bottom:2px solid var(--line); background:var(--panel2);}
-th.pink{color:var(--pink);}
-th.blue{color:var(--blue);}
-td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
-td.num{font-family:monospace; text-align:right;}
-td.staff{font-weight:700;}
+.today-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
+th{padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--line);background:var(--card);}
+td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+td.name{font-weight:700;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#fafafa;}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.kchip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:10px;background:var(--card2);font-size:12px;font-weight:600;}
+.kchip b{font-size:15px;color:var(--t1);}
+.kchip.pk{background:#fff0f3;color:var(--pink);}
+.kchip.bl{background:#e8f4ff;color:var(--blue);}
 
-/* totals */
-.totals-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
-.total-chip{display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:8px; font-size:12px;}
-.total-chip.store{background:var(--panel2); color:var(--text-dim);}
-.total-chip.insta{background:var(--pink-bg); color:var(--pink);}
-.total-chip.official{background:var(--blue-bg); color:var(--blue);}
-.total-chip b{font-size:14px; color:var(--text);}
+/* chart tabs */
+.ctabs{display:flex;background:var(--card2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;}
+.ctab{flex:1;text-align:center;padding:8px 6px;font-size:12px;font-weight:600;color:var(--t2);border-radius:8px;cursor:pointer;font-family:var(--font);border:none;background:none;}
+.ctab.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.cpanel{display:none;}
+.cpanel.on{display:block;}
+.toolbar{display:flex;gap:6px;margin-bottom:10px;}
+.toolbar select{padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:12px;color:var(--t1);font-family:var(--font);}
 
-/* charts */
-.chart-tabs{display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--line);}
-.chart-tab{padding:8px 16px; font-size:12.5px; font-weight:700; cursor:pointer; color:var(--text-dim); border-bottom:2px solid transparent; margin-bottom:-2px;}
-.chart-tab.active{color:var(--blue); border-bottom-color:var(--blue);}
-.chart-tab.pink.active{color:var(--pink); border-bottom-color:var(--pink);}
-.chart-tab.purple.active{color:var(--purple); border-bottom-color:var(--purple);}
-.chart-panel{display:none;}
-.chart-panel.active{display:block;}
-.chart-toolbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;}
-.chart-toolbar select{padding:7px 10px; border-radius:7px; border:1.5px solid var(--line); background:var(--bg); color:var(--text); font-size:12.5px;}
-.spacer{flex:1;}
-
-/* error */
-#errorBanner{display:none; background:var(--red-bg); border:1px solid var(--red); color:var(--red); border-radius:8px; padding:12px; margin-bottom:14px; font-size:12.5px; line-height:1.6;}
+/* bottom nav */
+#nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  height:calc(66px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+  background:rgba(255,255,255,.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:0.5px solid var(--line2);display:flex;
+}
+#nav button{
+  flex:1;border:none;background:none;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:10px;font-weight:600;color:var(--t3);font-family:var(--font);
+}
+#nav button.on{color:var(--blue);}
+#nav button .ico{font-size:22px;}
+.vw{display:none;}
+.vw.on{display:block;}
 
 /* modal */
-.modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; align-items:center; justify-content:center;}
-.modal-box{background:#fff; border-radius:14px; padding:22px; max-width:340px; width:90%;}
-.modal-title{font-size:15px; font-weight:800; margin-bottom:12px;}
-.modal-select{width:100%; padding:10px; border-radius:8px; border:1.5px solid var(--line); font-size:14px; background:var(--bg); margin-bottom:14px;}
-.modal-actions{display:flex; gap:8px; justify-content:flex-end;}
-
-@media(max-width:500px){
-  .page-header{flex-direction:column; align-items:flex-start;}
-  .chart-tabs{overflow-x:auto; white-space:nowrap;}
-  .chart-tab{padding:7px 12px; font-size:12px;}
-}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:60;align-items:center;justify-content:center;}
+.mb{background:#fff;border-radius:18px;padding:24px;max-width:320px;width:88%;}
+.mb h3{font-size:17px;font-weight:800;margin-bottom:14px;}
+.mb select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:16px;margin-bottom:16px;font-family:var(--font);background:var(--card2);}
+.mb .acts{display:flex;gap:8px;justify-content:flex-end;}
+.mb .acts button{padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);border:none;}
+.mb .acts .cancel{background:var(--card2);color:var(--t2);}
+.mb .acts .ok{background:var(--blue);color:#fff;}
+#errBanner{display:none;background:#fff0f0;border:1px solid #fecaca;color:var(--red);border-radius:12px;padding:12px;margin-bottom:12px;font-size:13px;}
+.empty{text-align:center;padding:28px;color:var(--t3);font-size:13px;}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<!-- Name modal -->
-<div class="modal-overlay" id="nameModalOverlay" style="align-items:center;justify-content:center;">
-  <div class="modal-box">
-    <div class="modal-title">👤 あなたの名前を選んでください</div>
-    <select class="modal-select" id="nameSelectInput"></select>
-    <div class="modal-actions">
-      <button class="btn" id="nameModalCancelBtn">キャンセル</button>
-      <button class="btn primary" id="nameModalSaveBtn">決定</button>
+<div class="ov" id="nameOv">
+  <div class="mb">
+    <h3>名前を選択</h3>
+    <select id="nameSel"></select>
+    <div class="acts">
+      <button class="cancel" id="nameCancel">キャンセル</button>
+      <button class="ok" id="nameOk">決定</button>
     </div>
   </div>
 </div>
 
-<!-- Header -->
-<div class="page-header">
-  <div class="left">
-    <div class="store">RINKAN 渋谷店</div>
-    <h1>個人タスク集計ツール</h1>
-    <div class="sub" id="todayLabel">読み込み中...</div>
+<div class="w">
+
+<div class="hd">
+  <div>
+    <h1>タスク集計</h1>
+    <div class="sub" id="dayLabel"></div>
   </div>
-  <button class="name-btn" id="staffNameBadge">👤 名前を設定</button>
+  <button class="pill" id="badge">👤 —</button>
+</div>
+<div id="errBanner"></div>
+
+<!-- ===== INPUT ===== -->
+<div class="vw on" id="vw-input">
+  <div class="c">
+    <div class="c-title">📅 日付</div>
+    <input type="date" id="inDate" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:16px;background:var(--card2);font-family:var(--font);">
+  </div>
+
+  <div class="c">
+    <div class="c-title">店頭タスク</div>
+    <div class="sg" id="sgStore"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📸 個人インスタ</div>
+    <div class="sg" id="sgInsta"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">🏢 公式インスタ</div>
+    <div class="sg" id="sgOff"></div>
+  </div>
+
+  <button class="save-btn" id="saveBtn">保存する</button>
+  <div class="save-tick" id="saveTick">✓ 保存しました</div>
 </div>
 
-<div id="errorBanner"></div>
-
-<!-- Input form -->
-<div class="card">
-  <div class="card-title"><span class="icon">✏️</span>今日の自分の数字を入力</div>
-  <div class="form-grid" style="margin-bottom:12px;">
-    <div class="field"><label>📅 日付</label><input type="date" id="inputDate"></div>
-  </div>
-
-  <div class="section-label sl-store">店頭タスク</div>
-  <div class="form-grid">
-    <div class="field"><label>アプローチ数</label><input type="number" min="0" id="inputApproach" placeholder="0"></div>
-    <div class="field"><label>接客人数</label><input type="number" min="0" id="inputService" placeholder="0"></div>
-    <div class="field"><label>新入荷取り置き数</label><input type="number" min="0" id="inputHold" placeholder="0"></div>
-    <div class="field"><label>古物取得数</label><input type="number" min="0" id="inputKobutsu" placeholder="0"></div>
-    <div class="field"><label>連絡先取得数</label><input type="number" min="0" id="inputContact" placeholder="0"></div>
-    <div class="field"><label>買取概算回答数</label><input type="number" min="0" id="inputKaitori" placeholder="0"></div>
-  </div>
-
-  <hr class="section-divider">
-  <div class="section-label sl-insta">📸 個人インスタ</div>
-  <div class="form-grid">
-    <div class="field pink"><label>当日DM件数</label><input type="number" min="0" id="inputInstaDM" placeholder="0"></div>
-    <div class="field pink"><label>販売問い合わせ件数</label><input type="number" min="0" id="inputInstaInquirySales" placeholder="0"></div>
-    <div class="field pink"><label>買取問い合わせ件数</label><input type="number" min="0" id="inputInstaInquiryBuy" placeholder="0"></div>
-    <div class="field pink"><label>販売 客数</label><input type="number" min="0" id="inputInstaSaleClients" placeholder="0"></div>
-    <div class="field pink"><label>販売 点数</label><input type="number" min="0" id="inputInstaSaleItems" placeholder="0"></div>
-    <div class="field pink"><label>販売 金額（円）</label><input type="number" min="0" id="inputInstaSaleAmount" placeholder="0"></div>
-    <div class="field pink"><label>買取 客数</label><input type="number" min="0" id="inputInstaBuyClients" placeholder="0"></div>
-    <div class="field pink"><label>買取 点数</label><input type="number" min="0" id="inputInstaBuyItems" placeholder="0"></div>
-  </div>
-
-  <hr class="section-divider">
-  <div class="section-label sl-official">🏢 公式インスタ</div>
-  <div class="form-grid">
-    <div class="field blue"><label>当日DM件数</label><input type="number" min="0" id="inputOffInstaDM" placeholder="0"></div>
-    <div class="field blue"><label>販売問い合わせ件数</label><input type="number" min="0" id="inputOffInstaInquirySales" placeholder="0"></div>
-    <div class="field blue"><label>買取問い合わせ件数</label><input type="number" min="0" id="inputOffInstaInquiryBuy" placeholder="0"></div>
-    <div class="field blue"><label>販売 客数</label><input type="number" min="0" id="inputOffInstaSaleClients" placeholder="0"></div>
-    <div class="field blue"><label>販売 点数</label><input type="number" min="0" id="inputOffInstaSaleItems" placeholder="0"></div>
-    <div class="field blue"><label>販売 金額（円）</label><input type="number" min="0" id="inputOffInstaSaleAmount" placeholder="0"></div>
-    <div class="field blue"><label>買取 客数</label><input type="number" min="0" id="inputOffInstaBuyClients" placeholder="0"></div>
-    <div class="field blue"><label>買取 点数</label><input type="number" min="0" id="inputOffInstaBuyItems" placeholder="0"></div>
-  </div>
-
-  <div class="save-row">
-    <button class="btn primary" id="submitBtn">保存する</button>
-    <span class="save-tick" id="saveStatus">✓ 保存しました</span>
-  </div>
-  <p style="font-size:11px;color:var(--text-light);margin-top:10px;">同じ日付・同じ名前で再保存すると上書きされます（入力し直しOK）</p>
-</div>
-
-<!-- Today status -->
-<div class="card">
-  <div class="card-title"><span class="icon">📊</span><span id="todayTitle">本日の入力状況</span>
-    <button class="btn sm" id="refreshBtn" style="margin-left:auto;">🔄 更新</button>
-  </div>
-  <div class="totals-grid" id="todayTotals"></div>
-  <div class="table-wrap">
-    <table id="todayTable">
-      <thead>
-        <tr>
-          <th rowspan="2">担当者</th>
-          <th colspan="6">店頭タスク</th>
-          <th colspan="8" class="pink">📸 個人インスタ</th>
-          <th colspan="8" class="blue">🏢 公式インスタ</th>
-        </tr>
-        <tr>
-          <th>アプローチ</th><th>接客</th><th>新入荷取置</th><th>古物取得</th><th>連絡先</th><th>買取概算</th>
-          <th class="pink">DM</th><th class="pink">販売問合</th><th class="pink">買取問合</th>
-          <th class="pink">販売客</th><th class="pink">販売点</th><th class="pink">販売金額</th><th class="pink">買取客</th><th class="pink">買取点</th>
-          <th class="blue">DM</th><th class="blue">販売問合</th><th class="blue">買取問合</th>
-          <th class="blue">販売客</th><th class="blue">販売点</th><th class="blue">販売金額</th><th class="blue">買取客</th><th class="blue">買取点</th>
-        </tr>
-      </thead>
-      <tbody id="todayTbody"></tbody>
-    </table>
+<!-- ===== TODAY ===== -->
+<div class="vw" id="vw-today">
+  <div class="c">
+    <div class="c-title" id="todayTitle">本日の入力状況</div>
+    <div class="chip-row" id="chips"></div>
+    <div class="today-scroll"><table><thead><tr>
+      <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
+      <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th>
+      <th style="color:var(--blue);">DM</th><th style="color:var(--blue);">販問</th><th style="color:var(--blue);">買問</th><th style="color:var(--blue);">販客</th><th style="color:var(--blue);">販点</th><th style="color:var(--blue);">販額</th><th style="color:var(--blue);">買客</th><th style="color:var(--blue);">買点</th>
+    </tr></thead><tbody id="tBody"></tbody></table></div>
   </div>
 </div>
 
-<!-- Charts -->
-<div class="card">
-  <div class="card-title"><span class="icon">📈</span>推移グラフ</div>
-  <div class="chart-tabs">
-    <div class="chart-tab active" onclick="switchChartTab('store')">店頭タスク</div>
-    <div class="chart-tab pink" onclick="switchChartTab('insta')">📸 個人インスタ</div>
-    <div class="chart-tab purple" onclick="switchChartTab('official')">🏢 公式インスタ</div>
-  </div>
-
-  <!-- store -->
-  <div class="chart-panel active" id="panel-store">
-    <div class="chart-toolbar">
-      <select id="storeMetricSelect">
-        <option value="approach">アプローチ数</option>
-        <option value="service">接客人数</option>
-        <option value="hold">新入荷取り置き数</option>
-        <option value="kobutsu">古物取得数</option>
-        <option value="contact">連絡先取得数</option>
-        <option value="kaitori">買取概算回答数</option>
-      </select>
-      <select id="storeRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
-      <select id="storeMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+<!-- ===== CHARTS ===== -->
+<div class="vw" id="vw-chart">
+  <div class="c">
+    <div class="ctabs">
+      <button class="ctab on" data-ct="store">店頭</button>
+      <button class="ctab" data-ct="insta">📸 個人</button>
+      <button class="ctab" data-ct="off">🏢 公式</button>
     </div>
-    <canvas id="storeTrendChart" height="110"></canvas>
-  </div>
-
-  <!-- insta -->
-  <div class="chart-panel" id="panel-insta">
-    <div class="chart-toolbar">
-      <select id="instaMetricSelect">
-        <option value="instaDM">DM件数</option>
-        <option value="instaInquirySales">販売問い合わせ</option>
-        <option value="instaInquiryBuy">買取問い合わせ</option>
-        <option value="instaSaleClients">販売 客数</option>
-        <option value="instaSaleItems">販売 点数</option>
-        <option value="instaSaleAmount">販売 金額</option>
-        <option value="instaBuyClients">買取 客数</option>
-        <option value="instaBuyItems">買取 点数</option>
-      </select>
-      <select id="instaRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
-      <select id="instaMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+    <div class="cpanel on" id="cp-store">
+      <div class="toolbar">
+        <select id="mStore"><option value="approach">アプローチ</option><option value="service">接客</option><option value="hold">取り置き</option><option value="kobutsu">古物取得</option><option value="contact">連絡先</option><option value="kaitori">買取概算</option></select>
+        <select id="rStore"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
+        <select id="dStore"><option value="total">全体</option><option value="staff">担当者別</option></select>
+      </div>
+      <canvas id="chStore" height="140"></canvas>
     </div>
-    <canvas id="instaTrendChart" height="110"></canvas>
-  </div>
-
-  <!-- official -->
-  <div class="chart-panel" id="panel-official">
-    <div class="chart-toolbar">
-      <select id="offMetricSelect">
-        <option value="offInstaDM">DM件数</option>
-        <option value="offInstaInquirySales">販売問い合わせ</option>
-        <option value="offInstaInquiryBuy">買取問い合わせ</option>
-        <option value="offInstaSaleClients">販売 客数</option>
-        <option value="offInstaSaleItems">販売 点数</option>
-        <option value="offInstaSaleAmount">販売 金額</option>
-        <option value="offInstaBuyClients">買取 客数</option>
-        <option value="offInstaBuyItems">買取 点数</option>
-      </select>
-      <select id="offRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
-      <select id="offMode"><option value="total">全体合計</option><option value="byStaff">担当者別</option></select>
+    <div class="cpanel" id="cp-insta">
+      <div class="toolbar">
+        <select id="mInsta"><option value="instaDM">DM</option><option value="instaInquirySales">販売問合</option><option value="instaInquiryBuy">買取問合</option><option value="instaSaleClients">販売客数</option><option value="instaSaleItems">販売点数</option><option value="instaSaleAmount">販売金額</option><option value="instaBuyClients">買取客数</option><option value="instaBuyItems">買取点数</option></select>
+        <select id="rInsta"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
+        <select id="dInsta"><option value="total">全体</option><option value="staff">担当者別</option></select>
+      </div>
+      <canvas id="chInsta" height="140"></canvas>
     </div>
-    <canvas id="offTrendChart" height="110"></canvas>
+    <div class="cpanel" id="cp-off">
+      <div class="toolbar">
+        <select id="mOff"><option value="offInstaDM">DM</option><option value="offInstaInquirySales">販売問合</option><option value="offInstaInquiryBuy">買取問合</option><option value="offInstaSaleClients">販売客数</option><option value="offInstaSaleItems">販売点数</option><option value="offInstaSaleAmount">販売金額</option><option value="offInstaBuyClients">買取客数</option><option value="offInstaBuyItems">買取点数</option></select>
+        <select id="rOff"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
+        <select id="dOff"><option value="total">全体</option><option value="staff">担当者別</option></select>
+      </div>
+      <canvas id="chOff" height="140"></canvas>
+    </div>
+  </div>
+  <div class="c">
+    <div class="c-title">🏆 ランキング</div>
+    <div class="toolbar">
+      <select id="rkM"><optgroup label="店頭"><option value="approach">アプローチ</option><option value="service">接客</option></optgroup><optgroup label="個人インスタ"><option value="instaSaleAmount">個人販売金額</option></optgroup><optgroup label="公式インスタ"><option value="offInstaSaleAmount">公式販売金額</option></optgroup></select>
+      <select id="rkR"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
+    </div>
+    <canvas id="chRank" height="140"></canvas>
   </div>
 </div>
 
-<!-- Ranking -->
-<div class="card">
-  <div class="card-title"><span class="icon">🏆</span>期間合計ランキング</div>
-  <div class="chart-toolbar">
-    <select id="rankMetricSelect">
-      <optgroup label="店頭タスク">
-        <option value="approach">アプローチ数</option><option value="service">接客人数</option>
-        <option value="hold">新入荷取置</option><option value="kobutsu">古物取得</option>
-        <option value="contact">連絡先取得</option><option value="kaitori">買取概算</option>
-      </optgroup>
-      <optgroup label="📸 個人インスタ">
-        <option value="instaDM">個人DM</option><option value="instaInquirySales">個人販売問合</option>
-        <option value="instaSaleAmount">個人販売金額</option><option value="instaBuyClients">個人買取客数</option>
-      </optgroup>
-      <optgroup label="🏢 公式インスタ">
-        <option value="offInstaDM">公式DM</option><option value="offInstaInquirySales">公式販売問合</option>
-        <option value="offInstaSaleAmount">公式販売金額</option><option value="offInstaBuyClients">公式買取客数</option>
-      </optgroup>
-    </select>
-    <select id="rankRange"><option value="14">直近14日</option><option value="30">直近30日</option><option value="90">直近90日</option></select>
-  </div>
-  <canvas id="rankChart" height="120"></canvas>
 </div>
 
-</div><!-- /wrap -->
+<div id="nav">
+  <button class="on" data-v="input"><span class="ico">✏️</span>入力</button>
+  <button data-v="today"><span class="ico">📋</span>本日</button>
+  <button data-v="chart"><span class="ico">📈</span>推移</button>
+</div>
+
 <script>
-const GH_OWNER="2002ogariku-design", GH_REPO="yoyaku";
-const GH_PATH="shibuya-tk/kpi-data.json";
+const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/kpi-data.json";
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
-const GH_TOKEN_KEY="tk-gh-token", STAFFNAME_KEY="tk-staffname";
+const TK="tk-gh-token",SK="tk-staffname";
+const STAFF=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"];
+const AMT=new Set(["instaSaleAmount","offInstaSaleAmount"]);
+const COLORS=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
 
-const STAFF_ROSTER=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"];
-const AMOUNT_KEYS=new Set(["instaSaleAmount","offInstaSaleAmount"]);
-const CHART_COLORS=["#2563eb","#db2777","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#65a30d"];
+Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
 
-function getGhToken(){
-  let t=null; try{t=localStorage.getItem(GH_TOKEN_KEY);}catch(e){}
-  if(!t){t=window.prompt("共有用のアクセスキーを入力してください");if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}}
-  return t;
-}
-function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
-function setStaffName(n){try{localStorage.setItem(STAFFNAME_KEY,n);}catch(e){}}
-function updateStaffBadge(){document.getElementById("staffNameBadge").textContent=getStaffName()?`👤 ${getStaffName()}`:"👤 名前を設定";}
-function showError(msg){const el=document.getElementById("errorBanner");el.style.display="block";el.textContent=msg;}
-function clearError(){document.getElementById("errorBanner").style.display="none";}
-function escapeHtml(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
-function fmtAmt(k,v){return AMOUNT_KEYS.has(k)?`¥${Number(v||0).toLocaleString("ja-JP")}`:String(v||0);}
-function utf8ToB64(str){return btoa(unescape(encodeURIComponent(str)));}
-function b64ToUtf8(b64){return decodeURIComponent(escape(atob(b64.replace(/\n/g,""))));}
+const STORE_FIELDS=[
+  {key:"approach",label:"アプローチ",color:""},
+  {key:"service",label:"接客",color:""},
+  {key:"hold",label:"新入荷取置",color:""},
+  {key:"kobutsu",label:"古物取得",color:""},
+  {key:"contact",label:"連絡先取得",color:""},
+  {key:"kaitori",label:"買取概算",color:""},
+];
+const INSTA_FIELDS=[
+  {key:"instaDM",label:"DM件数",color:"pink"},
+  {key:"instaInquirySales",label:"販売問合",color:"pink"},
+  {key:"instaInquiryBuy",label:"買取問合",color:"pink"},
+  {key:"instaSaleClients",label:"販売 客数",color:"orange"},
+  {key:"instaSaleItems",label:"販売 点数",color:"orange"},
+  {key:"instaSaleAmount",label:"販売 金額",color:"orange",isAmt:true},
+  {key:"instaBuyClients",label:"買取 客数",color:"green"},
+  {key:"instaBuyItems",label:"買取 点数",color:"green"},
+];
+const OFF_FIELDS=[
+  {key:"offInstaDM",label:"DM件数",color:"teal"},
+  {key:"offInstaInquirySales",label:"販売問合",color:"teal"},
+  {key:"offInstaInquiryBuy",label:"買取問合",color:"teal"},
+  {key:"offInstaSaleClients",label:"販売 客数",color:"purple"},
+  {key:"offInstaSaleItems",label:"販売 点数",color:"purple"},
+  {key:"offInstaSaleAmount",label:"販売 金額",color:"purple",isAmt:true},
+  {key:"offInstaBuyClients",label:"買取 客数",color:"green"},
+  {key:"offInstaBuyItems",label:"買取 点数",color:"green"},
+];
+const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...OFF_FIELDS];
+
+function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力してください");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
+function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
+function setName(n){try{localStorage.setItem(SK,n)}catch(e){}}
+function updBadge(){document.getElementById("badge").textContent=getName()?`👤 ${getName()}`:"👤 名前を設定";}
+function err(m){const el=document.getElementById("errBanner");el.style.display="block";el.textContent=m;}
+function clrErr(){document.getElementById("errBanner").style.display="none";}
+function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function nf(n){return Number(n||0).toLocaleString("ja-JP");}
+function u2b(s){return btoa(unescape(encodeURIComponent(s)))}
+function b2u(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))))}
+function dl(days){const t=new Date(),r=[];for(let i=days-1;i>=0;i--){const d=new Date(t);d.setDate(d.getDate()-i);r.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);}return r;}
 
 // name modal
-function openNameModal(force){
-  const sel=document.getElementById("nameSelectInput");
-  sel.innerHTML=STAFF_ROSTER.map(n=>`<option value="${n}">${n}</option>`).join("");
-  const cur=getStaffName(); if(cur&&STAFF_ROSTER.includes(cur)) sel.value=cur;
-  document.getElementById("nameModalCancelBtn").style.display=force?"none":"";
-  document.getElementById("nameModalOverlay").style.display="flex";
+function openName(force){
+  document.getElementById("nameSel").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");
+  const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSel").value=c;
+  document.getElementById("nameCancel").style.display=force?"none":"";
+  document.getElementById("nameOv").style.display="flex";
 }
-function closeNameModal(){document.getElementById("nameModalOverlay").style.display="none";}
-function ensureStaffModal(force){
-  return new Promise(resolve=>{
-    if(getStaffName()&&!force){resolve(getStaffName());return;}
-    openNameModal(force);
-    const btn=document.getElementById("nameModalSaveBtn");
-    const h=()=>{
-      const v=document.getElementById("nameSelectInput").value;
-      setStaffName(v); updateStaffBadge(); closeNameModal();
-      document.getElementById("nameModalCancelBtn").style.display="";
-      btn.removeEventListener("click",h); resolve(v);
-    };
-    btn.addEventListener("click",h);
+function closeName(){document.getElementById("nameOv").style.display="none";}
+function ensureName(force){
+  return new Promise(r=>{
+    if(getName()&&!force){r(getName());return;}
+    openName(force);
+    const b=document.getElementById("nameOk");
+    const h=()=>{setName(document.getElementById("nameSel").value);updBadge();closeName();b.removeEventListener("click",h);r(getName());};
+    b.addEventListener("click",h);
   });
 }
 
-// GH helpers
-let ghSha=null;
-let records=[];
-
+// GH
+let ghSha=null, records=[];
 async function ghGet(){
-  const token=getGhToken(); if(!token) return [];
-  const res=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
-  if(res.status===404){ghSha=null;return [];}
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  const data=await res.json(); ghSha=data.sha;
-  const text=b64ToUtf8(data.content); return text?JSON.parse(text):[];
+  const t=getToken();if(!t)return[];
+  const r=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
+  if(r.status===401){try{localStorage.removeItem(TK)}catch(e){}const nt=prompt("キーが無効です。新しいキーを入力：");if(nt){try{localStorage.setItem(TK,nt.trim())}catch(e){}}return ghGet();}
+  if(r.status===404){ghSha=null;return[];}
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const d=await r.json();ghSha=d.sha;return JSON.parse(b2u(d.content)||"[]");
 }
-
 async function ghSet(arr){
-  const token=getGhToken(); if(!token) throw new Error("アクセスキー未設定");
-  for(let attempt=0;attempt<4;attempt++){
-    // Always re-fetch SHA before every attempt
-    try{
-      const head=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
-      if(head.ok){ghSha=(await head.json()).sha;}else if(head.status===404){ghSha=null;}
-    }catch(e){}
-    const body={message:"update kpi "+new Date().toISOString(),content:utf8ToB64(JSON.stringify(arr))};
-    if(ghSha) body.sha=ghSha;
-    const res=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(res.ok){const d=await res.json();ghSha=d.content.sha;return;}
-    if(res.status===409&&attempt<3){await new Promise(r=>setTimeout(r,500+attempt*500));continue;}
-    throw new Error(`保存失敗 HTTP ${res.status}`);
+  const t=getToken();if(!t)throw new Error("キー未設定");
+  for(let a=0;a<4;a++){
+    try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}
+    const body={message:"kpi "+new Date().toISOString(),content:u2b(JSON.stringify(arr))};
+    if(ghSha)body.sha=ghSha;
+    const r=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(r.ok){ghSha=(await r.json()).content.sha;return;}
+    if(r.status===409&&a<3){await new Promise(r=>setTimeout(r,500+a*500));continue;}
+    throw new Error("保存失敗 "+r.status);
   }
 }
 
-async function loadRecords(){
-  try{records=await ghGet()||[];}
-  catch(e){showError("データ読み込み失敗："+e.message);records=[];}
+// stepper values
+const vals={};
+ALL_FIELDS.forEach(f=>vals[f.key]=0);
+
+function buildSteppers(containerId, fields){
+  const el=document.getElementById(containerId);
+  el.innerHTML=fields.map(f=>{
+    if(f.isAmt) return `<div class="si ${f.color}">
+      <div class="label">${f.label}</div>
+      <div class="val" id="v_${f.key}">¥0</div>
+      <input type="number" class="amt-input" id="amt_${f.key}" placeholder="金額を入力" min="0" value="">
+    </div>`;
+    return `<div class="si ${f.color}">
+      <div class="label">${f.label}</div>
+      <div class="val" id="v_${f.key}">0</div>
+      <div class="btns">
+        <button class="minus" data-k="${f.key}" data-d="-1">−</button>
+        <button class="plus" data-k="${f.key}" data-d="1">＋</button>
+      </div>
+    </div>`;
+  }).join("");
+  // bind steppers
+  el.querySelectorAll("button[data-k]").forEach(b=>{
+    const tap=()=>{
+      const k=b.dataset.k, d=Number(b.dataset.d);
+      vals[k]=Math.max(0,vals[k]+d);
+      document.getElementById("v_"+k).textContent=vals[k];
+    };
+    b.addEventListener("click",tap);
+    // long press for rapid increment
+    let iv;
+    b.addEventListener("pointerdown",()=>{iv=setInterval(tap,150);});
+    b.addEventListener("pointerup",()=>clearInterval(iv));
+    b.addEventListener("pointerleave",()=>clearInterval(iv));
+  });
+  // bind amount inputs
+  el.querySelectorAll(".amt-input").forEach(inp=>{
+    const k=inp.id.replace("amt_","");
+    inp.addEventListener("input",()=>{
+      vals[k]=Number(inp.value)||0;
+      document.getElementById("v_"+k).textContent="¥"+nf(vals[k]);
+    });
+  });
 }
 
-// get all field ids
-const FIELD_IDS=[
-  "inputApproach","inputService","inputHold","inputKobutsu","inputContact","inputKaitori",
-  "inputInstaDM","inputInstaInquirySales","inputInstaInquiryBuy","inputInstaSaleClients","inputInstaSaleItems","inputInstaSaleAmount","inputInstaBuyClients","inputInstaBuyItems",
-  "inputOffInstaDM","inputOffInstaInquirySales","inputOffInstaInquiryBuy","inputOffInstaSaleClients","inputOffInstaSaleItems","inputOffInstaSaleAmount","inputOffInstaBuyClients","inputOffInstaBuyItems"
-];
-const FIELD_KEYS=[
-  "approach","service","hold","kobutsu","contact","kaitori",
-  "instaDM","instaInquirySales","instaInquiryBuy","instaSaleClients","instaSaleItems","instaSaleAmount","instaBuyClients","instaBuyItems",
-  "offInstaDM","offInstaInquirySales","offInstaInquiryBuy","offInstaSaleClients","offInstaSaleItems","offInstaSaleAmount","offInstaBuyClients","offInstaBuyItems"
-];
+// nav
+document.querySelectorAll("#nav button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));
+    document.getElementById("vw-"+b.dataset.v).classList.add("on");
+    if(b.dataset.v==="today")renderToday();
+    if(b.dataset.v==="chart")renderCharts();
+  });
+});
+document.querySelectorAll(".ctab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".ctab").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.querySelectorAll(".cpanel").forEach(p=>p.classList.remove("on"));
+    document.getElementById("cp-"+b.dataset.ct).classList.add("on");
+  });
+});
 
-async function saveTodayEntry(){
-  const name=await ensureStaffModal(false); if(!name) return;
-  const date=document.getElementById("inputDate").value||todayStr();
+// save
+async function doSave(){
+  const name=await ensureName(false);if(!name)return;
+  const date=document.getElementById("inDate").value||today();
   const entry={date, staff:name, savedAt:new Date().toISOString()};
-  FIELD_IDS.forEach((id,i)=>{entry[FIELD_KEYS[i]]=Number(document.getElementById(id).value)||0;});
-  clearError();
-  const btn=document.getElementById("submitBtn");
+  ALL_FIELDS.forEach(f=>{entry[f.key]=vals[f.key];});
+  clrErr();
+  const btn=document.getElementById("saveBtn");
   btn.textContent="保存中...";btn.disabled=true;
   try{
-    // Fetch latest, merge, save
     const latest=await ghGet()||[];
     const idx=latest.findIndex(r=>r.date===entry.date&&r.staff===entry.staff);
-    if(idx>=0) latest[idx]=entry; else latest.push(entry);
+    if(idx>=0)latest[idx]=entry;else latest.push(entry);
     records=latest;
     await ghSet(records);
-    // Verify save succeeded by re-fetching
     records=await ghGet()||[];
     const saved=records.find(r=>r.date===entry.date&&r.staff===entry.staff);
-    if(!saved) throw new Error("保存を確認できませんでした。もう一度お試しください。");
-    const el=document.getElementById("saveStatus");
-    el.style.opacity="1"; setTimeout(()=>{el.style.opacity="0";},2500);
-    FIELD_IDS.forEach(id=>{document.getElementById(id).value="";});
-    renderToday(); renderAllCharts();
-  }catch(e){console.error(e);showError("保存失敗："+e.message);}
+    if(!saved)throw new Error("保存確認失敗");
+    const t=document.getElementById("saveTick");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+    ALL_FIELDS.forEach(f=>{vals[f.key]=0;document.getElementById("v_"+f.key).textContent=f.isAmt?"¥0":"0";});
+    document.querySelectorAll(".amt-input").forEach(i=>i.value="");
+  }catch(e){console.error(e);err("保存失敗："+e.message);}
   finally{btn.textContent="保存する";btn.disabled=false;}
 }
 
+// today
 function renderToday(){
-  const date=document.getElementById("inputDate").value||todayStr();
-  document.getElementById("todayTitle").textContent=`本日の入力状況（${date}）`;
-  const todays=records.filter(r=>r.date===date);
-  const tbody=document.getElementById("todayTbody");
-
-  if(!todays.length){
-    tbody.innerHTML=`<tr><td colspan="23" style="color:var(--text-light);padding:20px;text-align:center;">まだ誰も入力していません</td></tr>`;
-    document.getElementById("todayTotals").innerHTML="";
-    return;
-  }
-
-  tbody.innerHTML=todays.map(r=>`<tr>
-    <td class="staff">${escapeHtml(r.staff)}</td>
-    <td class="num">${r.approach||0}</td><td class="num">${r.service||0}</td><td class="num">${r.hold||0}</td><td class="num">${r.kobutsu||0}</td><td class="num">${r.contact||0}</td><td class="num">${r.kaitori||0}</td>
-    <td class="num">${r.instaDM||0}</td><td class="num">${r.instaInquirySales||0}</td><td class="num">${r.instaInquiryBuy||0}</td><td class="num">${r.instaSaleClients||0}</td><td class="num">${r.instaSaleItems||0}</td><td class="num">¥${(r.instaSaleAmount||0).toLocaleString()}</td><td class="num">${r.instaBuyClients||0}</td><td class="num">${r.instaBuyItems||0}</td>
-    <td class="num">${r.offInstaDM||0}</td><td class="num">${r.offInstaInquirySales||0}</td><td class="num">${r.offInstaInquiryBuy||0}</td><td class="num">${r.offInstaSaleClients||0}</td><td class="num">${r.offInstaSaleItems||0}</td><td class="num">¥${(r.offInstaSaleAmount||0).toLocaleString()}</td><td class="num">${r.offInstaBuyClients||0}</td><td class="num">${r.offInstaBuyItems||0}</td>
+  const date=document.getElementById("inDate").value||today();
+  document.getElementById("todayTitle").textContent=`入力状況（${date}）`;
+  const td=records.filter(r=>r.date===date);
+  const tb=document.getElementById("tBody");
+  if(!td.length){tb.innerHTML=`<tr><td colspan="23" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
+  tb.innerHTML=td.map(r=>`<tr>
+    <td class="name">${r.staff}</td>
+    ${STORE_FIELDS.map(f=>`<td>${r[f.key]||0}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(r[f.key]||0)}</td>`).join("")}
+    ${OFF_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(r[f.key]||0)}</td>`).join("")}
   </tr>`).join("");
-
-  const tot={};
-  FIELD_KEYS.forEach(k=>{tot[k]=todays.reduce((s,r)=>s+(r[k]||0),0);});
-  const storeKeys=FIELD_KEYS.slice(0,6);
-  const instaKeys=FIELD_KEYS.slice(6,14);
-  const offKeys=FIELD_KEYS.slice(14);
-  const STORE_LABELS=["アプローチ","接客","新入荷取置","古物","連絡先","買取概算"];
-  const INSTA_LABELS=["DM","販売問合","買取問合","販売客","販売点","販売金額","買取客","買取点"];
-  document.getElementById("todayTotals").innerHTML=
-    storeKeys.map((k,i)=>`<span class="total-chip store">${STORE_LABELS[i]} <b>${tot[k]}</b></span>`).join("")+
-    instaKeys.map((k,i)=>`<span class="total-chip insta">${INSTA_LABELS[i]} <b>${fmtAmt(k,tot[k])}</b></span>`).join("")+
-    offKeys.map((k,i)=>`<span class="total-chip official">${INSTA_LABELS[i]} <b>${fmtAmt(k,tot[k])}</b></span>`).join("");
+  const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=td.reduce((s,r)=>s+(r[f.key]||0),0);});
+  document.getElementById("chips").innerHTML=
+    STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("")+
+    OFF_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip bl">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
 }
 
 // charts
-let chartInstances={};
-function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
-
-function buildDateList(days){
-  const today=new Date(), list=[];
-  for(let i=days-1;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);list.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);}
-  return list;
-}
-
-function renderTrendChart(canvasId, metric, days, mode){
-  destroyChart(canvasId);
-  const dateList=buildDateList(days);
+let CH={};
+function kill(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+function trend(canvasId,metric,days,mode){
+  kill(canvasId);
+  const list=dl(days);
+  const isAmt=AMT.has(metric);
   let datasets;
   if(mode==="total"){
-    const data=dateList.map(d=>records.filter(r=>r.date===d).reduce((s,r)=>s+(r[metric]||0),0));
-    const isAmt=AMOUNT_KEYS.has(metric);
-    datasets=[{label:"全体合計",data,borderColor:CHART_COLORS[0],backgroundColor:"rgba(37,99,235,0.08)",fill:true,tension:0.3,pointRadius:3}];
+    datasets=[{label:"全体",data:list.map(d=>records.filter(r=>r.date===d).reduce((s,r)=>s+(r[metric]||0),0)),
+      borderColor:COLORS[0],backgroundColor:"rgba(0,122,255,.06)",fill:true,tension:.35,pointRadius:2}];
   }else{
-    const staffSet=[...new Set(records.map(r=>r.staff))];
-    datasets=staffSet.map((s,i)=>({
-      label:s,
-      data:dateList.map(d=>{const rec=records.find(r=>r.date===d&&r.staff===s);return rec?(rec[metric]||0):0;}),
-      borderColor:CHART_COLORS[i%CHART_COLORS.length],
-      backgroundColor:"transparent",tension:0.3,pointRadius:2
+    const staffs=[...new Set(records.map(r=>r.staff))];
+    datasets=staffs.map((s,i)=>({label:s,
+      data:list.map(d=>{const r=records.find(x=>x.date===d&&x.staff===s);return r?(r[metric]||0):0;}),
+      borderColor:COLORS[i%COLORS.length],backgroundColor:"transparent",tension:.35,pointRadius:1
     }));
   }
-  const isAmt=AMOUNT_KEYS.has(metric);
-  chartInstances[canvasId]=new Chart(document.getElementById(canvasId),{
-    type:"line",data:{labels:dateList.map(d=>d.slice(5)),datasets},
-    options:{responsive:true,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:14}}},
-      scales:{
-        y:{beginAtZero:true,ticks:{precision:0,callback:isAmt?v=>"¥"+v.toLocaleString():v=>v}},
-        x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}
-      }
-    }
+  CH[canvasId]=new Chart(document.getElementById(canvasId),{type:"line",data:{labels:list.map(d=>d.slice(5)),datasets},
+    options:{responsive:true,plugins:{legend:{display:mode==="staff",labels:{font:{size:10},boxWidth:10}}},
+      scales:{y:{beginAtZero:true,ticks:{precision:0,callback:isAmt?v=>"¥"+nf(v):v=>v}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}
   });
 }
-
-function renderRankChart(){
-  destroyChart("rankChart");
-  const metric=document.getElementById("rankMetricSelect").value;
-  const days=Number(document.getElementById("rankRange").value);
-  const dateList=buildDateList(days);
-  const tot={};
-  records.filter(r=>dateList.includes(r.date)).forEach(r=>{tot[r.staff]=(tot[r.staff]||0)+(r[metric]||0);});
+function renderRank(){
+  kill("chRank");
+  const m=document.getElementById("rkM").value,days=Number(document.getElementById("rkR").value);
+  const list=dl(days);
+  const tot={};records.filter(r=>list.includes(r.date)).forEach(r=>{tot[r.staff]=(tot[r.staff]||0)+(r[m]||0);});
   const sorted=Object.entries(tot).sort((a,b)=>b[1]-a[1]);
-  const isAmt=AMOUNT_KEYS.has(metric);
-  chartInstances["rankChart"]=new Chart(document.getElementById("rankChart"),{
-    type:"bar",
-    data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:CHART_COLORS,borderRadius:6}]},
-    options:{responsive:true,indexAxis:"y",plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:ctx=>isAmt?"¥"+ctx.raw.toLocaleString():ctx.raw}}},
-      scales:{x:{beginAtZero:true,ticks:{precision:0,callback:isAmt?v=>"¥"+v.toLocaleString():v=>v}}}
-    }
+  const isAmt=AMT.has(m);
+  CH["chRank"]=new Chart(document.getElementById("chRank"),{type:"bar",
+    data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS,borderRadius:6}]},
+    options:{responsive:true,indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{callback:isAmt?v=>"¥"+nf(v):v=>v}}}}
   });
 }
-
-function renderAllCharts(){
-  renderTrendChart("storeTrendChart",document.getElementById("storeMetricSelect").value,Number(document.getElementById("storeRange").value),document.getElementById("storeMode").value);
-  renderTrendChart("instaTrendChart",document.getElementById("instaMetricSelect").value,Number(document.getElementById("instaRange").value),document.getElementById("instaMode").value);
-  renderTrendChart("offTrendChart",document.getElementById("offMetricSelect").value,Number(document.getElementById("offRange").value),document.getElementById("offMode").value);
-  renderRankChart();
-}
-
-let currentChartTab="store";
-function switchChartTab(tab){
-  currentChartTab=tab;
-  document.querySelectorAll(".chart-tab").forEach((el,i)=>{
-    const tabs=["store","insta","official"];
-    el.classList.toggle("active",tabs[i]===tab);
-  });
-  document.querySelectorAll(".chart-panel").forEach(el=>el.classList.remove("active"));
-  document.getElementById(`panel-${tab}`).classList.add("active");
+function renderCharts(){
+  trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value);
+  trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value);
+  trend("chOff",document.getElementById("mOff").value,Number(document.getElementById("rOff").value),document.getElementById("dOff").value);
+  renderRank();
 }
 
 // event bindings
-document.getElementById("staffNameBadge").addEventListener("click",()=>openNameModal(false));
-document.getElementById("nameModalCancelBtn").addEventListener("click",closeNameModal);
-document.getElementById("nameModalSaveBtn").addEventListener("click",()=>{
-  const v=document.getElementById("nameSelectInput").value;
-  setStaffName(v); updateStaffBadge(); closeNameModal();
-});
-document.getElementById("submitBtn").addEventListener("click",saveTodayEntry);
-document.getElementById("refreshBtn").addEventListener("click",async()=>{
-  await loadRecords(); renderToday(); renderAllCharts();
-});
-document.getElementById("inputDate").addEventListener("change",renderToday);
-["storeMetricSelect","storeRange","storeMode"].forEach(id=>{
-  document.getElementById(id).addEventListener("change",()=>renderTrendChart("storeTrendChart",document.getElementById("storeMetricSelect").value,Number(document.getElementById("storeRange").value),document.getElementById("storeMode").value));
-});
-["instaMetricSelect","instaRange","instaMode"].forEach(id=>{
-  document.getElementById(id).addEventListener("change",()=>renderTrendChart("instaTrendChart",document.getElementById("instaMetricSelect").value,Number(document.getElementById("instaRange").value),document.getElementById("instaMode").value));
-});
-["offMetricSelect","offRange","offMode"].forEach(id=>{
-  document.getElementById(id).addEventListener("change",()=>renderTrendChart("offTrendChart",document.getElementById("offMetricSelect").value,Number(document.getElementById("offRange").value),document.getElementById("offMode").value));
-});
-["rankMetricSelect","rankRange"].forEach(id=>{
-  document.getElementById(id).addEventListener("change",renderRankChart);
-});
+document.getElementById("badge").addEventListener("click",()=>openName(false));
+document.getElementById("nameCancel").addEventListener("click",closeName);
+document.getElementById("saveBtn").addEventListener("click",doSave);
+["mStore","rStore","dStore"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value)));
+["mInsta","rInsta","dInsta"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value)));
+["mOff","rOff","dOff"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chOff",document.getElementById("mOff").value,Number(document.getElementById("rOff").value),document.getElementById("dOff").value)));
+["rkM","rkR"].forEach(id=>document.getElementById(id).addEventListener("change",renderRank));
 
 (async function init(){
-  document.getElementById("todayLabel").textContent="本日："+new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
-  document.getElementById("inputDate").value=todayStr();
-  updateStaffBadge();
-  await ensureStaffModal(true);
-  await loadRecords();
+  document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
+  document.getElementById("inDate").value=today();
+  updBadge();
+  buildSteppers("sgStore",STORE_FIELDS);
+  buildSteppers("sgInsta",INSTA_FIELDS);
+  buildSteppers("sgOff",OFF_FIELDS);
+  await ensureName(true);
+  try{records=await ghGet()||[];}catch(e){err("読み込み失敗："+e.message);}
   renderToday();
-  renderAllCharts();
+  renderCharts();
 })();
 </script>
 </body>
