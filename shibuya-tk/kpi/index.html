@@ -180,6 +180,31 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- ===== MONTHLY ===== -->
+<div class="vw" id="vw-month">
+  <div class="c">
+    <div class="c-title">📅 月別集計</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+      <button class="pill" id="monthPrev" style="padding:8px 14px;">◀</button>
+      <span id="monthLabel" style="font-size:18px;font-weight:800;flex:1;text-align:center;"></span>
+      <button class="pill" id="monthNext" style="padding:8px 14px;">▶</button>
+    </div>
+    <div class="chip-row" id="monthChips"></div>
+    <div class="today-scroll"><table>
+      <thead><tr>
+        <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
+        <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th>
+      </tr></thead>
+      <tbody id="monthBody"></tbody>
+      <tfoot id="monthFoot"></tfoot>
+    </table></div>
+    <div style="margin-top:14px;">
+      <div class="c-title">日別推移（選択月）</div>
+      <canvas id="chMonth" height="140"></canvas>
+    </div>
+  </div>
+</div>
+
 <!-- ===== CHARTS ===== -->
 <div class="vw" id="vw-chart">
   <div class="c">
@@ -220,6 +245,7 @@ tr:last-child td{border-bottom:none;}
 <div id="nav">
   <button class="on" data-v="input"><span class="ico">✏️</span>入力</button>
   <button data-v="today"><span class="ico">📋</span>本日</button>
+  <button data-v="month"><span class="ico">📅</span>月別</button>
   <button data-v="chart"><span class="ico">📈</span>推移</button>
 </div>
 
@@ -359,6 +385,7 @@ document.querySelectorAll("#nav button").forEach(b=>{
     document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));
     document.getElementById("vw-"+b.dataset.v).classList.add("on");
     if(b.dataset.v==="today")renderToday();
+    if(b.dataset.v==="month")renderMonth();
     if(b.dataset.v==="chart")renderCharts();
   });
 });
@@ -463,6 +490,68 @@ document.getElementById("saveBtn").addEventListener("click",doSave);
 ["mStore","rStore","dStore"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value)));
 ["mInsta","rInsta","dInsta"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value)));
 ["rkM","rkR"].forEach(id=>document.getElementById(id).addEventListener("change",renderRank));
+
+// ===== MONTHLY =====
+let currentMonth=new Date();
+function monthStr(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
+function monthRecords(){
+  const m=monthStr(currentMonth);
+  return records.filter(r=>r.date&&r.date.startsWith(m));
+}
+function renderMonth(){
+  const m=monthStr(currentMonth);
+  document.getElementById("monthLabel").textContent=`${currentMonth.getFullYear()}年${currentMonth.getMonth()+1}月`;
+  const mr=monthRecords();
+  const staffMap={};
+  mr.forEach(r=>{
+    if(!staffMap[r.staff])staffMap[r.staff]={};
+    ALL_FIELDS.forEach(f=>{staffMap[r.staff][f.key]=(staffMap[r.staff][f.key]||0)+(r[f.key]||0);});
+  });
+  const entries=Object.entries(staffMap).sort((a,b)=>{
+    const sa=STORE_FIELDS.reduce((s,f)=>s+(a[1][f.key]||0),0);
+    const sb=STORE_FIELDS.reduce((s,f)=>s+(b[1][f.key]||0),0);
+    return sb-sa;
+  });
+  const tb=document.getElementById("monthBody");
+  if(!entries.length){
+    tb.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
+    document.getElementById("monthFoot").innerHTML="";
+    document.getElementById("monthChips").innerHTML="";
+    kill("chMonth");
+    return;
+  }
+  tb.innerHTML=entries.map(([name,v])=>`<tr>
+    <td class="name">${name}</td>
+    ${STORE_FIELDS.map(f=>`<td>${v[f.key]||0}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(v[f.key]||0):(v[f.key]||0)}</td>`).join("")}
+  </tr>`).join("");
+  // totals row
+  const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=entries.reduce((s,[,v])=>s+(v[f.key]||0),0);});
+  document.getElementById("monthFoot").innerHTML=`<tr style="font-weight:800;border-top:2px solid var(--line);">
+    <td>合計</td>
+    ${STORE_FIELDS.map(f=>`<td>${tot[f.key]}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</td>`).join("")}
+  </tr>`;
+  document.getElementById("monthChips").innerHTML=`<span class="kchip">入力日数 <b>${new Set(mr.map(r=>r.date)).size}</b>日</span>`+
+    `<span class="kchip">入力人数 <b>${entries.length}</b>名</span>`+
+    STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
+
+  // daily chart for the month
+  kill("chMonth");
+  const year=currentMonth.getFullYear(),mon=currentMonth.getMonth();
+  const daysInMonth=new Date(year,mon+1,0).getDate();
+  const dayLabels=[];for(let d=1;d<=daysInMonth;d++)dayLabels.push(`${mon+1}/${d}`);
+  const dayDates=[];for(let d=1;d<=daysInMonth;d++)dayDates.push(`${year}-${String(mon+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+  const metric=STORE_FIELDS[0].key; // approach as default
+  const dayData=dayDates.map(d=>records.filter(r=>r.date===d).reduce((s,r)=>s+(r[metric]||0),0));
+  CH["chMonth"]=new Chart(document.getElementById("chMonth"),{type:"bar",
+    data:{labels:dayLabels,datasets:[{label:STORE_FIELDS[0].label,data:dayData,backgroundColor:"rgba(0,122,255,.25)",borderColor:COLORS[0],borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:15}}}}
+  });
+}
+document.getElementById("monthPrev").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()-1,1);renderMonth();});
+document.getElementById("monthNext").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()+1,1);renderMonth();});
 
 (async function init(){
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
