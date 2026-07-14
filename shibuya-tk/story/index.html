@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>公式インスタ分析｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
@@ -230,12 +231,12 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
         <input type="file" id="photoIn" accept="image/*" style="display:none;">
       </div>
       <div>
-        <div class="f"><label>値札写真（参考用に表示）</label></div>
+        <div class="f"><label>🏷️ 値札を撮影して自動入力</label></div>
         <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:20px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;transition:border-color .15s;">
-          🏷️ タップして選択
+          🏷️ 値札をタップして撮影
         </div>
-        <input type="file" id="tagIn" accept="image/*" style="display:none;">
-        <img id="tagPreview" style="display:none;width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);">
+        <input type="file" id="tagIn" accept="image/*" capture="environment" style="display:none;">
+        <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:8px;font-weight:600;">読み取り中...</div>
       </div>
     </div>
     <div class="fg">
@@ -381,33 +382,95 @@ const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 // photo drop
 const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
 pd.addEventListener("click",()=>pi.click());
-pi.addEventListener("change",e=>{if(e.target.files[0])loadImg(e.target.files[0],"photo");pi.value="";});
+pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0]);pi.value="";});
 ["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
 ["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
-pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImg(f,"photo");});
+pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
 
-// tag drop
-const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
-td2.addEventListener("click",()=>ti.click());
-ti.addEventListener("change",e=>{if(e.target.files[0])loadImg(e.target.files[0],"tag");ti.value="";});
-["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
-["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
-td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImg(f,"tag");});
-
-function loadImg(file,type){
+function loadPhoto(file){
   const fr=new FileReader();
   fr.onload=e=>{
-    if(type==="tag"){
-      document.getElementById("tagPreview").src=e.target.result;
-      document.getElementById("tagPreview").style.display="block";
-      td2.innerHTML="🏷️ 選択済み ✓";
-      return;
-    }
     const img=new Image();
     img.onload=()=>{photoImg=img;pd.innerHTML="📷 選択済み ✓";drawStory();};
     img.src=e.target.result;
   };
   fr.readAsDataURL(file);
+}
+
+// tag OCR
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files[0])ocrTag(e.target.files[0]);ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)ocrTag(f);});
+
+async function ocrTag(file){
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🔍 値札を読み取り中...";
+  td2.innerHTML="🏷️ 読み取り中...";
+  try{
+    const result=await Tesseract.recognize(file,"jpn+eng",{logger:m=>{
+      if(m.status==="recognizing text")status.textContent=`🔍 読み取り中... ${Math.round(m.progress*100)}%`;
+    }});
+    const text=result.data.text;
+    console.log("OCR result:",text);
+    extractFromOCR(text);
+    td2.innerHTML="🏷️ 読み取り完了 ✓";
+    status.textContent="✓ 自動入力しました（確認してください）";
+    status.style.color="var(--green)";
+    setTimeout(()=>{status.style.display="none";status.style.color="var(--blue)";},3000);
+  }catch(e){
+    console.error("OCR error:",e);
+    td2.innerHTML="🏷️ 読み取り失敗（タップして再試行）";
+    status.textContent="読み取りに失敗しました";
+    status.style.color="var(--red)";
+    setTimeout(()=>{status.style.display="none";status.style.color="var(--blue)";},3000);
+  }
+}
+
+function extractFromOCR(text){
+  const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  const allText=lines.join(" ");
+
+  // Price: find largest number (likely the price)
+  const nums=allText.match(/[\d,]+/g)||[];
+  const prices=nums.map(n=>Number(n.replace(/,/g,""))).filter(n=>n>=1000).sort((a,b)=>b-a);
+  if(prices.length){
+    const p=prices[0];
+    // If looks like tax-excluded (common round numbers ending in 000), multiply by 1.1
+    const isTaxEx=(p%1000===0||p%100===0)&&!allText.includes("税込")&&!allText.includes("tax");
+    const taxIn=isTaxEx?Math.round(p*1.1):p;
+    document.getElementById("sPrice").value=String(taxIn);
+  }
+
+  // Rank: look for S/A/B/C/D rank patterns
+  const rankMatch=allText.match(/(?:RANK|ランク|状態)[:\s：]*([SABCD])/i)||
+                   allText.match(/\b([SABCD])\s*(?:ランク|rank)/i)||
+                   allText.match(/(?:^|\s)([SABCD])(?:\s|$)/);
+  if(rankMatch) document.getElementById("sRank").value=rankMatch[1].toUpperCase();
+
+  // Size: look for size patterns
+  const sizeMatch=allText.match(/(?:SIZE|サイズ|size)[:\s：]*([A-Z0-9]+)/i)||
+                   allText.match(/\b(XXS|XS|S|M|L|XL|XXL|XXXL|FREE|F|\d{1,2})\b/i);
+  if(sizeMatch){
+    const sz=sizeMatch[1].toUpperCase();
+    if(!["A","B","C","D"].includes(sz)) document.getElementById("sSize").value=sz;
+  }
+
+  // Brand: first line or known brand pattern
+  const BRANDS=["CHROME HEARTS","SUPREME","ROLEX","BALENCIAGA","LOUIS VUITTON","HERMES","DIOR","GUCCI","PRADA","CELINE","SAINT LAURENT","THE ROW","LEMAIRE","VETEMENTS","RICK OWENS","MARGIELA","ACNE","MONCLER","BURBERRY"];
+  const upperText=allText.toUpperCase();
+  for(const b of BRANDS){
+    if(upperText.includes(b)){document.getElementById("sBrand").value=b;break;}
+  }
+  // If no brand found, try first line as brand
+  if(!document.getElementById("sBrand").value && lines[0] && lines[0].length<30){
+    document.getElementById("sBrand").value=lines[0].replace(/[^a-zA-Zａ-ｚＡ-Ｚぁ-ヶ一-龥\s]/g,"").trim();
+  }
+
+  drawStory();
 }
 
 function drawStory(){
