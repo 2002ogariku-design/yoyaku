@@ -500,10 +500,13 @@ td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)ocrTag(f);}
 async function ocrTag(file){
   const status=document.getElementById("ocrStatus");
   status.style.display="block";
-  status.textContent="🔍 値札を読み取り中...";
-  td2.innerHTML="🏷️ 読み取り中...";
+  status.textContent="🔍 画像を処理中...";
+  td2.innerHTML="🏷️ 処理中...";
   try{
-    const result=await Tesseract.recognize(file,"jpn+eng",{logger:m=>{
+    // Pre-process image for better OCR accuracy
+    const processedBlob = await preprocessImage(file);
+    status.textContent="🔍 値札を読み取り中...";
+    const result=await Tesseract.recognize(processedBlob,"eng",{logger:m=>{
       if(m.status==="recognizing text")status.textContent=`🔍 読み取り中... ${Math.round(m.progress*100)}%`;
     }});
     const text=result.data.text;
@@ -522,75 +525,133 @@ async function ocrTag(file){
   }
 }
 
+function preprocessImage(file){
+  return new Promise((resolve)=>{
+    const fr=new FileReader();
+    fr.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        // Create large canvas for better OCR resolution
+        const scale=Math.max(1, 2000/Math.max(img.width,img.height));
+        const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+        const c=document.createElement("canvas");
+        c.width=w; c.height=h;
+        const ctx=c.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
+        
+        // Get pixel data
+        const imageData=ctx.getImageData(0,0,w,h);
+        const d=imageData.data;
+        
+        // Convert to grayscale + high contrast + binarize
+        for(let i=0;i<d.length;i+=4){
+          // Grayscale
+          let gray=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+          // Increase contrast
+          gray=((gray/255-0.5)*2.0+0.5)*255;
+          gray=Math.max(0,Math.min(255,gray));
+          // Binarize with threshold
+          const bw=gray>140?255:0;
+          d[i]=bw; d[i+1]=bw; d[i+2]=bw;
+        }
+        ctx.putImageData(imageData,0,0);
+        
+        c.toBlob(blob=>resolve(blob),"image/png");
+      };
+      img.src=e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
 function extractFromOCR(text){
-  const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  const lines=text.split(/\n/).map(l=>l.trim()).filter(l=>l.length>0);
   const allText=lines.join(" ");
   console.log("OCR lines:", lines);
 
-  // Brand: first meaningful line (uppercase English, no numbers/special chars)
-  for(const line of lines){
-    const clean=line.replace(/[^a-zA-Z\s]/g,"").trim();
-    if(clean.length>=2 && clean.length<30 && /^[A-Z\s]+$/.test(clean)){
-      document.getElementById("sBrand").value=clean;
-      break;
+  // Reset fields
+  document.getElementById("sBrand").value="";
+  document.getElementById("sSize").value="";
+  document.getElementById("sRank").value="";
+  document.getElementById("sPrice").value="";
+
+  // === BRAND: first line that is mostly uppercase English letters ===
+  const KNOWN_BRANDS=["CHROME HEARTS","SUPREME","ROLEX","BALENCIAGA","LOUIS VUITTON","HERMES","DIOR","GUCCI","PRADA","CELINE","SAINT LAURENT","THE ROW","LEMAIRE","VETEMENTS","RICK OWENS","MARGIELA","ACNE STUDIOS","MONCLER","BURBERRY","AMIRI","CARTIER","TIFFANY","VAN CLEEF","CHANEL","FENDI","BOTTEGA","GIVENCHY","VALENTINO","LOEWE","BVLGARI","OMEGA","PATEK","AUDEMARS"];
+  // Try known brands first
+  const upperAll=allText.toUpperCase();
+  let brandFound=false;
+  for(const b of KNOWN_BRANDS){
+    if(upperAll.includes(b)){document.getElementById("sBrand").value=b;brandFound=true;break;}
+  }
+  // If not found, use first line that looks like a brand name
+  if(!brandFound){
+    for(const line of lines){
+      const clean=line.replace(/[^a-zA-Z\s&']/g,"").trim().toUpperCase();
+      if(clean.length>=2 && clean.length<35 && /^[A-Z\s&']+$/.test(clean) && !/RANK|SEASON|MODEL|NONE|SIZE/i.test(clean)){
+        document.getElementById("sBrand").value=clean;
+        break;
+      }
     }
   }
 
-  // RANK: look for RANK:X or RANK X pattern
-  const rankMatch=allText.match(/RANK\s*[:\uff1a]\s*([SABCD])/i);
+  // === RANK: RANK:X pattern ===
+  const rankMatch=allText.match(/RANK\s*[:\uff1a\.]\s*([SABCD])/i)||allText.match(/RANK([SABCD])/i);
   if(rankMatch) document.getElementById("sRank").value=rankMatch[1].toUpperCase();
 
-  // Size: number or letter near RANK line (before RANK on same line, or line above)
-  // RINKAN tags show size on a line like "54" or "M" just above "RANK:B"
+  // === SIZE: find the size value near RANK ===
+  // RINKAN tags: size is on a line before or same line as RANK
+  let sizeFound=false;
   for(let i=0;i<lines.length;i++){
     if(/RANK/i.test(lines[i])){
-      // Check same line for size before RANK
-      const beforeRank=lines[i].replace(/RANK\s*[:\uff1a]\s*[SABCD].*/i,"").trim();
-      if(beforeRank && /^[A-Z0-9]{1,5}$/i.test(beforeRank)){
-        document.getElementById("sSize").value=beforeRank;
-        break;
+      // Same line: extract what's before RANK
+      const parts=lines[i].split(/RANK/i);
+      if(parts[0]){
+        const sz=parts[0].replace(/[^a-zA-Z0-9]/g,"").trim();
+        if(sz && sz.length<=5 && /^[A-Z0-9]+$/i.test(sz)){
+          document.getElementById("sSize").value=sz.toUpperCase();
+          sizeFound=true;break;
+        }
       }
-      // Check previous line
-      if(i>0){
-        const prev=lines[i-1].replace(/[^a-zA-Z0-9]/g,"").trim();
-        if(prev && /^[A-Z0-9]{1,5}$/i.test(prev) && !/RANK|SEASON|MODEL/i.test(prev)){
-          document.getElementById("sSize").value=prev;
-          break;
+      // Previous line
+      if(!sizeFound && i>0){
+        const prevLine=lines[i-1].replace(/[^a-zA-Z0-9]/g,"").trim();
+        if(prevLine && prevLine.length<=5 && /^[A-Z0-9]+$/i.test(prevLine) && !/RANK|SEASON|MODEL/i.test(prevLine)){
+          // Make sure it's not the brand (brand is usually longer)
+          if(prevLine!==document.getElementById("sBrand").value){
+            document.getElementById("sSize").value=prevLine.toUpperCase();
+            sizeFound=true;break;
+          }
         }
       }
     }
   }
-  // Fallback: look for common size patterns
-  if(!document.getElementById("sSize").value){
-    const sizeMatch=allText.match(/\b(XXS|XS|XXL|XL|FREE|F|\d{2,3})\b(?!\s*[-,])/i);
-    if(sizeMatch && !/^\d{4,}$/.test(sizeMatch[1])){
-      document.getElementById("sSize").value=sizeMatch[1].toUpperCase();
+  // Fallback: look for standalone size-like values
+  if(!sizeFound){
+    const sizeMatch=allText.match(/\b(XXS|XS|XXL|XL|XXXL|FREE|ONE SIZE|[SMLF]|[1-9]\d{0,2})\b/i);
+    if(sizeMatch){
+      const sz=sizeMatch[1].toUpperCase();
+      if(sz!==document.getElementById("sBrand").value && !["A","B","C","D","NONE"].includes(sz)){
+        document.getElementById("sSize").value=sz;
+      }
     }
   }
 
-  // Price: find ¥ amounts - the TAX-INCLUDED price is the larger one
-  const priceMatches=[...allText.matchAll(/[¥￥]\s*([\d,]+)/g)];
+  // === PRICE: find ¥ amounts, largest = tax-included ===
+  const priceMatches=[...allText.matchAll(/[¥￥]\s*([\d,.\s]+)/g)];
   if(priceMatches.length){
-    const prices=priceMatches.map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=100).sort((a,b)=>b-a);
+    const prices=priceMatches.map(m=>{
+      const numStr=m[1].replace(/[,\s]/g,"").replace(/\..*$/,"");
+      return Number(numStr);
+    }).filter(n=>n>=100&&n<100000000).sort((a,b)=>b-a);
     if(prices.length){
-      // Largest ¥ value = tax-included price
       document.getElementById("sPrice").value=String(prices[0]);
     }
-  } else {
-    // No ¥ symbol found, try plain large numbers
-    const nums=allText.match(/[\d,]{4,}/g)||[];
-    const prices=nums.map(n=>Number(n.replace(/,/g,""))).filter(n=>n>=1000&&n<100000000).sort((a,b)=>b-a);
-    if(prices.length){
-      const p=prices[0];
-      // Check if exc.tax is mentioned nearby
-      const hasExcTax=/exc\.?\s*tax|税抜/i.test(allText);
-      const hasTaxIn=/税込|tax\s*in/i.test(allText);
-      if(hasExcTax && !hasTaxIn){
-        document.getElementById("sPrice").value=String(Math.round(p*1.1));
-      } else {
-        document.getElementById("sPrice").value=String(p);
-      }
-    }
+  }
+  // Fallback: look for large numbers if no ¥ found
+  if(!document.getElementById("sPrice").value){
+    const nums=[...allText.matchAll(/([\d,]{5,})/g)];
+    const prices=nums.map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000).sort((a,b)=>b-a);
+    if(prices.length) document.getElementById("sPrice").value=String(prices[0]);
   }
 
   drawStory();
