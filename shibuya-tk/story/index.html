@@ -525,41 +525,72 @@ async function ocrTag(file){
 function extractFromOCR(text){
   const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
   const allText=lines.join(" ");
+  console.log("OCR lines:", lines);
 
-  // Price: find largest number (likely the price)
-  const nums=allText.match(/[\d,]+/g)||[];
-  const prices=nums.map(n=>Number(n.replace(/,/g,""))).filter(n=>n>=1000).sort((a,b)=>b-a);
-  if(prices.length){
-    const p=prices[0];
-    // If looks like tax-excluded (common round numbers ending in 000), multiply by 1.1
-    const isTaxEx=(p%1000===0||p%100===0)&&!allText.includes("税込")&&!allText.includes("tax");
-    const taxIn=isTaxEx?Math.round(p*1.1):p;
-    document.getElementById("sPrice").value=String(taxIn);
+  // Brand: first meaningful line (uppercase English, no numbers/special chars)
+  for(const line of lines){
+    const clean=line.replace(/[^a-zA-Z\s]/g,"").trim();
+    if(clean.length>=2 && clean.length<30 && /^[A-Z\s]+$/.test(clean)){
+      document.getElementById("sBrand").value=clean;
+      break;
+    }
   }
 
-  // Rank: look for S/A/B/C/D rank patterns
-  const rankMatch=allText.match(/(?:RANK|ランク|状態)[:\s：]*([SABCD])/i)||
-                   allText.match(/\b([SABCD])\s*(?:ランク|rank)/i)||
-                   allText.match(/(?:^|\s)([SABCD])(?:\s|$)/);
+  // RANK: look for RANK:X or RANK X pattern
+  const rankMatch=allText.match(/RANK\s*[:\uff1a]\s*([SABCD])/i);
   if(rankMatch) document.getElementById("sRank").value=rankMatch[1].toUpperCase();
 
-  // Size: look for size patterns
-  const sizeMatch=allText.match(/(?:SIZE|サイズ|size)[:\s：]*([A-Z0-9]+)/i)||
-                   allText.match(/\b(XXS|XS|S|M|L|XL|XXL|XXXL|FREE|F|\d{1,2})\b/i);
-  if(sizeMatch){
-    const sz=sizeMatch[1].toUpperCase();
-    if(!["A","B","C","D"].includes(sz)) document.getElementById("sSize").value=sz;
+  // Size: number or letter near RANK line (before RANK on same line, or line above)
+  // RINKAN tags show size on a line like "54" or "M" just above "RANK:B"
+  for(let i=0;i<lines.length;i++){
+    if(/RANK/i.test(lines[i])){
+      // Check same line for size before RANK
+      const beforeRank=lines[i].replace(/RANK\s*[:\uff1a]\s*[SABCD].*/i,"").trim();
+      if(beforeRank && /^[A-Z0-9]{1,5}$/i.test(beforeRank)){
+        document.getElementById("sSize").value=beforeRank;
+        break;
+      }
+      // Check previous line
+      if(i>0){
+        const prev=lines[i-1].replace(/[^a-zA-Z0-9]/g,"").trim();
+        if(prev && /^[A-Z0-9]{1,5}$/i.test(prev) && !/RANK|SEASON|MODEL/i.test(prev)){
+          document.getElementById("sSize").value=prev;
+          break;
+        }
+      }
+    }
+  }
+  // Fallback: look for common size patterns
+  if(!document.getElementById("sSize").value){
+    const sizeMatch=allText.match(/\b(XXS|XS|XXL|XL|FREE|F|\d{2,3})\b(?!\s*[-,])/i);
+    if(sizeMatch && !/^\d{4,}$/.test(sizeMatch[1])){
+      document.getElementById("sSize").value=sizeMatch[1].toUpperCase();
+    }
   }
 
-  // Brand: first line or known brand pattern
-  const BRANDS=["CHROME HEARTS","SUPREME","ROLEX","BALENCIAGA","LOUIS VUITTON","HERMES","DIOR","GUCCI","PRADA","CELINE","SAINT LAURENT","THE ROW","LEMAIRE","VETEMENTS","RICK OWENS","MARGIELA","ACNE","MONCLER","BURBERRY"];
-  const upperText=allText.toUpperCase();
-  for(const b of BRANDS){
-    if(upperText.includes(b)){document.getElementById("sBrand").value=b;break;}
-  }
-  // If no brand found, try first line as brand
-  if(!document.getElementById("sBrand").value && lines[0] && lines[0].length<30){
-    document.getElementById("sBrand").value=lines[0].replace(/[^a-zA-Zａ-ｚＡ-Ｚぁ-ヶ一-龥\s]/g,"").trim();
+  // Price: find ¥ amounts - the TAX-INCLUDED price is the larger one
+  const priceMatches=[...allText.matchAll(/[¥￥]\s*([\d,]+)/g)];
+  if(priceMatches.length){
+    const prices=priceMatches.map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=100).sort((a,b)=>b-a);
+    if(prices.length){
+      // Largest ¥ value = tax-included price
+      document.getElementById("sPrice").value=String(prices[0]);
+    }
+  } else {
+    // No ¥ symbol found, try plain large numbers
+    const nums=allText.match(/[\d,]{4,}/g)||[];
+    const prices=nums.map(n=>Number(n.replace(/,/g,""))).filter(n=>n>=1000&&n<100000000).sort((a,b)=>b-a);
+    if(prices.length){
+      const p=prices[0];
+      // Check if exc.tax is mentioned nearby
+      const hasExcTax=/exc\.?\s*tax|税抜/i.test(allText);
+      const hasTaxIn=/税込|tax\s*in/i.test(allText);
+      if(hasExcTax && !hasTaxIn){
+        document.getElementById("sPrice").value=String(Math.round(p*1.1));
+      } else {
+        document.getElementById("sPrice").value=String(p);
+      }
+    }
   }
 
   drawStory();
