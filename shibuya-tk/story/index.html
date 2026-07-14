@@ -218,6 +218,26 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
   <div class="c"><div class="c-title">日次インサイト履歴</div><div id="insList"></div></div>
 </div>
 
+<!-- MONTHLY -->
+<div class="vw" id="vw-month">
+  <div class="c">
+    <div class="c-title">📅 月別集計</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+      <button class="pill" id="imPrev" style="padding:8px 14px;">◀</button>
+      <span id="imLabel" style="font-size:18px;font-weight:800;flex:1;text-align:center;"></span>
+      <button class="pill" id="imNext" style="padding:8px 14px;">▶</button>
+    </div>
+    <div class="kgrid" id="imKpis"></div>
+    <div class="c-title" style="margin-top:14px;">日次インサイト推移</div>
+    <canvas id="chImFol" height="120"></canvas>
+    <div style="margin-top:14px;"><canvas id="chImReach" height="120"></canvas></div>
+    <div style="margin-top:14px;"><canvas id="chImSales" height="120"></canvas></div>
+    <div class="c-title" style="margin-top:14px;">投稿実績</div>
+    <div class="chip-row" id="imPostChips"></div>
+    <div id="imPostList"></div>
+  </div>
+</div>
+
 <!-- STORY CREATION -->
 <div class="vw" id="vw-story">
   <div class="c">
@@ -269,6 +289,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
 <div id="nav">
   <button class="on" data-v="dash"><span class="ico">📊</span>分析</button>
   <button data-v="rec"><span class="ico">✏️</span>記録</button>
+  <button data-v="month"><span class="ico">📅</span>月別</button>
   <button data-v="story"><span class="ico">📸</span>作成</button>
   <button data-v="list"><span class="ico">📋</span>一覧</button>
 </div>
@@ -302,7 +323,7 @@ async function ghGet(){const t=getToken();if(!t)return DB;const r=await fetch(`$
 async function ghSet(db){const t=getToken();if(!t)throw new Error("キー未設定");for(let a=0;a<4;a++){try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}const body={message:"insta "+new Date().toISOString(),content:u2b(JSON.stringify(db))};if(ghSha)body.sha=ghSha;const r=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});if(r.ok){ghSha=(await r.json()).content.sha;return;}if(r.status===409&&a<3){await new Promise(r=>setTimeout(r,500+a*500));continue;}throw new Error("保存失敗 "+r.status);}}
 
 // nav
-document.querySelectorAll("#nav button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));document.getElementById("vw-"+b.dataset.v).classList.add("on");if(b.dataset.v==="dash")renderDash();});});
+document.querySelectorAll("#nav button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));document.getElementById("vw-"+b.dataset.v).classList.add("on");if(b.dataset.v==="dash")renderDash();if(b.dataset.v==="month")renderImMonth();});});
 document.querySelectorAll("#recSeg button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#recSeg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.getElementById("fInsight").style.display=b.dataset.m==="insight"?"":"none";document.getElementById("fPost").style.display=b.dataset.m==="post"?"":"none";});});
 document.querySelectorAll(".ctab").forEach(b=>{b.addEventListener("click",()=>{b.closest(".c").querySelectorAll(".ctab").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".c").querySelectorAll(".cpanel").forEach(p=>p.classList.remove("on"));document.getElementById("ap-"+b.dataset.ap).classList.add("on");});});
 
@@ -373,6 +394,77 @@ document.getElementById("nameCancel").addEventListener("click",closeName);
 document.getElementById("refreshBtn").addEventListener("click",async()=>{try{DB=await ghGet();updBrandDl();renderDash();renderPosts();renderInsights();}catch(e){err(e.message);}});
 document.getElementById("folR").addEventListener("change",()=>{renderFolChart();renderReachChart();renderSalesChart();});
 ["qS","qC"].forEach(id=>document.getElementById(id).addEventListener(id==="qS"?"input":"change",renderPosts));
+
+// ===== MONTHLY =====
+let imMonth=new Date();
+function imMonthStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
+function renderImMonth(){
+  const m=imMonthStr(imMonth);
+  document.getElementById("imLabel").textContent=`${imMonth.getFullYear()}年${imMonth.getMonth()+1}月`;
+  const ins=DB.insights.filter(i=>i.date&&i.date.startsWith(m));
+  const posts=DB.posts.filter(p=>p.date&&p.date.startsWith(m));
+
+  // KPIs for the month
+  const folStart=ins.length?ins[0].followers:0;
+  const folEnd=ins.length?ins[ins.length-1].followers:0;
+  const folDiff=folEnd-folStart;
+  const reachTotal=ins.reduce((s,i)=>s+i.reach,0);
+  const profTotal=ins.reduce((s,i)=>s+i.profileVisits,0);
+  const dmTotal=ins.reduce((s,i)=>s+i.dm,0);
+  const saleTotal=ins.reduce((s,i)=>s+(i.saleAmount||0),0);
+  const buyTotal=ins.reduce((s,i)=>s+(i.buyAmount||0),0);
+  const inqPosts=posts.filter(p=>p.inquiry&&p.inquiry!=="なし").length;
+
+  document.getElementById("imKpis").innerHTML=`
+    <div class="kcard"><div class="kn">${nf(folEnd)}</div><div class="kl">フォロワー（月末）</div></div>
+    <div class="kcard"><div class="kn" style="color:${folDiff>=0?"var(--green)":"var(--red)"};">${folDiff>=0?"+":""}${nf(folDiff)}</div><div class="kl">フォロワー増減</div></div>
+    <div class="kcard"><div class="kn">${nf(reachTotal)}</div><div class="kl">リーチ合計</div></div>
+    <div class="kcard"><div class="kn">${nf(profTotal)}</div><div class="kl">プロフ訪問合計</div></div>
+    <div class="kcard"><div class="kn">${nf(dmTotal)}</div><div class="kl">DM合計</div></div>
+    <div class="kcard"><div class="kn">${posts.length}</div><div class="kl">投稿数</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--green);">¥${nf(saleTotal)}</div><div class="kl">販売金額</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--blue);">¥${nf(buyTotal)}</div><div class="kl">買取金額</div></div>
+  `;
+
+  // daily charts
+  const year=imMonth.getFullYear(),mon=imMonth.getMonth();
+  const daysInMonth=new Date(year,mon+1,0).getDate();
+  const dayDates=[];for(let d=1;d<=daysInMonth;d++)dayDates.push(`${year}-${String(mon+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+  const dayLabels=dayDates.map(d=>d.slice(8));
+  const insMap={};ins.forEach(i=>insMap[i.date]=i);
+
+  kill("chImFol");
+  let lastFol=null;
+  CH["chImFol"]=new Chart(document.getElementById("chImFol"),{type:"line",
+    data:{labels:dayLabels,datasets:[{label:"フォロワー",data:dayDates.map(d=>{if(insMap[d]){lastFol=insMap[d].followers;return lastFol;}return lastFol;}),borderColor:CC[0],backgroundColor:"rgba(0,122,255,.06)",fill:true,tension:.35,pointRadius:2,spanGaps:true}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  kill("chImReach");
+  CH["chImReach"]=new Chart(document.getElementById("chImReach"),{type:"bar",
+    data:{labels:dayLabels,datasets:[
+      {label:"リーチ",data:dayDates.map(d=>insMap[d]?insMap[d].reach:0),backgroundColor:"rgba(0,122,255,.25)",borderRadius:3},
+      {label:"プロフ訪問",data:dayDates.map(d=>insMap[d]?insMap[d].profileVisits:0),backgroundColor:"rgba(255,45,85,.2)",borderRadius:3}
+    ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  kill("chImSales");
+  CH["chImSales"]=new Chart(document.getElementById("chImSales"),{type:"bar",
+    data:{labels:dayLabels,datasets:[
+      {label:"販売金額",data:dayDates.map(d=>insMap[d]?(insMap[d].saleAmount||0):0),backgroundColor:"rgba(52,199,89,.25)",borderRadius:3},
+      {label:"買取金額",data:dayDates.map(d=>insMap[d]?(insMap[d].buyAmount||0):0),backgroundColor:"rgba(0,122,255,.2)",borderRadius:3}
+    ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  // post summary
+  const catMap={};posts.forEach(p=>{const c=p.category||"不明";catMap[c]=(catMap[c]||0)+1;});
+  document.getElementById("imPostChips").innerHTML=
+    `<span class="kchip">投稿数 <b>${posts.length}</b></span>`+
+    `<span class="kchip pk">問合あり <b>${inqPosts}</b></span>`+
+    Object.entries(catMap).map(([k,v])=>`<span class="kchip">${esc(k)} <b>${v}</b></span>`).join("");
+  document.getElementById("imPostList").innerHTML=posts.length?
+    posts.slice().reverse().slice(0,20).map(p=>`<div class="pi"><div class="top"><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><div class="chips"><span class="chip">${p.date}</span>${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div></div>`).join(""):
+    '<div class="empty">この月の投稿記録なし</div>';
+}
+document.getElementById("imPrev").addEventListener("click",()=>{imMonth=new Date(imMonth.getFullYear(),imMonth.getMonth()-1,1);renderImMonth();});
+document.getElementById("imNext").addEventListener("click",()=>{imMonth=new Date(imMonth.getFullYear(),imMonth.getMonth()+1,1);renderImMonth();});
 
 // ===== STORY CREATION =====
 let photoImg=null, storyArchive=[];
