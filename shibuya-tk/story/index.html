@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>公式インスタ分析｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
@@ -494,162 +493,116 @@ function loadPhoto(file){
   fr.readAsDataURL(file);
 }
 
-// tag OCR
-const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
-td2.addEventListener("click",()=>ti.click());
-ti.addEventListener("change",e=>{if(e.target.files[0])ocrTag(e.target.files[0]);ti.value="";});
-["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
-["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
-td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)ocrTag(f);});
-
-async function ocrTag(file){
-  const status=document.getElementById("ocrStatus");
-  status.style.display="block";
-  status.textContent="🔍 画像を処理中...";
-  td2.innerHTML="🏷️ 処理中...";
-
-  // Show tag photo as reference immediately
-  const fr2=new FileReader();
-  fr2.onload=e2=>{
-    document.getElementById("tagRefImg").src=e2.target.result;
-    document.getElementById("tagRefArea").style.display="block";
-  };
-  fr2.readAsDataURL(file);
-
-  try{
-    const img=await loadImageFromFile(file);
-    // Reset fields
-    document.getElementById("sBrand").value="";
-    document.getElementById("sSize").value="";
-    document.getElementById("sRank").value="";
-    document.getElementById("sPrice").value="";
-
-    // RINKAN tag layout: crop into regions for separate OCR
-    // Top-left ~50% width, ~25% height = Brand
-    // Left ~45% width, 25-50% height = Size + Rank  
-    // Right ~55% width, 25-65% height = Price
-    const regions=[
-      {name:"brand", x:0, y:0, w:0.50, h:0.30, whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ &'"},
-      {name:"sizerank", x:0, y:0.25, w:0.45, h:0.35, whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:. "},
-      {name:"price", x:0.40, y:0.20, w:0.60, h:0.45, whitelist:"0123456789¥,. excta"},
-    ];
-
-    status.textContent="🔍 ブランド名を読み取り中...";
-    for(const region of regions){
-      status.textContent=`🔍 ${region.name==="brand"?"ブランド名":region.name==="sizerank"?"サイズ・ランク":"価格"}を読み取り中...`;
-      const cropped=cropAndProcess(img, region.x, region.y, region.w, region.h);
-      const result=await Tesseract.recognize(cropped,"eng",{
-        tessedit_char_whitelist:region.whitelist,
-        tessedit_pageseg_mode:"6"
-      });
-      const text=result.data.text.trim();
-      console.log(`OCR [${region.name}]:`, text);
-
-      if(region.name==="brand") extractBrand(text);
-      if(region.name==="sizerank") extractSizeRank(text);
-      if(region.name==="price") extractPrice(text);
-    }
-
-    td2.innerHTML="🏷️ 読み取り完了 ✓";
-    status.textContent="✓ 自動入力しました（確認してください）";
-    status.style.color="var(--green)";
-    setTimeout(()=>{status.style.display="none";status.style.color="var(--blue)";},3000);
-    drawStory();
-  }catch(e){
-    console.error("OCR error:",e);
-    td2.innerHTML="🏷️ 読み取り失敗（タップして再試行）";
-    status.textContent="読み取りに失敗しました";
-    status.style.color="var(--red)";
-    setTimeout(()=>{status.style.display="none";status.style.color="var(--blue)";},3000);
+// tag OCR with Gemini Vision AI
+const GEMINI_KEY_LS="tk-gemini-key";
+function getGeminiKey(){
+  let k;try{k=localStorage.getItem(GEMINI_KEY_LS)}catch(e){}
+  if(!k){
+    k=prompt("AI読み取り機能を使うには Google Gemini APIキーが必要です。\n\n取得方法：\n1. https://aistudio.google.com/app/apikey を開く\n2. Googleアカウントでログイン\n3.「APIキーを作成」を押す\n4. コピーしてここに貼り付け\n\nAPIキーを入力：");
+    if(k){try{localStorage.setItem(GEMINI_KEY_LS,k.trim())}catch(e){}k=k.trim();}
   }
+  return k;
 }
 
-function loadImageFromFile(file){
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files[0])aiReadTag(e.target.files[0]);ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)aiReadTag(f);});
+
+async function aiReadTag(file){
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🤖 AI読み取り中...";
+  status.style.color="var(--blue)";
+  td2.innerHTML="🏷️ AI処理中...";
+
+  // Show tag photo as reference
+  const dataUrl=await fileToDataUrl(file);
+  document.getElementById("tagRefImg").src=dataUrl;
+  document.getElementById("tagRefArea").style.display="block";
+
+  const apiKey=getGeminiKey();
+  if(!apiKey){
+    status.textContent="APIキーが未設定です";status.style.color="var(--red)";
+    td2.innerHTML="🏷️ タップして再試行";
+    return;
+  }
+
+  try{
+    const base64=dataUrl.split(",")[1];
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        contents:[{parts:[
+          {inline_data:{mime_type:file.type||"image/jpeg",data:base64}},
+          {text:`この画像はRINKAN（高級リセールショップ）の値札です。以下の情報を正確に読み取ってJSON形式で返してください。余計な説明は不要です。JSONのみ返してください。
+
+{
+  "brand": "ブランド名（英語表記・値札の左上に記載）",
+  "size": "サイズ（数字またはS/M/Lなど）",
+  "rank": "状態ランク（S/A/B/C/Dのいずれか1文字）",
+  "price_tax_included": 税込価格の数値（カンマなし）
+}
+
+注意：
+- brandは値札に記載されている通りの英語表記で
+- priceは税込（大きく表示されている方の金額）を数値で
+- 読み取れない項目はnullにしてください`}
+        ]}]
+      })
+    });
+
+    if(!resp.ok){
+      const errData=await resp.json().catch(()=>({}));
+      if(resp.status===400||resp.status===403){
+        localStorage.removeItem(GEMINI_KEY_LS);
+        throw new Error("APIキーが無効です。再度入力してください。");
+      }
+      throw new Error("API Error: "+resp.status);
+    }
+
+    const data=await resp.json();
+    const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+    console.log("Gemini response:",text);
+
+    // Parse JSON from response
+    const jsonMatch=text.match(/\{[\s\S]*\}/);
+    if(!jsonMatch) throw new Error("AIからの応答を解析できませんでした");
+    const parsed=JSON.parse(jsonMatch[0]);
+
+    // Fill fields
+    if(parsed.brand) document.getElementById("sBrand").value=parsed.brand;
+    if(parsed.size) document.getElementById("sSize").value=String(parsed.size);
+    if(parsed.rank){
+      const r=parsed.rank.toUpperCase();
+      const sel=document.getElementById("sRank");
+      if([...sel.options].some(o=>o.value===r)) sel.value=r;
+    }
+    if(parsed.price_tax_included) document.getElementById("sPrice").value=String(parsed.price_tax_included);
+
+    td2.innerHTML="🏷️ AI読み取り完了 ✓";
+    status.textContent="✓ 自動入力しました（確認してください）";
+    status.style.color="var(--green)";
+    drawStory();
+  }catch(e){
+    console.error("AI read error:",e);
+    td2.innerHTML="🏷️ 読み取り失敗（タップして再試行）";
+    status.textContent="⚠ "+e.message;
+    status.style.color="var(--red)";
+  }
+  setTimeout(()=>{status.style.display="none";},4000);
+}
+
+function fileToDataUrl(file){
   return new Promise(resolve=>{
     const fr=new FileReader();
-    fr.onload=e=>{const img=new Image();img.onload=()=>resolve(img);img.src=e.target.result;};
+    fr.onload=e=>resolve(e.target.result);
     fr.readAsDataURL(file);
   });
 }
-
-function cropAndProcess(img, rx, ry, rw, rh){
-  const sx=Math.round(img.width*rx), sy=Math.round(img.height*ry);
-  const sw=Math.round(img.width*rw), sh=Math.round(img.height*rh);
-  // Scale up for better OCR
-  const scale=Math.max(1, 1200/Math.max(sw,sh));
-  const c=document.createElement("canvas");
-  c.width=Math.round(sw*scale); c.height=Math.round(sh*scale);
-  const ctx=c.getContext("2d");
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  // High contrast binarization
-  const imageData=ctx.getImageData(0,0,c.width,c.height);
-  const d=imageData.data;
-  for(let i=0;i<d.length;i+=4){
-    let gray=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-    gray=((gray/255-0.5)*2.5+0.5)*255;
-    const bw=gray>130?255:0;
-    d[i]=bw;d[i+1]=bw;d[i+2]=bw;
-  }
-  ctx.putImageData(imageData,0,0);
-  return c;
-}
-
-function extractBrand(text){
-  const lines=text.split(/\n/).map(l=>l.trim()).filter(l=>l.length>=2);
-  for(const line of lines){
-    let clean=line.replace(/[^A-Z\s&']/gi,"").trim().toUpperCase();
-    // Remove OCR noise like single chars
-    clean=clean.replace(/\b[^A-Z]\b/g,"").replace(/\s{2,}/g," ").trim();
-    if(clean.length>=2 && clean.length<40 && !/^(RANK|SEASON|MODEL|NONE|SIZE|BARCODE)/.test(clean)){
-      document.getElementById("sBrand").value=clean;
-      return;
-    }
-  }
-}
-
-function extractSizeRank(text){
-  const allText=text.replace(/\n/g," ");
-  // Rank
-  const rankMatch=allText.match(/RANK\s*[:\.\s]\s*([SABCD])/i)||allText.match(/RANK([SABCD])/i);
-  if(rankMatch){
-    const r=rankMatch[1].toUpperCase();
-    const sel=document.getElementById("sRank");
-    if([...sel.options].some(o=>o.value===r)) sel.value=r;
-  }
-  
-  // Size: anything that's NOT part of RANK pattern
-  const lines=text.split(/\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  for(const line of lines){
-    if(/RANK/i.test(line)) continue; // skip rank line
-    const clean=line.replace(/[^A-Z0-9]/gi,"").trim().toUpperCase();
-    if(clean && clean.length<=5 && /^[A-Z0-9]+$/.test(clean) && !["RANK","NONE","MODEL","SEASON"].includes(clean)){
-      document.getElementById("sSize").value=clean;
-      break;
-    }
-  }
-  // If size still empty, try extracting from same line as RANK (before RANK)
-  if(!document.getElementById("sSize").value){
-    for(const line of lines){
-      const m=line.match(/^([A-Z0-9]{1,5})\s*RANK/i);
-      if(m){document.getElementById("sSize").value=m[1].toUpperCase();break;}
-    }
-  }
-}
-
-function extractPrice(text){
-  const allText=text.replace(/\n/g," ");
-  const priceMatches=[...allText.matchAll(/[¥￥]\s*([\d,.\s]+)/g)];
-  if(priceMatches.length){
-    const prices=priceMatches.map(m=>Number(m[1].replace(/[,\s]/g,"").replace(/\..*$/,""))).filter(n=>n>=100&&n<100000000).sort((a,b)=>b-a);
-    if(prices.length){document.getElementById("sPrice").value=String(prices[0]);return;}
-  }
-  // Fallback: largest number
-  const nums=[...allText.matchAll(/([\d,]{4,})/g)];
-  const prices=nums.map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000).sort((a,b)=>b-a);
-  if(prices.length) document.getElementById("sPrice").value=String(prices[0]);
-}
-
-function preprocessImage(file){/* unused now */return file;}
 
 function drawStory(){
   const W=1080,H=1920;
