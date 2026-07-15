@@ -556,12 +556,17 @@ async function aiReadTag(file){
     });
 
     if(!resp.ok){
-      const errData=await resp.json().catch(()=>({}));
-      if(resp.status===400||resp.status===403){
+      const errText=await resp.text().catch(()=>"");
+      console.error("Gemini API error:",resp.status,errText);
+      if(resp.status===400&&errText.includes("API_KEY")){
         localStorage.removeItem(GEMINI_KEY_LS);
-        throw new Error("APIキーが無効です。再度入力してください。");
+        throw new Error("APIキーが無効です。「鍵をコピー」で正確にコピーし直してください。");
       }
-      throw new Error("API Error: "+resp.status);
+      if(resp.status===403){
+        localStorage.removeItem(GEMINI_KEY_LS);
+        throw new Error("APIキーの権限エラーです。Google AI Studioで再作成してください。");
+      }
+      throw new Error("API Error "+resp.status+": "+errText.slice(0,100));
     }
 
     const data=await resp.json();
