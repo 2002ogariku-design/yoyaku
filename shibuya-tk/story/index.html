@@ -532,13 +532,16 @@ async function aiReadTag(file){
 
   try{
     const base64=dataUrl.split(",")[1];
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        contents:[{parts:[
-          {inline_data:{mime_type:file.type||"image/jpeg",data:base64}},
-          {text:`この画像はRINKAN（高級リセールショップ）の値札です。以下の情報を正確に読み取ってJSON形式で返してください。余計な説明は不要です。JSONのみ返してください。
+
+    // Call Gemini with auto-retry for 429
+    async function callGemini(){
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          contents:[{parts:[
+            {inline_data:{mime_type:file.type||"image/jpeg",data:base64}},
+            {text:`この画像はRINKAN（高級リセールショップ）の値札です。以下の情報を正確に読み取ってJSON形式で返してください。余計な説明は不要です。JSONのみ返してください。
 
 {
   "brand": "ブランド名（英語表記・値札の左上に記載）",
@@ -551,9 +554,20 @@ async function aiReadTag(file){
 - brandは値札に記載されている通りの英語表記で
 - priceは税込（大きく表示されている方の金額）を数値で
 - 読み取れない項目はnullにしてください`}
-        ]}]
-      })
-    });
+          ]}]
+        })
+      });
+      return r;
+    }
+
+    let resp=await callGemini();
+    // Auto-retry on 429 (rate limit)
+    if(resp.status===429){
+      status.textContent="⏳ レート制限中...30秒後にリトライします";
+      await new Promise(r=>setTimeout(r,30000));
+      status.textContent="🤖 リトライ中...";
+      resp=await callGemini();
+    }
 
     if(!resp.ok){
       const errText=await resp.text().catch(()=>"");
@@ -566,19 +580,20 @@ async function aiReadTag(file){
         localStorage.removeItem(GEMINI_KEY_LS);
         throw new Error("APIキーの権限エラーです。Google AI Studioで再作成してください。");
       }
-      throw new Error("API Error "+resp.status+": "+errText.slice(0,100));
+      if(resp.status===429){
+        throw new Error("API制限に達しました。1〜2分待ってから再試行してください。");
+      }
+      throw new Error("API Error "+resp.status+": "+errText.slice(0,150));
     }
 
     const data=await resp.json();
     const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
     console.log("Gemini response:",text);
 
-    // Parse JSON from response
     const jsonMatch=text.match(/\{[\s\S]*\}/);
     if(!jsonMatch) throw new Error("AIからの応答を解析できませんでした");
     const parsed=JSON.parse(jsonMatch[0]);
 
-    // Fill fields
     if(parsed.brand) document.getElementById("sBrand").value=parsed.brand;
     if(parsed.size) document.getElementById("sSize").value=String(parsed.size);
     if(parsed.rank){
