@@ -159,6 +159,15 @@ input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
     <h2>演習モード</h2>
     <div class="card">
       <button class="btn primary" onclick="startWeak()">弱点優先モード（間違えた問題から出題）</button>
+      <div style="margin:12px 0;padding:12px;background:var(--bg2);border-radius:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--dim);margin-bottom:8px;">📝 記述式の割合</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn" style="flex:1;font-size:12px;" onclick="setInputRatio(0)" id="ir0">選択式のみ</button>
+          <button class="btn" style="flex:1;font-size:12px;border-color:var(--acc);color:var(--acc);" onclick="setInputRatio(0.3)" id="ir30">3割記述</button>
+          <button class="btn" style="flex:1;font-size:12px;" onclick="setInputRatio(0.5)" id="ir50">半々</button>
+          <button class="btn" style="flex:1;font-size:12px;" onclick="setInputRatio(1)" id="ir100">全問記述</button>
+        </div>
+      </div>
       <button class="btn" onclick="startCat('all')">全カテゴリ ランダム</button>
       <button class="btn" id="btnPhotoMode" onclick="startPhoto()">📷 写真あてクイズ（<span id="phCount">0</span>問）</button>
       <div id="catBtns"></div>
@@ -807,10 +816,36 @@ function shuffledQ(x){
   const idx=shuffle(x.choices.map((_,i)=>i));
   return {...x, choices:idx.map(i=>x.choices[i]), answer:idx.indexOf(x.answer)};
 }
+function toInputQ(x){
+  // Convert a choice question to a free-input (written answer) question
+  if(x.input) return x; // already input type
+  const correct=x.choices?x.choices[x.answer]:"";
+  return {...x, input:true, ans:correct, exp:"正解："+correct+(x.exp?" ／ "+x.exp:""), _origChoices:x.choices, _origAnswer:x.answer};
+}
+function mixInputMode(list, inputRatio){
+  // Convert a portion of questions to free-input mode
+  const ratio=inputRatio||0.3; // 30% default
+  return list.map(x=>{
+    if(x.input) return x; // already input
+    if(Math.random()<ratio) return toInputQ(x);
+    return x;
+  });
+}
+let quizInputRatio=0.3; // can be changed by user
+function setInputRatio(r){
+  quizInputRatio=r;
+  ["ir0","ir30","ir50","ir100"].forEach(id=>{
+    const el=document.getElementById(id);
+    el.style.borderColor=el.style.color="";
+  });
+  const active={0:"ir0",0.3:"ir30",0.5:"ir50",1:"ir100"}[r];
+  if(active){const el=document.getElementById(active);el.style.borderColor=el.style.color="var(--acc)";}
+}
+
 function startCat(cid){
   let pool=cid==='all'?allQ().slice().concat(photoMCQs()):allQ().filter(x=>x.cat===cid).concat(photoMCQs(cid));
   if(!pool.length)return;
-  quiz={list:shuffle(pool).slice(0,10).map(shuffledQ),i:0,ok:0,wrong:[]};
+  quiz={list:mixInputMode(shuffle(pool).slice(0,10).map(shuffledQ), quizInputRatio),i:0,ok:0,wrong:[]};
   showQuizUI();renderQ();
 }
 function startPhoto(){
@@ -826,7 +861,7 @@ function startWeak(){
     const wb=(sb.w*2-sb.c)+(sb.c+sb.w===0?1.5:0)+Math.random()*.5;
     return wb-wa;
   });
-  quiz={list:pool.slice(0,10).map(shuffledQ),i:0,ok:0,wrong:[]};
+  quiz={list:mixInputMode(pool.slice(0,10).map(shuffledQ), quizInputRatio),i:0,ok:0,wrong:[]};
   go('quiz');showQuizUI();renderQ();
 }
 async function showImg(elId,imgId){
