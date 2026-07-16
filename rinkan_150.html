@@ -149,6 +149,7 @@ input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
     <button class="btn primary" onclick="startWeak()">弱点優先で10問（推奨）</button>
     <button class="btn" onclick="go('quiz')">カテゴリを選んで演習する</button>
     <button class="btn" onclick="go('price')">売価フラッシュカード</button>
+    <button class="btn" onclick="go('wrongnote')">📝 間違いノート</button>
     <button class="btn" onclick="go('exam')">模擬テスト（本番形式）</button>
   </div>
 </section>
@@ -260,6 +261,17 @@ input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
 </section>
 
 <!-- ================= IMPORT ================= -->
+<section id="tab-wrongnote">
+  <div class="card">
+    <h2 style="font-size:17px;margin-bottom:10px;">📝 間違いノート</h2>
+    <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.7;">過去に間違えた問題の一覧です。正解を確認して覚え直しましょう。<br>「この問題だけ記述で復習」で1問ずつ練習できます。</p>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn primary" onclick="startWrongOnly()" id="btnWrongDrill">間違えた問題だけで演習（全問記述）</button>
+    </div>
+    <div id="wrongNoteList"></div>
+  </div>
+</section>
+
 <section id="tab-import">
   <h2>写真から問題を作る</h2>
   <div class="card">
@@ -763,12 +775,49 @@ function record(id,ok){const s=stat(id); if(ok){s.c++;s.streak++}else{s.w++;s.st
 /* ============ ナビ ============ */
 function go(t){
   document.querySelectorAll('section').forEach(s=>s.classList.remove('on'));
-  document.getElementById('tab-'+t).classList.add('on');
+  const sec=document.getElementById('tab-'+t);
+  if(sec) sec.classList.add('on');
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   if(t==='home')renderHome();
   if(t==='price')renderCard();
   if(t==='import')renderImportStats();
+  if(t==='wrongnote')renderWrongNote();
   window.scrollTo(0,0);
+}
+
+function renderWrongNote(){
+  const all=allQ().slice().concat(photoMCQs());
+  const wrong=all.filter(x=>{const s=stat(x.id);return s.w>0;}).sort((a,b)=>stat(b.id).w-stat(a.id).w);
+  const el=document.getElementById('wrongNoteList');
+  const btn=document.getElementById('btnWrongDrill');
+  if(!wrong.length){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--dim);font-size:13px;">まだ間違えた問題はありません。<br>演習を始めてみましょう！</div>';
+    btn.style.display='none';
+    return;
+  }
+  btn.style.display='';
+  btn.textContent=`間違えた問題だけで演習（${wrong.length}問・全問記述）`;
+  el.innerHTML=wrong.map(x=>{
+    const s=stat(x.id);
+    const cat=CATS.find(c=>c.id===x.cat);
+    const correct=x.input?x.ans:(x.choices?x.choices[x.answer]:'');
+    return `<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="font-size:11px;color:var(--dim);">${cat?cat.name:''}・${x.sub||''}</div>
+        <div style="font-size:10px;color:var(--bad);font-weight:700;">✗${s.w}回 ✓${s.c}回</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;margin:6px 0;">${x.q}</div>
+      <div style="font-size:13px;color:var(--acc);font-weight:600;">→ ${correct}</div>
+      ${x.exp?`<div style="font-size:11px;color:var(--dim);margin-top:4px;line-height:1.6;">${x.exp}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function startWrongOnly(){
+  const all=allQ().slice().concat(photoMCQs());
+  const wrong=all.filter(x=>{const s=stat(x.id);return s.w>0;});
+  if(!wrong.length)return;
+  quiz={list:shuffle(wrong).slice(0,15).map(x=>toInputQ(shuffledQ(x))),i:0,ok:0,wrong:[]};
+  go('quiz');showQuizUI();renderQ();
 }
 
 /* ============ ホーム ============ */
@@ -817,16 +866,17 @@ function shuffledQ(x){
   return {...x, choices:idx.map(i=>x.choices[i]), answer:idx.indexOf(x.answer)};
 }
 function toInputQ(x){
-  // Convert a choice question to a free-input (written answer) question
-  if(x.input) return x; // already input type
+  if(x.input) return x;
   const correct=x.choices?x.choices[x.answer]:"";
   return {...x, input:true, ans:correct, exp:"正解："+correct+(x.exp?" ／ "+x.exp:""), _origChoices:x.choices, _origAnswer:x.answer};
 }
 function mixInputMode(list, inputRatio){
-  // Convert a portion of questions to free-input mode
-  const ratio=inputRatio||0.3; // 30% default
+  const ratio=inputRatio||0.3;
   return list.map(x=>{
-    if(x.input) return x; // already input
+    if(x.input) return x;
+    // Past mistakes always become input mode
+    const s=stat(x.id);
+    if(s.w>0 && s.w>=s.c) return toInputQ(x);
     if(Math.random()<ratio) return toInputQ(x);
     return x;
   });
@@ -880,7 +930,7 @@ function renderQ(){
   const x=quiz.list[quiz.i];
   const cat=CATS.find(c=>c.id===x.cat);
   document.getElementById('qProg').textContent=`${quiz.i+1} / ${quiz.list.length}`;
-  document.getElementById('qCat').textContent=`${cat?cat.name:''}・${x.sub||''}`;
+  document.getElementById('qCat').textContent=`${cat?cat.name:''}・${x.sub||''}${x._retry?' 🔄 復習':''}`;
   showImg('qImg',x.img);
   document.getElementById('qText').textContent=x.q;
   const cw=document.getElementById('qChoices'), iw=document.getElementById('qInputWrap');
@@ -941,7 +991,17 @@ function answer(i){
 }
 function nextQ(){
   quiz.i++;
-  if(quiz.i>=quiz.list.length){finishQuiz();return}
+  if(quiz.i>=quiz.list.length){
+    // Check if there are wrong questions to retry
+    if(quiz.wrong.length && !quiz._retrying){
+      quiz._retrying=true;
+      quiz.list=quiz.list.concat(quiz.wrong.map(x=>toInputQ({...x, _retry:true})));
+      quiz.wrong=[];
+      renderQ();window.scrollTo(0,0);
+      return;
+    }
+    finishQuiz();return;
+  }
   renderQ();window.scrollTo(0,0);
 }
 function finishQuiz(){
