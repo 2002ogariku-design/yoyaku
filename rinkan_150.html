@@ -1259,9 +1259,42 @@ async function renderPhotoList(){
   if(!DB.photos.length){box.innerHTML='';return}
   const items=await Promise.all(DB.photos.map(async p=>{
     const d=await getImg(p.id);
-    return `<div class="ph-item">${d?`<img src="${d}">`:'<div style="aspect-ratio:1;background:var(--surface2);border-radius:9px"></div>'}<button class="del" onclick="delPhoto('${p.id}',this)">×</button><div class="nm">${p.name}</div></div>`;
+    const cat=CATS.find(c=>c.id===p.cat);
+    return `<div class="ph-item">${d?`<img src="${d}">`:'<div style="aspect-ratio:1;background:var(--surface2);border-radius:9px"></div>'}<button class="del" onclick="delPhoto('${p.id}',this)">×</button><button style="position:absolute;top:4px;left:4px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-size:10px;padding:3px 7px;cursor:pointer;font-weight:700;" onclick="editPhoto('${p.id}')">✎</button><div class="nm">${p.name}</div><div style="font-size:9px;color:var(--dim);margin-top:1px;">${cat?cat.name:p.cat}${p.note?' / '+p.note:''}</div></div>`;
   }));
   box.innerHTML=items.join('');
+}
+function editPhoto(id){
+  const p=DB.photos.find(x=>x.id===id);
+  if(!p)return;
+  const cat=CATS.find(c=>c.id===p.cat);
+  const catOpts=CATS.filter(c=>c.id!=='price').map(c=>`<option value="${c.id}"${c.id===p.cat?' selected':''}>${c.name}</option>`).join('');
+  const div=document.createElement('div');
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;display:flex;align-items:center;justify-content:center;';
+  div.innerHTML=`<div style="background:var(--bg);border-radius:16px;padding:20px;max-width:340px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="font-size:15px;font-weight:800;margin-bottom:14px;">写真問題を編集</div>
+    <label style="font-size:12px;font-weight:700;color:var(--dim);">カテゴリ</label>
+    <select id="editPhCat" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:14px;margin:6px 0 12px;background:var(--bg2);">${catOpts}</select>
+    <label style="font-size:12px;font-weight:700;color:var(--dim);">モデル名（正解）</label>
+    <input id="editPhName" value="${p.name.replace(/"/g,'&quot;')}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:14px;margin:6px 0 12px;background:var(--bg2);">
+    <label style="font-size:12px;font-weight:700;color:var(--dim);">メモ</label>
+    <input id="editPhNote" value="${(p.note||'').replace(/"/g,'&quot;')}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:14px;margin:6px 0 14px;background:var(--bg2);">
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="this.closest('div[style]').remove()" style="padding:10px 18px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);font-size:13px;font-weight:700;cursor:pointer;">キャンセル</button>
+      <button onclick="savePhotoEdit('${id}')" style="padding:10px 18px;border-radius:10px;border:none;background:var(--acc);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">保存</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+function savePhotoEdit(id){
+  const p=DB.photos.find(x=>x.id===id);
+  if(!p)return;
+  p.cat=document.getElementById('editPhCat').value;
+  p.name=document.getElementById('editPhName').value.trim();
+  p.note=document.getElementById('editPhNote').value.trim();
+  saveDB();
+  document.querySelector('div[style*="position:fixed"]').remove();
+  renderPhotoList();renderHome();
 }
 async function delPhoto(id,btn){
   if(btn&&btn.dataset.c!=='1'){
