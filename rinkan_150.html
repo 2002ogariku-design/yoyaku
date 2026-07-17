@@ -731,15 +731,131 @@ SEED_PRICES.forEach((x,i)=>x.id='p'+i);
 let DB={stats:{},custom:[],prices:[],pstats:{},history:[],photos:[]};
 const KEY='rinkan-150-v1';
 const IMGKEY=id=>'rinkan-img-'+id;
-async function loadDB(){
-  try{const r=await window.storage.get(KEY); if(r&&r.value){DB=Object.assign(DB,JSON.parse(r.value));}}catch(e){/* 初回は無しでOK */}
-  if(!DB.photos)DB.photos=[];
+
+/* ===== GitHub Sync ===== */
+const GH_QUIZ_OWNER="2002ogariku-design",GH_QUIZ_REPO="yoyaku",GH_QUIZ_PATH="shibuya-tk/quiz-db.json";
+const GH_QUIZ_API=`https://api.github.com/repos/${GH_QUIZ_OWNER}/${GH_QUIZ_REPO}/contents/${GH_QUIZ_PATH}`;
+const GH_TK_KEY="tk-gh-token";
+let ghQuizSha=null;
+
+function getGhTk(){let t;try{t=localStorage.getItem(GH_TK_KEY)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力（他ツールと同じ）");if(t)try{localStorage.setItem(GH_TK_KEY,t.trim())}catch(e){};}return t?.trim()||null;}
+function u2b(s){return btoa(unescape(encodeURIComponent(s)))}
+function b2u(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))))}
+
+async function ghLoadQuizDB(){
+  const t=getGhTk();if(!t)return null;
+  try{
+    const r=await fetch(`${GH_QUIZ_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
+    if(r.status===401){try{localStorage.removeItem(GH_TK_KEY)}catch(e){}return null;}
+    if(r.status===404){ghQuizSha=null;return null;}
+    if(!r.ok)return null;
+    const d=await r.json();ghQuizSha=d.sha;
+    return JSON.parse(b2u(d.content));
+  }catch(e){console.error("ghLoadQuiz:",e);return null;}
 }
+
+async function ghSaveQuizDB(data){
+  const t=getGhTk();if(!t)return;
+  for(let a=0;a<3;a++){
+    try{const h=await fetch(`${GH_QUIZ_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghQuizSha=(await h.json()).sha;else if(h.status===404)ghQuizSha=null;}catch(e){}
+    const body={message:"quiz sync "+new Date().toISOString(),content:u2b(JSON.stringify(data))};
+    if(ghQuizSha)body.sha=ghQuizSha;
+    const r=await fetch(GH_QUIZ_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(r.ok){ghQuizSha=(await r.json()).content.sha;return;}
+    if(r.status===409&&a<2){await new Promise(r=>setTimeout(r,500));continue;}
+    console.error("ghSaveQuiz failed:",r.status);return;
+  }
+}
+
+function mergeDB(local, remote){
+  if(!remote)return local;
+  const m={...local};
+  // stats: keep higher counts
+  m.stats={...local.stats};
+  if(remote.stats){
+    for(const[k,v]of Object.entries(remote.stats)){
+      if(!m.stats[k])m.stats[k]=v;
+      else{m.stats[k]={c:Math.max(m.stats[k].c||0,v.c||0),w:Math.max(m.stats[k].w||0,v.w||0)};}
+    }
+  }
+  // pstats
+  m.pstats={...local.pstats};
+  if(remote.pstats){for(const[k,v]of Object.entries(remote.pstats)){if(!m.pstats[k])m.pstats[k]=v;else{m.pstats[k]={c:Math.max(m.pstats[k].c||0,v.c||0),w:Math.max(m.pstats[k].w||0,v.w||0)};}}}
+  // custom: merge by id
+  const cIds=new Set((local.custom||[]).map(x=>x.id));
+  m.custom=[...(local.custom||[]),...(remote.custom||[]).filter(x=>!cIds.has(x.id))];
+  // prices: merge by id
+  const pIds=new Set((local.prices||[]).map(x=>x.id));
+  m.prices=[...(local.prices||[]),...(remote.prices||[]).filter(x=>!pIds.has(x.id))];
+  // photos: merge by id
+  const phIds=new Set((local.photos||[]).map(x=>x.id));
+  m.photos=[...(local.photos||[]),...(remote.photos||[]).filter(x=>!phIds.has(x.id))];
+  // history: merge, keep unique by timestamp
+  const hSet=new Set((local.history||[]).map(x=>JSON.stringify(x)));
+  m.history=[...(local.history||[]),...(remote.history||[]).filter(x=>!hSet.has(JSON.stringify(x)))];
+  return m;
+}
+
+// Compress photo to thumbnail for GitHub storage
+function compressPhotoForSync(dataUrl){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=300;
+      let w=img.width,h=img.height;
+      if(w>max||h>max){const s=Math.min(max/w,max/h);w=Math.round(w*s);h=Math.round(h*s);}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg',0.5));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+async function loadDB(){
+  // 1. Load local
+  try{const r=await window.storage.get(KEY);if(r&&r.value){DB=Object.assign(DB,JSON.parse(r.value));}}catch(e){}
+  if(!DB.photos)DB.photos=[];
+  // 2. Load GitHub and merge
+  try{
+    const remote=await ghLoadQuizDB();
+    if(remote){
+      DB=mergeDB(DB,remote);
+      // Restore photo images from GitHub thumbnails
+      if(remote.photoImages){
+        for(const[id,data]of Object.entries(remote.photoImages)){
+          if(!imgCache[id]){imgCache[id]=data;try{await window.storage.set(IMGKEY(id),data);}catch(e){}}
+        }
+      }
+      // Save merged back to local
+      try{await window.storage.set(KEY,JSON.stringify(DB));}catch(e){}
+    }
+  }catch(e){console.error("sync load error:",e);}
+}
+
 let saveTimer=null;
 function saveDB(){
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(async()=>{try{await window.storage.set(KEY,JSON.stringify(DB));}catch(e){console.error('save failed',e);}},400);
+  // Save locally immediately
+  saveTimer=setTimeout(async()=>{
+    try{await window.storage.set(KEY,JSON.stringify(DB));}catch(e){console.error('local save failed',e);}
+    // Also sync to GitHub (with photo thumbnails)
+    try{
+      const syncData={...DB};
+      // Collect photo thumbnails for sync
+      const photoImages={};
+      for(const p of DB.photos){
+        let img=imgCache[p.id];
+        if(!img){try{const r=await window.storage.get(IMGKEY(p.id));if(r&&r.value)img=r.value;}catch(e){}}
+        if(img) photoImages[p.id]=await compressPhotoForSync(img);
+      }
+      syncData.photoImages=photoImages;
+      await ghSaveQuizDB(syncData);
+    }catch(e){console.error('gh sync failed',e);}
+  },800);
 }
+
 const imgCache={};
 async function getImg(id){
   if(imgCache[id])return imgCache[id];
