@@ -178,7 +178,7 @@ input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
   <div id="quizPlay" style="display:none">
     <div class="card">
       <div class="qmeta"><span id="qProg"></span><span id="qCat"></span></div>
-      <img class="qimg" id="qImg" alt="">
+      <img class="qimg" id="qImg" alt="" referrerpolicy="no-referrer">
       <div class="qtext" id="qText"></div>
       <div id="qChoices"></div>
       <div id="qInputWrap" style="display:none">
@@ -235,7 +235,7 @@ input[type=file]{width:100%;color:var(--mut);font-size:13px;margin-bottom:10px}
   <div id="examPlay" style="display:none">
     <div class="card">
       <div class="qmeta"><span id="eProg"></span><span id="eCat"></span></div>
-      <img class="qimg" id="eImg" alt="">
+      <img class="qimg" id="eImg" alt="" referrerpolicy="no-referrer">
       <div class="qtext" id="eText"></div>
       <div id="eChoices"></div>
       <div id="eInputWrap" style="display:none">
@@ -1159,7 +1159,12 @@ function startWeak(){
 }
 async function showImg(elId,imgId,imgUrl){
   const el=document.getElementById(elId);
-  if(imgUrl){el.style.display='block';el.src=imgUrl;return;}
+  if(imgUrl){
+    el.style.display='block';
+    el.onerror=()=>{el.style.display='none';};
+    el.src=imgUrl;
+    return;
+  }
   if(!imgId){el.style.display='none';el.src='';return}
   el.style.display='block';el.src='';
   const d=await getImg(imgId);
@@ -1329,7 +1334,7 @@ function renderE(){
   const x=exam.list[exam.i];
   document.getElementById('eProg').textContent=`${exam.i+1} / ${exam.list.length}`;
   document.getElementById('eCat').textContent=CATS.find(c=>c.id===x.cat).name;
-  showImg('eImg',x.img);
+  showImg('eImg',x.img,x.imgUrl);
   document.getElementById('eText').textContent=x.q;
   const cw=document.getElementById('eChoices'), iw=document.getElementById('eInputWrap');
   if(x.input){
