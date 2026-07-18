@@ -44,12 +44,12 @@ nav button.on{color:var(--text);border-bottom-color:#000;}
 
 /* table */
 .tbl-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap;}
-thead th{background:#000;color:#fff;padding:11px 12px;text-align:left;font-size:11px;font-weight:700;position:sticky;top:0;}
-tbody td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap;table-layout:fixed;}
+thead th{background:#000;color:#fff;padding:7px 6px;text-align:left;font-size:10px;font-weight:700;position:sticky;top:0;overflow:hidden;text-overflow:ellipsis;}
+tbody td{padding:6px 5px;border-bottom:1px solid var(--line);vertical-align:middle;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
 tbody tr:hover td{background:#fafafa;}
-.iname{font-weight:700;max-width:230px;overflow:hidden;text-overflow:ellipsis;}
-.isub{font-size:11px;color:var(--dim);max-width:230px;overflow:hidden;text-overflow:ellipsis;}
+.iname{font-weight:700;max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;}
+.isub{font-size:9px;color:var(--dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;}
 .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:800;font-size:12px;}
 .rank.S{background:var(--gold);}
 .rank.A{background:#52525b;}
@@ -58,12 +58,26 @@ tbody tr:hover td{background:#fafafa;}
 .rank.D{background:#d4d4d8;color:#52525b;}
 .rank.N{background:#e4e4e7;color:#71717a;font-size:9px;}
 .price{font-variant-numeric:tabular-nums;font-weight:700;}
-.g-btn,.st-btn{border-radius:6px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;}
+.g-btn,.st-btn{border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;}
 .g-btn{background:#fff;border:1px solid var(--line);color:var(--text);}
 .g-btn:hover{border-color:var(--gold);}
 .st-btn{background:#000;border:1px solid #000;color:#fff;}
 .st-btn:hover{background:#27272a;}
 .empty{text-align:center;padding:50px 20px;color:var(--faint);line-height:1.8;}
+@media(max-width:1200px){
+  .hide-narrow{display:none;}
+  tbody td{max-width:100px;font-size:10.5px;}
+  .iname{max-width:110px;}
+}
+@media(max-width:768px){
+  table{font-size:10px;}
+  thead th{padding:5px 4px;font-size:9px;}
+  tbody td{padding:5px 4px;max-width:80px;}
+  .iname{max-width:90px;font-size:10px;}
+  .isub{display:none;}
+  .g-btn,.st-btn{padding:3px 5px;font-size:9px;}
+  .price{font-size:10px;}
+}
 
 /* analysis */
 .sec-title{text-align:center;font-size:13px;font-weight:700;letter-spacing:.3em;color:var(--dim);margin:26px 0 14px;}
@@ -154,8 +168,8 @@ tbody tr:hover td{background:#fafafa;}
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>ブランド</th><th>商品名 / 特徴</th><th>アイテム</th><th>サイズ</th><th>カラー</th><th>ランク</th>
-        <th>売価(税込)</th><th>仕入店舗</th><th>バイヤー</th><th>バイヤーコメント</th><th>付属品</th><th>検索</th><th>ストーリー</th>
+        <th>ブランド</th><th>商品名</th><th>アイテム</th><th>サイズ</th><th class="hide-narrow">カラー</th><th>ランク</th>
+        <th>税込売価</th><th>仕入店</th><th>バイヤー</th><th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>検索</th><th></th>
       </tr></thead>
       <tbody id="tbody"><tr><td colspan="13"><div class="empty">データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。</div></td></tr></tbody>
     </table>
@@ -514,12 +528,12 @@ function renderList(){
     return `<tr>
       <td style="font-weight:700;">${esc(i.brand)}</td>
       <td><div class="iname">${esc(i.name)}</div><div class="isub">${esc(i.feature||"")}</div></td>
-      <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td>${esc(i.color)||"-"}</td>
+      <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td class="hide-narrow">${esc(i.color)||"-"}</td>
       <td>${rk?`<span class="rank ${rk}">${rk}</span>`:`<span class="rank N">-</span>`}</td>
       <td class="price">${i.price?yen(i.price):"-"}</td>
       <td>${esc(i.store)||esc(i.origStore)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${esc(i.comment)||"-"}</td>
-      <td>${esc(i.acc)||"-"}</td>
+      <td class="hide-narrow" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">${esc(i.comment)||"-"}</td>
+      <td class="hide-narrow">${esc(i.acc)||"-"}</td>
       <td><a class="g-btn" style="text-decoration:none;display:inline-block;" href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a></td>
       <td><button class="st-btn" onclick="makeStory(${items.indexOf(i)})">📸 作成</button></td>
     </tr>`;
