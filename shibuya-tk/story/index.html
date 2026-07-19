@@ -521,13 +521,37 @@ async function scanTagQR(file){
   const ctx2=canvas.getContext("2d");
   ctx2.drawImage(img,0,0);
   const imageData=ctx2.getImageData(0,0,canvas.width,canvas.height);
-  const qr=jsQR(imageData.data,canvas.width,canvas.height);
+  // Try multiple resolutions for better detection
+  let qr=null;
+  const sizes=[canvas.width, 1500, 1000, 600];
+  for(const sz of sizes){
+    if(qr)break;
+    const scale=sz/Math.max(img.width,img.height);
+    const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
+    const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
+    const tctx=tc.getContext("2d");
+    tctx.drawImage(img,0,0,sw,sh);
+    // Also try with inverted colors
+    const td3=tctx.getImageData(0,0,sw,sh);
+    qr=jsQR(td3.data,sw,sh);
+    if(!qr){
+      // Try with increased contrast
+      const d=td3.data;
+      for(let i=0;i<d.length;i+=4){
+        let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        g=g>128?255:0;
+        d[i]=g;d[i+1]=g;d[i+2]=g;
+      }
+      tctx.putImageData(td3,0,0);
+      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh);
+    }
+  }
 
   if(!qr||!qr.data){
     td2.innerHTML="🏷️ QR検出できず（値札を見て入力）";
-    status.textContent="⚠ QRコードが見つかりませんでした。値札を見ながら手入力してください。";
+    status.textContent="⚠ QRコードが見つかりません。QRコードが大きく写るように撮り直してください。";
     status.style.color="var(--red)";
-    setTimeout(()=>{status.style.display="none";},3000);
+    setTimeout(()=>{status.style.display="none";},4000);
     return;
   }
 
