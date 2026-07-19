@@ -571,18 +571,47 @@ async function scanTagQR(file){
       
       if(resp&&resp.ok){
         const html2=await resp.text();
-        // Extract product info from Rakuten page
+        // Extract product info from Rakuten RINKAN page
         const titleMatch=html2.match(/<title[^>]*>([^<]+)/i);
-        const priceMatch=html2.match(/[¥￥]([\d,]+)/);
-        
         if(titleMatch){
-          const title=titleMatch[1].replace(/\s*[-|].*/,"").trim();
-          // Try to extract brand from title
-          const parts=title.split(/\s+/);
-          if(parts.length>=1) document.getElementById("sBrand").value=parts[0];
+          let title=titleMatch[1]
+            .replace(/【楽天市場】/g,"")
+            .replace(/\s*[:|｜].*$/,"")
+            .trim();
+          // RINKAN titles often: "ブランド名 商品名 サイズ ランク"
+          // Try to find English brand name
+          const engBrand=title.match(/^([A-Z][A-Za-z\s&'.]+?)\s/);
+          if(engBrand) document.getElementById("sBrand").value=engBrand[1].trim();
         }
-        if(priceMatch){
-          document.getElementById("sPrice").value=priceMatch[1].replace(/,/g,"");
+        // Price: look for tax-included price patterns
+        const pricePatterns=[
+          /税込[^\d]*(\d[\d,]+)/,
+          /販売価格[^\d]*(\d[\d,]+)/,
+          /price["\'\s:]*(\d[\d,]+)/i,
+          /(\d{2,3},\d{3})円/,
+          /¥(\d[\d,]+)/
+        ];
+        for(const pat of pricePatterns){
+          const m=html2.match(pat);
+          if(m){
+            const p=Number(m[1].replace(/,/g,""));
+            if(p>=1000&&p<100000000){
+              document.getElementById("sPrice").value=String(p);
+              break;
+            }
+          }
+        }
+        // Size: look for common size patterns in product description
+        const sizeMatch=html2.match(/サイズ[：:\s]*([A-Z0-9]+(?:LINK)?)/i)
+          ||html2.match(/size[：:\s]*([A-Z0-9]+)/i)
+          ||html2.match(/\b(XXS|XS|XXL|XL|XXXL|FREE|[SMLF]|\d{2,3})\b/);
+        if(sizeMatch) document.getElementById("sSize").value=sizeMatch[1];
+        // Rank
+        const rankMatch=html2.match(/ランク[：:\s]*([SABCD])/i)||html2.match(/RANK[：:\s]*([SABCD])/i);
+        if(rankMatch){
+          const r2=rankMatch[1].toUpperCase();
+          const sel=document.getElementById("sRank");
+          if([...sel.options].some(o=>o.value===r2)) sel.value=r2;
         }
         status.textContent="✓ 商品情報を取得しました（確認してください）";
         status.style.color="var(--green)";
