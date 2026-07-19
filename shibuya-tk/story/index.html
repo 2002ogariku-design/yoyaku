@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>公式インスタ分析｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
@@ -248,8 +249,8 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
         <input type="file" id="photoIn" accept="image/*" style="display:none;">
       </div>
       <div>
-        <div class="f"><label>🏷️ 値札（参考表示）</label></div>
-        <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;">🏷️ タップして撮影/選択</div>
+        <div class="f"><label>🏷️ 値札QRスキャン＋参考表示</label></div>
+        <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;">🏷️ 値札のQRを撮影/選択</div>
         <input type="file" id="tagIn" accept="image/*" style="display:none;">
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
       </div>
@@ -493,22 +494,90 @@ function loadPhoto(file){
   fr.readAsDataURL(file);
 }
 
-// tag photo reference display
+// QR code scan from tag photo
 const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
 td2.addEventListener("click",()=>ti.click());
-ti.addEventListener("change",e=>{if(e.target.files[0])showTagRef(e.target.files[0]);ti.value="";});
+ti.addEventListener("change",e=>{if(e.target.files[0])scanTagQR(e.target.files[0]);ti.value="";});
 ["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
 ["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
-td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)showTagRef(f);});
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)scanTagQR(f);});
 
-function showTagRef(file){
-  const fr=new FileReader();
-  fr.onload=e=>{
-    document.getElementById("tagRefImg").src=e.target.result;
-    document.getElementById("tagRefArea").style.display="block";
-    td2.innerHTML="🏷️ 選択済み ✓";
-  };
-  fr.readAsDataURL(file);
+async function scanTagQR(file){
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🔍 QRコードを読み取り中...";
+  status.style.color="var(--blue)";
+  td2.innerHTML="🏷️ 読み取り中...";
+
+  // Show tag photo as reference
+  const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
+  document.getElementById("tagRefImg").src=dataUrl;
+  document.getElementById("tagRefArea").style.display="block";
+
+  // Scan QR code from image
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+  const canvas=document.createElement("canvas");
+  canvas.width=img.width;canvas.height=img.height;
+  const ctx2=canvas.getContext("2d");
+  ctx2.drawImage(img,0,0);
+  const imageData=ctx2.getImageData(0,0,canvas.width,canvas.height);
+  const qr=jsQR(imageData.data,canvas.width,canvas.height);
+
+  if(!qr||!qr.data){
+    td2.innerHTML="🏷️ QR検出できず（値札を見て入力）";
+    status.textContent="⚠ QRコードが見つかりませんでした。値札を見ながら手入力してください。";
+    status.style.color="var(--red)";
+    setTimeout(()=>{status.style.display="none";},3000);
+    return;
+  }
+
+  console.log("QR data:",qr.data);
+  const url=qr.data;
+
+  // Check if it's a Rakuten URL
+  if(url.includes("item.rakuten.co.jp")){
+    status.textContent="✓ QR読み取り成功！商品ページを取得中...";
+    td2.innerHTML="🏷️ QR読み取り成功 ✓";
+
+    // Open the Rakuten page to fetch product info
+    try{
+      // Use a CORS proxy or direct fetch attempt
+      const proxyUrl="https://corsproxy.io/?"+encodeURIComponent(url);
+      const resp=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)}).catch(()=>null);
+      
+      if(resp&&resp.ok){
+        const html2=await resp.text();
+        // Extract product info from Rakuten page
+        const titleMatch=html2.match(/<title[^>]*>([^<]+)/i);
+        const priceMatch=html2.match(/[¥￥]([\d,]+)/);
+        
+        if(titleMatch){
+          const title=titleMatch[1].replace(/\s*[-|].*/,"").trim();
+          // Try to extract brand from title
+          const parts=title.split(/\s+/);
+          if(parts.length>=1) document.getElementById("sBrand").value=parts[0];
+        }
+        if(priceMatch){
+          document.getElementById("sPrice").value=priceMatch[1].replace(/,/g,"");
+        }
+        status.textContent="✓ 商品情報を取得しました（確認してください）";
+        status.style.color="var(--green)";
+        drawStory();
+      }else{
+        // Proxy failed - show link to open manually
+        status.innerHTML='✓ QR読み取り成功 → <a href="'+url+'" target="_blank" style="color:var(--blue);text-decoration:underline;">商品ページを開く</a>（見ながら入力）';
+        status.style.color="var(--green)";
+      }
+    }catch(e){
+      status.innerHTML='✓ QR読み取り成功 → <a href="'+url+'" target="_blank" style="color:var(--blue);text-decoration:underline;">商品ページを開く</a>（見ながら入力）';
+      status.style.color="var(--green)";
+    }
+  }else{
+    // Not Rakuten URL - show the data
+    status.textContent="QR内容: "+url;
+    td2.innerHTML="🏷️ QR読み取り完了";
+  }
+  setTimeout(()=>{if(status.style.color!=="var(--green)")status.style.display="none";},5000);
 }
 
 function drawStory(){
