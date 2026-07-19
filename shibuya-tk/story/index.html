@@ -256,7 +256,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
       </div>
     </div>
     <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
-      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札を見ながら入力してください</div>
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札を見ながらサイズ・ランク・価格を入力してください</div>
       <img id="tagRefImg" style="width:100%;border-radius:8px;border:1px solid var(--line);">
     </div>
     <div class="fg">
@@ -563,74 +563,43 @@ async function scanTagQR(file){
     status.textContent="✓ QR読み取り成功！商品ページを取得中...";
     td2.innerHTML="🏷️ QR読み取り成功 ✓";
 
-    // Open the Rakuten page to fetch product info
+    // Show Rakuten link for product reference
     try{
-      // Use a CORS proxy or direct fetch attempt
       const proxyUrl="https://corsproxy.io/?"+encodeURIComponent(url);
-      const resp=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)}).catch(()=>null);
-      
+      const resp=await fetch(proxyUrl,{signal:AbortSignal.timeout(6000)}).catch(()=>null);
       if(resp&&resp.ok){
-        const html2=await resp.text();
-        // Extract product info from Rakuten RINKAN page
-        const titleMatch=html2.match(/<title[^>]*>([^<]+)/i);
-        if(titleMatch){
-          let title=titleMatch[1]
-            .replace(/【楽天市場】/g,"")
-            .replace(/\s*[:|｜].*$/,"")
-            .trim();
-          // RINKAN titles often: "ブランド名 商品名 サイズ ランク"
-          // Try to find English brand name
-          const engBrand=title.match(/^([A-Z][A-Za-z\s&'.]+?)\s/);
-          if(engBrand) document.getElementById("sBrand").value=engBrand[1].trim();
-        }
-        // Price: look for tax-included price patterns
-        const pricePatterns=[
-          /税込[^\d]*(\d[\d,]+)/,
-          /販売価格[^\d]*(\d[\d,]+)/,
-          /price["\'\s:]*(\d[\d,]+)/i,
-          /(\d{2,3},\d{3})円/,
-          /¥(\d[\d,]+)/
-        ];
-        for(const pat of pricePatterns){
-          const m=html2.match(pat);
-          if(m){
-            const p=Number(m[1].replace(/,/g,""));
-            if(p>=1000&&p<100000000){
-              document.getElementById("sPrice").value=String(p);
-              break;
-            }
+        const pg=await resp.text();
+        // Extract English brand name from title or page content
+        const titleM=pg.match(/<title[^>]*>([^<]+)/i);
+        if(titleM){
+          let t=titleM[1].replace(/【[^】]*】/g,"").trim();
+          // Find English brand at start of title
+          const engM=t.match(/^([A-Z][A-Za-z\s&'.\/]+?)\s/);
+          if(engM) document.getElementById("sBrand").value=engM[1].trim();
+          else{
+            // Try finding known brand patterns anywhere in title
+            const brands=t.match(/CHROME\s*HEARTS|SUPREME|ROLEX|BALENCIAGA|LOUIS\s*VUITTON|HERMES|DIOR|GUCCI|PRADA|CELINE|AMIRI|RICK\s*OWENS|VETEMENTS|MARGIELA|THE\s*ROW|MONCLER|BURBERRY|SAINT\s*LAURENT|FENDI|BOTTEGA|LOEWE|CHANEL|CARTIER|TIFFANY|OMEGA|PATEK/i);
+            if(brands) document.getElementById("sBrand").value=brands[0].toUpperCase();
           }
         }
-        // Size: look for common size patterns in product description
-        const sizeMatch=html2.match(/サイズ[：:\s]*([A-Z0-9]+(?:LINK)?)/i)
-          ||html2.match(/size[：:\s]*([A-Z0-9]+)/i)
-          ||html2.match(/\b(XXS|XS|XXL|XL|XXXL|FREE|[SMLF]|\d{2,3})\b/);
-        if(sizeMatch) document.getElementById("sSize").value=sizeMatch[1];
-        // Rank
-        const rankMatch=html2.match(/ランク[：:\s]*([SABCD])/i)||html2.match(/RANK[：:\s]*([SABCD])/i);
-        if(rankMatch){
-          const r2=rankMatch[1].toUpperCase();
-          const sel=document.getElementById("sRank");
-          if([...sel.options].some(o=>o.value===r2)) sel.value=r2;
-        }
-        status.textContent="✓ 商品情報を取得しました（確認してください）";
-        status.style.color="var(--green)";
-        drawStory();
-      }else{
-        // Proxy failed - show link to open manually
-        status.innerHTML='✓ QR読み取り成功 → <a href="'+url+'" target="_blank" style="color:var(--blue);text-decoration:underline;">商品ページを開く</a>（見ながら入力）';
-        status.style.color="var(--green)";
+        // Try rank from page
+        const rkM=pg.match(/ランク[：:・\s]*([SABCD])/i)||pg.match(/RANK[：:\s]*([SABCD])/i);
+        if(rkM){const rv=rkM[1].toUpperCase();const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===rv))sel.value=rv;}
+        // Try size from page
+        const szM=pg.match(/サイズ[：:・\s]*([A-Z0-9]+)/i)||pg.match(/SIZE[：:\s]*([A-Z0-9]+)/i);
+        if(szM&&szM[1].length<=5) document.getElementById("sSize").value=szM[1];
       }
-    }catch(e){
-      status.innerHTML='✓ QR読み取り成功 → <a href="'+url+'" target="_blank" style="color:var(--blue);text-decoration:underline;">商品ページを開く</a>（見ながら入力）';
-      status.style.color="var(--green)";
-    }
+    }catch(e){console.log("fetch error:",e);}
+    // Always show link to Rakuten page
+    status.innerHTML='✓ QR読み取り成功 → <a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:underline;">楽天で商品を確認</a>';
+    status.style.color="var(--green)";
+    status.style.display="block";
+    drawStory();
   }else{
-    // Not Rakuten URL - show the data
     status.textContent="QR内容: "+url;
     td2.innerHTML="🏷️ QR読み取り完了";
+    setTimeout(()=>{status.style.display="none";},5000);
   }
-  setTimeout(()=>{if(status.style.color!=="var(--green)")status.style.display="none";},5000);
 }
 
 function drawStory(){
