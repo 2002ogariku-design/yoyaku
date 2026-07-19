@@ -248,14 +248,14 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
         <input type="file" id="photoIn" accept="image/*" style="display:none;">
       </div>
       <div>
-        <div class="f"><label>🏷️ 値札（自動読取＋参考表示）</label></div>
+        <div class="f"><label>🏷️ 値札（参考表示）</label></div>
         <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;">🏷️ タップして撮影/選択</div>
         <input type="file" id="tagIn" accept="image/*" style="display:none;">
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
       </div>
     </div>
     <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
-      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札を見ながら確認・修正してください（横向きで撮ると精度UP）</div>
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札を見ながら入力してください</div>
       <img id="tagRefImg" style="width:100%;border-radius:8px;border:1px solid var(--line);">
     </div>
     <div class="fg">
@@ -493,153 +493,22 @@ function loadPhoto(file){
   fr.readAsDataURL(file);
 }
 
-// tag OCR with Gemini Vision AI
-const GEMINI_KEY_LS="tk-gemini-key";
-function getGeminiKey(){
-  let k;try{k=localStorage.getItem(GEMINI_KEY_LS)}catch(e){}
-  if(!k){
-    k=prompt("AI読み取り機能を使うには Google Gemini APIキーが必要です。\n\n取得方法：\n1. https://aistudio.google.com/app/apikey を開く\n2. Googleアカウントでログイン\n3.「APIキーを作成」を押す\n4. コピーしてここに貼り付け\n\nAPIキーを入力：");
-    if(k){try{localStorage.setItem(GEMINI_KEY_LS,k.trim())}catch(e){}k=k.trim();}
-  }
-  return k;
-}
-
+// tag photo reference display
 const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
 td2.addEventListener("click",()=>ti.click());
-ti.addEventListener("change",e=>{if(e.target.files[0])aiReadTag(e.target.files[0]);ti.value="";});
+ti.addEventListener("change",e=>{if(e.target.files[0])showTagRef(e.target.files[0]);ti.value="";});
 ["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
 ["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
-td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)aiReadTag(f);});
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)showTagRef(f);});
 
-function compressImage(base64Data, mimeType){
-  return new Promise(resolve=>{
-    const img=new Image();
-    img.onload=()=>{
-      const maxW=800, maxH=800;
-      let w=img.width, h=img.height;
-      if(w>maxW||h>maxH){const s=Math.min(maxW/w,maxH/h);w=Math.round(w*s);h=Math.round(h*s);}
-      const c=document.createElement("canvas");c.width=w;c.height=h;
-      c.getContext("2d").drawImage(img,0,0,w,h);
-      resolve(c.toDataURL("image/jpeg",0.7).split(",")[1]);
-    };
-    img.src="data:"+(mimeType||"image/jpeg")+";base64,"+base64Data;
-  });
-}
-
-async function aiReadTag(file){
-  const status=document.getElementById("ocrStatus");
-  status.style.display="block";
-  status.textContent="🤖 AI読み取り中...";
-  status.style.color="var(--blue)";
-  td2.innerHTML="🏷️ AI処理中...";
-
-  // Show tag photo as reference
-  const dataUrl=await fileToDataUrl(file);
-  document.getElementById("tagRefImg").src=dataUrl;
-  document.getElementById("tagRefArea").style.display="block";
-
-  const apiKey=getGeminiKey();
-  if(!apiKey){
-    status.textContent="APIキーが未設定です";status.style.color="var(--red)";
-    td2.innerHTML="🏷️ タップして再試行";
-    return;
-  }
-
-  try{
-    const base64=dataUrl.split(",")[1];
-
-    // Compress image before sending to API
-    const compressed=await compressImage(base64, file.type);
-
-    // Call Gemini with auto-retry for 429
-    async function callGemini(){
-      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          contents:[{parts:[
-            {inline_data:{mime_type:"image/jpeg",data:compressed}},
-            {text:`この画像はRINKAN（高級リセールショップ）の値札です。以下の情報を正確に読み取ってJSON形式で返してください。余計な説明は不要です。JSONのみ返してください。
-
-{
-  "brand": "ブランド名（英語表記・値札の左上に記載）",
-  "size": "サイズ（数字またはS/M/Lなど）",
-  "rank": "状態ランク（S/A/B/C/Dのいずれか1文字）",
-  "price_tax_included": 税込価格の数値（カンマなし）
-}
-
-注意：
-- brandは値札に記載されている通りの英語表記で
-- priceは税込（大きく表示されている方の金額）を数値で
-- 読み取れない項目はnullにしてください`}
-          ]}]
-        })
-      });
-      return r;
-    }
-
-    let resp=await callGemini();
-    // Auto-retry on 429 (rate limit)
-    if(resp.status===429){
-      status.textContent="⏳ レート制限中...30秒後にリトライします";
-      await new Promise(r=>setTimeout(r,30000));
-      status.textContent="🤖 リトライ中...";
-      resp=await callGemini();
-    }
-
-    if(!resp.ok){
-      const errText=await resp.text().catch(()=>"");
-      console.error("Gemini API error:",resp.status,errText);
-      if(resp.status===400&&errText.includes("API_KEY")){
-        localStorage.removeItem(GEMINI_KEY_LS);
-        throw new Error("APIキーが無効です。「鍵をコピー」で正確にコピーし直してください。");
-      }
-      if(resp.status===403){
-        localStorage.removeItem(GEMINI_KEY_LS);
-        throw new Error("APIキーの権限エラーです。Google AI Studioで再作成してください。");
-      }
-      if(resp.status===429){
-        throw new Error("API制限に達しました。1〜2分待ってから再試行してください。");
-      }
-      throw new Error("API Error "+resp.status+": "+errText.slice(0,150));
-    }
-
-    const data=await resp.json();
-    const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
-    console.log("Gemini response:",text);
-
-    const jsonMatch=text.match(/\{[\s\S]*\}/);
-    if(!jsonMatch) throw new Error("AIからの応答を解析できませんでした");
-    const parsed=JSON.parse(jsonMatch[0]);
-
-    if(parsed.brand) document.getElementById("sBrand").value=parsed.brand;
-    if(parsed.size) document.getElementById("sSize").value=String(parsed.size);
-    if(parsed.rank){
-      const r=parsed.rank.toUpperCase();
-      const sel=document.getElementById("sRank");
-      if([...sel.options].some(o=>o.value===r)) sel.value=r;
-    }
-    if(parsed.price_tax_included) document.getElementById("sPrice").value=String(parsed.price_tax_included);
-
-    td2.innerHTML="🏷️ AI読み取り完了 ✓";
-    status.textContent="✓ 自動入力しました（確認してください）";
-    status.style.color="var(--green)";
-    drawStory();
-  }catch(e){
-    console.error("AI read error:",e);
-    td2.innerHTML="🏷️ 読み取り失敗（タップして再試行）";
-    status.textContent="⚠ "+e.message;
-    status.style.color="var(--red)";
-  }
-  setTimeout(()=>{status.style.display="none";},4000);
-}
-
-function fileToDataUrl(file){
-  return new Promise(resolve=>{
-    const fr=new FileReader();
-    fr.onload=e=>resolve(e.target.result);
-    fr.readAsDataURL(file);
-  });
+function showTagRef(file){
+  const fr=new FileReader();
+  fr.onload=e=>{
+    document.getElementById("tagRefImg").src=e.target.result;
+    document.getElementById("tagRefArea").style.display="block";
+    td2.innerHTML="🏷️ 選択済み ✓";
+  };
+  fr.readAsDataURL(file);
 }
 
 function drawStory(){
