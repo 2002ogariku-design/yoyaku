@@ -277,6 +277,10 @@ tbody tr:hover td{background:#fafafa;}
     <div class="note">データはブラウザ内（localStorage）に保存されます。外部サーバーには送信されません。</div>
   </div>
   <div class="dz">
+    <div class="dz-title">📜 アップロード履歴</div>
+    <div id="histList"></div>
+  </div>
+  <div class="dz">
     <div class="dz-title">データ管理</div>
     <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px;">すべてのデータを削除してファイル読み込み画面に戻ります</div>
     <button class="reset-btn" id="resetBtn">データをリセット（最初からやり直す）</button>
@@ -305,6 +309,7 @@ const GH_DATA_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/
 const GH_TOKEN_KEY="tk-gh-token",STAFFNAME_KEY="tk-staffname";
 let items=[];
 let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
+let uploadHistory=[];
 let ghDataSha=null;
 
 function getGhToken(){
@@ -337,12 +342,13 @@ async function ghLoadData(){
     const parsed=JSON.parse(b64Utf8(d.content));
     items=parsed.items||[];
     uploadMeta={uploadedAt:parsed.uploadedAt||null,uploadedBy:parsed.uploadedBy||null,filename:parsed.filename||null};
+    uploadHistory=parsed.uploadHistory||[];
   }catch(e){console.error(e);toast("データの読み込みに失敗："+e.message);}
 }
 
 async function ghSaveData(){
   const token=getGhToken();if(!token){toast("アクセスキーが未設定です");return;}
-  const payload={items,uploadedAt:uploadMeta.uploadedAt,uploadedBy:uploadMeta.uploadedBy,filename:uploadMeta.filename};
+  const payload={items,uploadedAt:uploadMeta.uploadedAt,uploadedBy:uploadMeta.uploadedBy,filename:uploadMeta.filename,uploadHistory};
   for(let a=0;a<3;a++){
     try{
       const h=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
@@ -359,6 +365,25 @@ async function ghSaveData(){
   }
 }
 
+function renderHistory(){
+  const el=document.getElementById("histList");
+  if(!el)return;
+  if(!uploadHistory.length){el.innerHTML='<div style="text-align:center;color:var(--faint);font-size:12.5px;padding:16px;">まだ履歴がありません</div>';return;}
+  el.innerHTML=uploadHistory.map(h=>{
+    const d=new Date(h.at);
+    const ds=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);gap:10px;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(h.file||"不明なファイル")}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">${ds}${h.by?" ・ "+esc(h.by):""}</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap;">
+        <div style="font-size:14px;font-weight:800;color:var(--ok);">+${h.added}</div>
+        <div style="font-size:10.5px;color:var(--faint);">計${h.total}点</div>
+      </div>
+    </div>`;
+  }).join("");
+}
 function updateUploadInfo(){
   const el=document.getElementById("uploadInfo");
   if(!el)return;
@@ -471,6 +496,10 @@ async function importWorkbook(wb){
       items.push(it);
       added++;
     }
+  }
+  if(added>0){
+    uploadHistory.unshift({at:uploadMeta.uploadedAt,by:uploadMeta.uploadedBy,file:uploadMeta.filename,added:added,total:items.length});
+    if(uploadHistory.length>50)uploadHistory=uploadHistory.slice(0,50);
   }
   await save();
   await renderAll();
@@ -802,7 +831,7 @@ document.getElementById("dlBtn").addEventListener("click",()=>{
 });
 
 /* ===== init ===== */
-async function renderAll(){fillFilters();renderList();updateUploadInfo();if(document.getElementById("v-anal").classList.contains("on"))renderAnal();}
+async function renderAll(){fillFilters();renderList();updateUploadInfo();renderHistory();if(document.getElementById("v-anal").classList.contains("on"))renderAnal();}
 (async function init(){
   await ghLoadData();
   renderAll();
