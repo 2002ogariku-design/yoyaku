@@ -182,15 +182,16 @@ tbody tr:hover td{background:#fafafa;}
       <select id="fRank"><option value="">すべてのランク</option></select>
       <select id="fStore"><option value="">すべての仕入店</option></select>
       <select id="fBuyer"><option value="">すべてのバイヤー</option></select>
+      <select id="fDate"><option value="">すべての買取日</option></select>
     </div>
   </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr>
         <th>ブランド</th><th>商品名</th><th>アイテム</th><th>サイズ</th><th class="hide-narrow">カラー</th><th>ランク</th>
-        <th>税込売価</th><th>仕入店</th><th>バイヤー</th><th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>検索</th><th></th>
+        <th>税込売価</th><th>買取日</th><th>仕入店</th><th>バイヤー</th><th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>検索</th><th></th>
       </tr></thead>
-      <tbody id="tbody"><tr><td colspan="13"><div class="empty">データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。</div></td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="14"><div class="empty">データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。</div></td></tr></tbody>
     </table>
   </div>
   <div class="card-list" id="cardList"></div>
@@ -397,6 +398,23 @@ function updateUploadInfo(){
 
 const yen=n=>"¥"+Number(n||0).toLocaleString("ja-JP");
 const yenMan=n=>{const m=Number(n||0)/10000;return "¥"+(m>=10000?(m/10000).toFixed(1)+"億":m.toLocaleString("ja-JP",{maximumFractionDigits:1})+"万");};
+function normDate(d){
+  if(!d)return "";
+  const s=String(d).trim();
+  // Try YYYY-MM-DD or YYYY/MM/DD
+  let m=s.match(/(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  // Try MM/DD (assume current year)
+  m=s.match(/^(\d{1,2})[-\/](\d{1,2})$/);
+  if(m){const y=new Date().getFullYear();return `${y}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}
+  // Excel serial number
+  const n=Number(s);
+  if(!isNaN(n)&&n>25000&&n<60000){
+    const dt=new Date((n-25569)*86400*1000);
+    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+  }
+  return "";
+}
 const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.opacity="1";clearTimeout(t.__x);t.__x=setTimeout(()=>t.style.opacity="0",2400);}
 document.querySelectorAll("nav button").forEach(b=>{
@@ -545,6 +563,14 @@ function fillFilters(){
   fill("fRank",items.map(i=>i.rank),"すべてのランク");
   fill("fStore",items.map(i=>i.store),"すべての仕入店");
   fill("fBuyer",items.map(i=>i.buyer),"すべてのバイヤー");
+  // Date filter: normalize and sort descending
+  const dsel=document.getElementById("fDate");
+  if(dsel){
+    const cur=dsel.value;
+    const dates=[...new Set(items.map(i=>normDate(i.date)).filter(Boolean))].sort().reverse();
+    dsel.innerHTML='<option value="">すべての買取日</option>'+dates.map(d=>`<option value="${d}">${d.replace(/-/g,"/")}（${items.filter(x=>normDate(x.date)===d).length}点）</option>`).join("");
+    if([...dsel.options].some(o=>o.value===cur))dsel.value=cur;
+  }
 }
 function filtered(){
   // Chrome Hearts専用：自動フィルター
@@ -560,6 +586,7 @@ function filtered(){
     if(fr&&i.rank!==fr)return false;
     if(fs&&i.store!==fs)return false;
     if(fy&&i.buyer!==fy)return false;
+    if(fd&&normDate(i.date)!==fd)return false;
     if(q&&![i.brand,i.name,i.item,i.color,i.comment].join(" ").toLowerCase().includes(q))return false;
     return true;
   });
@@ -572,7 +599,7 @@ function renderList(){
   document.getElementById("stCost").textContent=yenMan(items.reduce((s,i)=>s+i.cost,0));
   document.getElementById("dataCount").textContent=`現在 ${items.length} 点のデータが保存されています`;
   const tb=document.getElementById("tbody");
-  if(!list.length){tb.innerHTML=`<tr><td colspan="13"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;return;}
+  if(!list.length){tb.innerHTML=`<tr><td colspan="14"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;return;}
   tb.innerHTML=list.slice(0,500).map((i,idx)=>{
     const gq=encodeURIComponent([i.brand,i.name].filter(Boolean).join(" "));
     const rk=i.rank||"";
@@ -583,13 +610,13 @@ function renderList(){
       <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td class="hide-narrow">${esc(i.color)||"-"}</td>
       <td>${rk?`<span class="rank ${rk}">${rk}</span>`:`<span class="rank N">-</span>`}</td>
       <td class="price">${i.price?yen(i.price):"-"}</td>
-      <td>${esc(i.store)||esc(i.origStore)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
+      <td style="font-size:10px;">${normDate(i.date)?normDate(i.date).slice(5).replace("-","/"):"-"}</td><td>${esc(i.store)||esc(i.origStore)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
       <td class="hide-narrow" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">${esc(i.comment)||"-"}</td>
       <td class="hide-narrow">${esc(i.acc)||"-"}</td>
       <td><a class="g-btn" style="text-decoration:none;display:inline-block;" href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a></td>
       <td><button class="st-btn" onclick="makeStory(${items.indexOf(i)})">📸 作成</button></td>
     </tr>`;
-  }).join("")+(list.length>500?`<tr><td colspan="13" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
+  }).join("")+(list.length>500?`<tr><td colspan="14" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
 
   // Mobile card view
   const cl=document.getElementById("cardList");
@@ -613,6 +640,7 @@ function renderList(){
             ${i.size?`<span class="kc-tag">${esc(i.size)}</span>`:""}
             ${rk?`<span class="kc-tag">ランク${rk}</span>`:""}
             ${i.color?`<span class="kc-tag">${esc(i.color)}</span>`:""}
+            ${normDate(i.date)?`<span class="kc-tag">${normDate(i.date).replace(/-/g,"/")}</span>`:""}
             ${i.store||i.origStore?`<span class="kc-tag">${esc(i.store||i.origStore)}</span>`:""}
             ${i.buyer?`<span class="kc-tag">${esc(i.buyer)}</span>`:""}
           </div>
@@ -625,8 +653,8 @@ function renderList(){
     }
   }
 }
-["q","fBrand","fItem","fRank","fStore","fBuyer"].forEach(id=>{
-  document.getElementById(id).addEventListener(id==="q"?"input":"change",renderList);
+["q","fBrand","fItem","fRank","fStore","fBuyer","fDate"].forEach(id=>{
+  const el=document.getElementById(id);if(el)el.addEventListener(id==="q"?"input":"change",renderList);
 });
 
 /* ===== analysis ===== */
