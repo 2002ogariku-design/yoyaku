@@ -577,6 +577,7 @@ function filtered(){
   const fb=document.getElementById("fBrand").value, fi=document.getElementById("fItem").value,
         fr=document.getElementById("fRank").value, fs=document.getElementById("fStore").value,
         fy=document.getElementById("fBuyer").value;
+  const fdEl=document.getElementById("fDate"); const fd=fdEl?fdEl.value:"";
   return items.filter(i=>{
     if(fb&&i.brand!==fb)return false;
     if(fi&&i.item!==fi)return false;
@@ -641,6 +642,7 @@ function renderList(){
             ${i.store||i.origStore?`<span class="kc-tag">${esc(i.store||i.origStore)}</span>`:""}
             ${i.buyer?`<span class="kc-tag">${esc(i.buyer)}</span>`:""}
           </div>
+          ${i.comment?`<div style="font-size:11.5px;color:var(--dim);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.5;">💬 ${esc(i.comment)}</div>`:""}
           <div class="kc-actions">
             <a href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a>
             <button onclick="makeStory(${items.indexOf(i)})">📸 ストーリー</button>
@@ -672,7 +674,7 @@ function aTable(elId,label,entries,total){
     entries.map(([k,v])=>`<tr><td style="font-weight:700;">${esc(k)}</td><td class="r">${v.n} 点</td><td class="r">${(v.n/total*100).toFixed(1)}%</td><td class="r">${yen(v.cost)}</td><td class="r">${yen(Math.round(v.cost/v.n))}</td></tr>`).join("");
 }
 function renderAnal(){
-  if(!items.length){document.getElementById("sumCards").innerHTML='<div class="acard" style="grid-column:1/-1;text-align:center;color:var(--faint);">データがありません</div>';return;}
+  if(!items||!items.length){document.getElementById("sumCards").innerHTML='<div class="acard" style="grid-column:1/-1;text-align:center;color:var(--faint);">データがありません</div>';return;}
   const costs=items.map(i=>i.cost).sort((a,b)=>a-b);
   const total=costs.reduce((s,c)=>s+c,0);
   const med=costs.length%2?costs[(costs.length-1)/2]:(costs[costs.length/2-1]+costs[costs.length/2])/2;
