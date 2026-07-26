@@ -75,6 +75,8 @@ header p{font-size:11.5px;color:#aeaeb2;margin-top:3px;}
     <div style="margin-top:10px;">
       <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:6px;">よく使う文言（タップで選択）</div>
       <div id="phraseChips"></div>
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin:12px 0 6px;">下部テキストの色</div>
+      <div id="colorChips"></div>
     </div>
     <datalist id="sBrandDl"></datalist>
   </div>
@@ -120,6 +122,18 @@ window.pickPhrase=function(el){
   document.querySelectorAll("#phraseChips .chip").forEach(c=>c.classList.remove("on"));
   el.classList.add("on");
   document.getElementById("sTag").value=el.textContent;
+  drawStory();
+};
+
+// bottom text color
+const COLORS=[["白","#ffffff"],["黒","#111111"],["赤","#ff2d2d"],["ゴールド","#d4af37"],["ピンク","#ff5fa2"],["水色","#4fc3ff"],["イエロー","#ffd60a"],["グリーン","#34c759"]];
+let tagColor="#ffffff";
+const cc=document.getElementById("colorChips");
+cc.innerHTML=COLORS.map(([name,hex],i)=>`<span class="chip${i===0?" on":""}" onclick="pickColor(this,'${hex}')" style="display:inline-flex;align-items:center;gap:6px;"><span style="width:16px;height:16px;border-radius:50%;background:${hex};border:1px solid #ccc;display:inline-block;"></span>${name}</span>`).join("");
+window.pickColor=function(el,hex){
+  document.querySelectorAll("#colorChips .chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  tagColor=hex;
   drawStory();
 };
 
@@ -397,7 +411,7 @@ function drawStory(){
   if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
   if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
   if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
-  if(tag){cx.font=`600 70px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-190);}
+  if(tag){cx.fillStyle=tagColor;cx.font=`600 70px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-190);}
   cx.shadowBlur=0;
 }
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
