@@ -560,16 +560,99 @@ async function scanTagQR(file){
 
   // Check if it's a Rakuten URL
   if(url.includes("item.rakuten.co.jp")){
-    td2.innerHTML="🏷️ QR読み取り成功 ✓";
-    status.innerHTML='✓ <a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:14px;text-decoration:underline;">👆 楽天で商品情報を確認（タップ）</a><br><span style="font-size:11px;color:var(--t2);">ブランド英語名・ランクを確認して下の欄に入力</span>';
-    status.style.color="var(--green)";
+    td2.innerHTML="🏷️ QR成功 → 商品情報を取得中...";
+    status.textContent="🔍 楽天ページから商品情報を取得中...";
+    status.style.color="var(--blue)";
+    const got=await fetchRakuten(url);
+    if(got.ok){
+      const filled=[];
+      if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
+      if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
+      if(got.rank){const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===got.rank)){sel.value=got.rank;filled.push("ランク");}}
+      if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
+      drawStory();
+      td2.innerHTML="🏷️ 自動入力完了 ✓";
+      status.innerHTML=(filled.length?'✓ '+filled.join("・")+'を自動入力しました（確認してください）':'⚠ 情報を読み取れませんでした')+'<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを開いて確認</a>';
+      status.style.color=filled.length?"var(--green)":"var(--orange)";
+    }else{
+      td2.innerHTML="🏷️ 自動取得できず";
+      status.innerHTML='⚠ 楽天ページを自動取得できませんでした。<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:14px;text-decoration:underline;">👆 楽天ページを開く</a><br><span style="font-size:11px;color:var(--t2);">値札を見ながら入力してください</span>';
+      status.style.color="var(--orange)";
+    }
     status.style.display="block";
-    drawStory();
   }else{
     status.textContent="QR内容: "+url;
     td2.innerHTML="🏷️ QR読み取り完了";
     setTimeout(()=>{status.style.display="none";},5000);
   }
+}
+
+// Fetch Rakuten product page and extract info (brand-English, size, rank, price)
+async function fetchRakuten(url){
+  const proxies=[
+    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
+  ];
+  let html2="";
+  for(const mk of proxies){
+    try{
+      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
+      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
+    }catch(e){console.log("proxy fail:",e.message);}
+  }
+  if(!html2)return{ok:false};
+
+  const out={ok:true,brand:"",size:"",rank:"",price:0};
+
+  // 1) JSON-LD structured data (most reliable for price & name)
+  try{
+    const ldMatches=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for(const m of ldMatches){
+      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
+      const arr=Array.isArray(data)?data:[data];
+      for(const d of arr){
+        const offers=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
+        if(offers&&offers.price){const p=Number(String(offers.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
+        if(d.brand){out.brand=typeof d.brand==="string"?d.brand:(d.brand.name||"");}
+      }
+    }
+  }catch(e){}
+
+  // 2) Extract title (RINKAN format: usually "...ブランド... rinkan X")
+  let title="";
+  const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if(tM)title=tM[1];
+  const ogT=html2.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+  if(ogT&&ogT[1].length>title.length/2)title=ogT[1];
+  title=title.replace(/【[^】]*】/g,"").replace(/[｜|].*$/,"").trim();
+  console.log("Rakuten title:",title);
+
+  // 3) Rank: "rinkan X" at end
+  const rkM=title.match(/rinkan\s*([SABCD])\b/i)||html2.match(/rinkan\s*([SABCD])\b/i);
+  if(rkM)out.rank=rkM[1].toUpperCase();
+
+  // 4) Brand (English): find longest Latin-letter phrase in title
+  if(!out.brand||!/[A-Za-z]/.test(out.brand)){
+    const engPhrases=title.match(/[A-Z][A-Za-z][A-Za-z&'.\- ]*[A-Za-z]/g);
+    if(engPhrases){
+      // Filter out "rinkan" and pick the longest meaningful phrase
+      const cand=engPhrases.map(s=>s.trim()).filter(s=>!/^rinkan/i.test(s)&&s.length>=2).sort((a,b)=>b.length-a.length);
+      if(cand.length)out.brand=cand[0];
+    }
+  }
+
+  // 5) Size: from title or page
+  const szM=title.match(/(?:size|サイズ)[：:\s]*([A-Z0-9]{1,4})/i)||html2.match(/サイズ[／/]?[：:\s]*([A-Z0-9]{1,4})\b/i);
+  if(szM&&!["A","B","C","D"].includes(szM[1].toUpperCase()))out.size=szM[1].toUpperCase();
+
+  // 6) Price fallback if JSON-LD missed it
+  if(!out.price){
+    const pats=[/税込[^\d]{0,6}(\d[\d,]{3,})/,/["']price["']\s*:\s*["']?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
+    for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
+  }
+
+  return out;
 }
 
 function drawStory(){
