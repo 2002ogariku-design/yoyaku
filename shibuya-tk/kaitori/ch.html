@@ -174,6 +174,7 @@ tbody tr:hover td{background:#fafafa;}
     <div class="stat"><div class="n" id="stBrands">0</div><div class="l">BRANDS</div></div>
     <div class="stat"><div class="n" id="stCost">¥0</div><div class="l">仕入額</div></div>
   </div>
+  <div id="batchIndicator" style="display:none;justify-content:space-between;align-items:center;background:var(--gold-bg);border:1px solid var(--gold);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;font-weight:700;"></div>
   <div class="fbar">
     <input type="text" id="q" placeholder="ブランド・商品名・型番で検索...">
     <div class="row">
@@ -311,6 +312,7 @@ const GH_TOKEN_KEY="tk-gh-token",STAFFNAME_KEY="tk-staffname";
 let items=[];
 let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
 let uploadHistory=[];
+let batchFilter="";
 let ghDataSha=null;
 
 function getGhToken(){
@@ -366,6 +368,17 @@ async function ghSaveData(){
   }
 }
 
+window.viewBatch=function(batch){
+  batchFilter=(batchFilter===batch)?"":batch;
+  // Switch to inventory tab
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+  document.querySelector('nav button[data-v="list"]').classList.add("on");
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("on"));
+  document.getElementById("v-list").classList.add("on");
+  renderList();
+  window.scrollTo({top:0,behavior:"smooth"});
+  if(batchFilter)toast("この回にアップロードされたデータを表示中");
+};
 function renderHistory(){
   const el=document.getElementById("histList");
   if(!el)return;
@@ -373,10 +386,12 @@ function renderHistory(){
   el.innerHTML=uploadHistory.map(h=>{
     const d=new Date(h.at);
     const ds=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);gap:10px;">
+    const active=batchFilter===h.batch;
+    return `<div onclick="viewBatch('${h.batch||""}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid ${active?"var(--gold)":"var(--line)"};background:${active?"var(--gold-bg)":"transparent"};border-radius:10px;margin-bottom:8px;gap:10px;cursor:pointer;">
       <div style="min-width:0;flex:1;">
         <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(h.file||"不明なファイル")}</div>
         <div style="font-size:11px;color:var(--dim);margin-top:2px;">${ds}${h.by?" ・ "+esc(h.by):""}</div>
+        <div style="font-size:11px;color:var(--gold);margin-top:3px;font-weight:700;">${active?"✓ 表示中（タップで解除）":"タップでこの回のデータを表示 →"}</div>
       </div>
       <div style="text-align:right;white-space:nowrap;">
         <div style="font-size:14px;font-weight:800;color:var(--ok);">+${h.added}</div>
@@ -455,6 +470,7 @@ const HEADER_MAP=[
 ];
 async function importWorkbook(wb){
   let added=0;
+  const batchId=uploadMeta.uploadedAt||new Date().toISOString();
   const seen=new Set(items.map(i=>i.__key));
   for(const sn of wb.SheetNames){
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
@@ -511,12 +527,13 @@ async function importWorkbook(wb){
       it.__key=[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer].join("|");
       if(seen.has(it.__key))continue;
       seen.add(it.__key);
+      it.__batch=batchId;
       items.push(it);
       added++;
     }
   }
   if(added>0){
-    uploadHistory.unshift({at:uploadMeta.uploadedAt,by:uploadMeta.uploadedBy,file:uploadMeta.filename,added:added,total:items.length});
+    uploadHistory.unshift({at:uploadMeta.uploadedAt,by:uploadMeta.uploadedBy,file:uploadMeta.filename,added:added,total:items.length,batch:batchId});
     if(uploadHistory.length>50)uploadHistory=uploadHistory.slice(0,50);
   }
   await save();
@@ -581,6 +598,7 @@ function filtered(){
         fy=document.getElementById("fBuyer").value;
   const fdEl=document.getElementById("fDate"); const fd=fdEl?fdEl.value:"";
   return items.filter(i=>{
+    if(batchFilter&&i.__batch!==batchFilter)return false;
     if(!i.brand||!i.brand.match(/クロムハーツ|CHROME\s*HEARTS|CH\b/i))return false;
     if(fb&&i.brand!==fb)return false;
     if(fi&&i.item!==fi)return false;
@@ -594,6 +612,14 @@ function filtered(){
 }
 function renderList(){
   const list=filtered();
+  const bi=document.getElementById("batchIndicator");
+  if(bi){
+    if(batchFilter){
+      const h=uploadHistory.find(x=>x.batch===batchFilter);
+      bi.style.display="flex";
+      bi.innerHTML=`<span>📜 ${h?esc(h.file):"過去の回"} のデータを表示中（${list.length}点）</span><button onclick="viewBatch('${batchFilter}')" style="background:#000;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">解除</button>`;
+    }else{bi.style.display="none";}
+  }
   document.getElementById("hCount").textContent=items.length+"点";
   document.getElementById("stTotal").textContent=items.length;
   document.getElementById("stBrands").textContent=new Set(items.map(i=>i.brand).filter(Boolean)).size;
