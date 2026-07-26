@@ -8,6 +8,7 @@
 <title>公式インスタ分析｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
@@ -569,7 +570,11 @@ async function scanTagQR(file){
       if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
       if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
       if(got.rank){const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===got.rank)){sel.value=got.rank;filled.push("ランク");}}
-      if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
+      // Read tax-included price from the TAG photo (overrides Rakuten price)
+      status.textContent="🔍 値札から税込価格を読み取り中...";
+      const tagPrice=await ocrTagPrice(dataUrl);
+      if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+      else if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
       drawStory();
       td2.innerHTML="🏷️ 自動入力完了 ✓";
       status.innerHTML=(filled.length?'✓ '+filled.join("・")+'を自動入力しました（確認してください）':'⚠ 情報を読み取れませんでした')+'<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを開いて確認</a>';
@@ -585,6 +590,34 @@ async function scanTagQR(file){
     td2.innerHTML="🏷️ QR読み取り完了";
     setTimeout(()=>{status.style.display="none";},5000);
   }
+}
+
+// OCR the tax-included price from the RINKAN tag photo
+// RINKAN tags: the LARGER price (top-right) is tax-included, smaller below is ex-tax
+async function ocrTagPrice(dataUrl){
+  try{
+    const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+    // Crop the right portion where prices are printed (roughly right 55%, vertical 15-55%)
+    const cx=Math.round(img.width*0.42), cy=Math.round(img.height*0.12);
+    const cw=Math.round(img.width*0.56), ch=Math.round(img.height*0.5);
+    const cv=document.createElement("canvas");
+    // upscale 2x for better OCR
+    const sc=2;
+    cv.width=cw*sc;cv.height=ch*sc;
+    const cx2=cv.getContext("2d");
+    cx2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
+    // high-contrast black/white
+    const idd=cx2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
+    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>135?255:0;d[i]=d[i+1]=d[i+2]=g;}
+    cx2.putImageData(idd,0,0);
+    const res=await Tesseract.recognize(cv,"eng",{tessedit_char_whitelist:"0123456789,¥"});
+    const text=res.data.text;
+    console.log("Tag price OCR:",JSON.stringify(text));
+    // Collect all price-like numbers; tax-included is the LARGER one
+    const nums=[...text.matchAll(/(\d[\d,]{3,})/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+    if(!nums.length)return 0;
+    return Math.max(...nums); // tax-included is larger than ex-tax
+  }catch(e){console.log("tag OCR error:",e);return 0;}
 }
 
 // Fetch Rakuten product page and extract info (brand-English, size, rank, price)
