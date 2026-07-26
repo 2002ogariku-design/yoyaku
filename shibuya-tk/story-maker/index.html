@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>RINKAN ストーリー作成</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+  --bg:#f2f2f7;--card:#fff;--card2:#f7f7fa;--line:#e2e2e8;
+  --t1:#1d1d1f;--t2:#48484a;--t3:#8e8e93;
+  --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:40px;}
+header{background:#000;color:#fff;padding:20px 18px;position:sticky;top:0;z-index:10;}
+header h1{font-size:19px;font-weight:800;letter-spacing:.02em;}
+header p{font-size:11.5px;color:#aeaeb2;margin-top:3px;}
+.wrap{max-width:640px;margin:0 auto;padding:14px;}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.c-title{font-size:15px;font-weight:800;margin-bottom:14px;}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.f{margin-bottom:0;}
+.f.full{grid-column:1/-1;}
+.f label{display:block;font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:5px;}
+.f input,.f select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:16px;font-family:var(--font);}
+.f input:focus,.f select:focus{outline:none;border-color:var(--blue);}
+.save-btn{width:100%;padding:16px;border-radius:14px;border:none;background:var(--t1);color:#fff;font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;}
+.pill{padding:12px 20px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);}
+.empty{text-align:center;color:var(--t3);font-size:13px;padding:24px;}
+.chip{display:inline-block;padding:8px 13px;margin:3px;border-radius:20px;border:1px solid var(--line);background:var(--card2);font-size:12.5px;cursor:pointer;font-family:var(--font);}
+.chip.on{background:var(--t1);color:#fff;border-color:var(--t1);}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>📸 RINKAN ストーリー作成</h1>
+  <p>値札スキャンで自動入力 → ワンタップでインスタ用画像を保存</p>
+</header>
+<div class="wrap">
+
+  <div class="c">
+    <div class="c-title">📸 ストーリー画像を作成</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <div class="f"><label>商品写真</label></div>
+        <div id="photoDrop" class="drop">📷 タップして選択</div>
+        <input type="file" id="photoIn" accept="image/*" style="display:none;">
+      </div>
+      <div>
+        <div class="f"><label>🏷️ 値札スキャン（QR＋価格）</label></div>
+        <div id="tagDrop" class="drop">🏷️ 値札を撮影/選択</div>
+        <input type="file" id="tagIn" accept="image/*" style="display:none;">
+        <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
+      </div>
+    </div>
+    <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札（自動入力の確認用）</div>
+      <img id="tagRefImg" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+    </div>
+    <div class="fg">
+      <div class="f"><label>ブランド</label><input type="text" id="sBrand" placeholder="CHROME HEARTS" list="sBrandDl"></div>
+      <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="54"></div>
+      <div class="f"><label>ランク</label>
+        <select id="sRank">
+          <option value="">選択...</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+        </select>
+      </div>
+      <div class="f"><label>価格（税込・数字のみ）</label><input type="number" id="sPrice" placeholder="172480"></div>
+      <div class="f full"><label>下部テキスト</label><input type="text" id="sTag" value="📩DMにて割引可能"></div>
+    </div>
+    <div style="margin-top:10px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:6px;">よく使う文言（タップで選択）</div>
+      <div id="phraseChips"></div>
+    </div>
+    <datalist id="sBrandDl"></datalist>
+  </div>
+
+  <div class="c" style="text-align:center;">
+    <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);"></canvas>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;">
+      <button class="pill" id="shareBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:12px 24px;font-size:15px;">📤 保存・共有</button>
+      <button class="pill" id="dlBtn" style="padding:12px 18px;">💾 DL</button>
+    </div>
+    <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📁 作成アーカイブ</div>
+    <div id="archiveList"><div class="empty">まだ作成した画像はありません</div></div>
+  </div>
+
+</div>
+
+<!-- Full-size archive viewer modal -->
+<div id="viewerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px;" onclick="closeViewer(event)">
+  <img id="viewerImg" style="max-width:100%;max-height:78vh;border-radius:10px;">
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button class="pill" id="viewerShare" style="background:var(--blue);color:#fff;border-color:var(--blue);">📤 保存・共有</button>
+    <button class="pill" id="viewerClose" style="background:#fff;">閉じる</button>
+  </div>
+</div>
+
+<script>
+const PHRASES=["📩DMにて割引可能","📩コメント・DMお気軽に","✨新入荷","🔥売切れ次第終了","📦全国発送可能","💎美品","🆕新品未使用","⭐️店頭にて販売中","💰お値下げ交渉可","📸スタッフ着用"];
+const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
+
+let photoImg=null, storyArchive=[];
+try{storyArchive=JSON.parse(localStorage.getItem("story-archive-v2")||"[]");}catch(e){}
+const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
+
+// phrase chips
+const pc=document.getElementById("phraseChips");
+pc.innerHTML=PHRASES.map(p=>`<span class="chip" onclick="pickPhrase(this)">${esc(p)}</span>`).join("");
+window.pickPhrase=function(el){
+  document.querySelectorAll("#phraseChips .chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  document.getElementById("sTag").value=el.textContent;
+  drawStory();
+};
+
+// photo drop
+const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
+pd.addEventListener("click",()=>pi.click());
+pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0]);pi.value="";});
+["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
+pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
+function loadPhoto(file){
+  const fr=new FileReader();
+  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;pd.innerHTML="📷 選択済み ✓";drawStory();};img.src=e.target.result;};
+  fr.readAsDataURL(file);
+}
+
+// tag scan
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files[0])scanTagQR(e.target.files[0]);ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)scanTagQR(f);});
+
+async function scanTagQR(file){
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🔍 QRコードを読み取り中...";
+  status.style.color="var(--blue)";
+  td2.innerHTML="🏷️ 読み取り中...";
+
+  // Show tag photo as reference
+  const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
+  document.getElementById("tagRefImg").src=dataUrl;
+  document.getElementById("tagRefArea").style.display="block";
+
+  // Scan QR code from image
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+  const canvas=document.createElement("canvas");
+  canvas.width=img.width;canvas.height=img.height;
+  const ctx2=canvas.getContext("2d");
+  ctx2.drawImage(img,0,0);
+  const imageData=ctx2.getImageData(0,0,canvas.width,canvas.height);
+  // Try multiple resolutions for better detection
+  let qr=null;
+  const sizes=[canvas.width, 1500, 1000, 600];
+  for(const sz of sizes){
+    if(qr)break;
+    const scale=sz/Math.max(img.width,img.height);
+    const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
+    const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
+    const tctx=tc.getContext("2d");
+    tctx.drawImage(img,0,0,sw,sh);
+    // Also try with inverted colors
+    const td3=tctx.getImageData(0,0,sw,sh);
+    qr=jsQR(td3.data,sw,sh);
+    if(!qr){
+      // Try with increased contrast
+      const d=td3.data;
+      for(let i=0;i<d.length;i+=4){
+        let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        g=g>128?255:0;
+        d[i]=g;d[i+1]=g;d[i+2]=g;
+      }
+      tctx.putImageData(td3,0,0);
+      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh);
+    }
+  }
+
+  if(!qr||!qr.data){
+    td2.innerHTML="🏷️ QR検出できず（値札を見て入力）";
+    status.textContent="⚠ QRコードが見つかりません。QRコードが大きく写るように撮り直してください。";
+    status.style.color="var(--red)";
+    setTimeout(()=>{status.style.display="none";},4000);
+    return;
+  }
+
+  console.log("QR data:",qr.data);
+  const url=qr.data;
+
+  // Check if it's a Rakuten URL
+  if(url.includes("item.rakuten.co.jp")){
+    td2.innerHTML="🏷️ QR成功 → 商品情報を取得中...";
+    status.textContent="🔍 楽天ページから商品情報を取得中...";
+    status.style.color="var(--blue)";
+    const got=await fetchRakuten(url);
+    if(got.ok){
+      const filled=[];
+      if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
+      if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
+      if(got.rank){const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===got.rank)){sel.value=got.rank;filled.push("ランク");}}
+      // Read tax-included price from the TAG photo (overrides Rakuten price)
+      status.textContent="🔍 値札から税込価格を読み取り中...";
+      const tagPrice=await ocrTagPrice(dataUrl);
+      if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+      else if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
+      drawStory();
+      td2.innerHTML="🏷️ 自動入力完了 ✓";
+      status.innerHTML=(filled.length?'✓ '+filled.join("・")+'を自動入力しました（確認してください）':'⚠ 情報を読み取れませんでした')+'<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを開いて確認</a>';
+      status.style.color=filled.length?"var(--green)":"var(--orange)";
+    }else{
+      td2.innerHTML="🏷️ 自動取得できず";
+      status.innerHTML='⚠ 楽天ページを自動取得できませんでした。<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:14px;text-decoration:underline;">👆 楽天ページを開く</a><br><span style="font-size:11px;color:var(--t2);">値札を見ながら入力してください</span>';
+      status.style.color="var(--orange)";
+    }
+    status.style.display="block";
+  }else{
+    status.textContent="QR内容: "+url;
+    td2.innerHTML="🏷️ QR読み取り完了";
+    setTimeout(()=>{status.style.display="none";},5000);
+  }
+}
+
+// OCR the tax-included price from the RINKAN tag photo
+// Tax-included = the comma-formatted price on a line WITHOUT "exc.tax"
+async function ocrTagPrice(dataUrl){
+  try{
+    const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+    const cx=Math.round(img.width*0.40), cy=Math.round(img.height*0.10);
+    const cw=Math.round(img.width*0.58), ch=Math.round(img.height*0.55);
+    const cv=document.createElement("canvas");
+    const sc=2;
+    cv.width=cw*sc;cv.height=ch*sc;
+    const cx2=cv.getContext("2d");
+    cx2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
+    const idd=cx2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
+    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>135?255:0;d[i]=d[i+1]=d[i+2]=g;}
+    cx2.putImageData(idd,0,0);
+    const res=await Tesseract.recognize(cv,"eng",{tessedit_char_whitelist:"0123456789,.exctaxRANKSEO:¥ "});
+    const text=res.data.text;
+    console.log("Tag price OCR:",JSON.stringify(text));
+    // Only accept comma-formatted numbers (real prices like 181,500), reject model numbers like 000000078
+    const taxIncluded=[], allPrices=[];
+    for(const ln of text.split("\n")){
+      const isExTax=/exc|tax/i.test(ln);
+      const priceNums=[...ln.matchAll(/(\d{1,3},\d{3})/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+      for(const n of priceNums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+    }
+    console.log("taxIncluded:",taxIncluded,"all:",allPrices);
+    if(taxIncluded.length)return Math.max(...taxIncluded);
+    if(allPrices.length)return Math.max(...allPrices);
+    return 0;
+  }catch(e){console.log("tag OCR error:",e);return 0;}
+}
+
+// Fetch Rakuten product page and extract info (brand-English, size, rank, price)
+async function fetchRakuten(url){
+  const proxies=[
+    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
+  ];
+  let html2="";
+  for(const mk of proxies){
+    try{
+      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
+      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
+    }catch(e){console.log("proxy fail:",e.message);}
+  }
+  if(!html2)return{ok:false};
+
+  const out={ok:true,brand:"",size:"",rank:"",price:0};
+
+  // Gather title from multiple sources (og:title is usually cleanest)
+  let title="";
+  const ogT=html2.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+  if(ogT)title=ogT[1];
+  if(!title){const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);if(tM)title=tM[1];}
+  title=title.replace(/【楽天市場】/g,"").replace(/｜.*$/,"").trim();
+  console.log("Rakuten title:",title);
+
+  // Also grab full product name area for pattern matching (title + description)
+  let searchText=title;
+  const descM=html2.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  if(descM)searchText+=" "+descM[1];
+
+  // RANK: RINKAN uses "#rinkan*X" format
+  const rkM=html2.match(/#rinkan\*([SABCD])/i)||searchText.match(/#rinkan\*([SABCD])/i)||searchText.match(/rinkan[*＊]?\s*([SABCD])\b/i);
+  if(rkM)out.rank=rkM[1].toUpperCase();
+
+  // SIZE: "サイズ:XX" format
+  const szM=searchText.match(/サイズ[:：]\s*([A-Za-z0-9.\/]+)/);
+  if(szM&&szM[1].length<=6)out.size=szM[1];
+
+  // BRAND (English): RINKAN title starts with "カタカナ英語ブランド Englishブランド ..."
+  // Use known-brand dictionary for clean names
+  const brandMap={
+    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
+    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
+    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
+    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
+    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
+    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
+    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
+    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
+    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
+    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
+    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
+    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
+    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING"
+  };
+  // Match leading katakana brand
+  for(const[jp,en]of Object.entries(brandMap)){
+    if(title.startsWith(jp)){out.brand=en;break;}
+  }
+  // Fallback: extract English text right after leading Japanese brand word
+  if(!out.brand){
+    const bM=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+([A-Za-z][A-Za-z'&.\- ]{1,30}?)(?=[\s　]+[A-Z0-9]{2,}[\s　]|[\s　]+サイズ|[\s　]*[\u3040-\u30FF\u4E00-\u9FFF]|[\s　]*$)/);
+    if(bM)out.brand=bM[1].trim();
+    else{
+      // Last resort: first Latin phrase in title
+      const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
+      if(eng)out.brand=eng[0];
+    }
+  }
+
+  // PRICE: try JSON-LD first, then patterns
+  try{
+    const lds=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for(const m of lds){
+      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
+      const arr=Array.isArray(data)?data:[data];
+      for(const d of arr){
+        const off=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
+        if(off&&off.price){const p=Number(String(off.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
+      }
+    }
+  }catch(e){}
+  if(!out.price){
+    const pats=[/itemprice["'\s:]*(\d[\d,]{3,})/i,/税込[^\d]{0,6}(\d[\d,]{3,})/,/"price"\s*:\s*"?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
+    for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
+  }
+
+  return out;
+}
+
+
+function drawStory(){
+  const W=1080,H=1920;
+  cx.clearRect(0,0,W,H);
+  if(photoImg){
+    const s=Math.max(W/photoImg.width,H/photoImg.height);
+    const w=photoImg.width*s,h=photoImg.height*s;
+    cx.drawImage(photoImg,(W-w)/2,(H-h)/2,w,h);
+  }else{
+    cx.fillStyle="#1d1d1f";cx.fillRect(0,0,W,H);
+    cx.fillStyle="#aeaeb2";cx.font="500 36px sans-serif";cx.textAlign="center";
+    cx.fillText("写真を選択してください",W/2,H/2);cx.textAlign="left";
+  }
+  const g1=cx.createLinearGradient(0,0,0,500);
+  g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");
+  cx.fillStyle=g1;cx.fillRect(0,0,W,500);
+  const g2=cx.createLinearGradient(0,H-560,0,H);
+  g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,"rgba(0,0,0,.5)");
+  cx.fillStyle=g2;cx.fillRect(0,H-560,W,560);
+  cx.fillStyle="#fff";cx.shadowColor="rgba(0,0,0,.5)";cx.shadowBlur=16;
+  const serif="'Hiragino Mincho ProN','Yu Mincho',serif";
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  let y=220;
+  if(brand){cx.font=`500 72px ${serif}`;cx.fillText(brand,70,y);y+=86;}
+  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
+  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
+  if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
+  if(tag){cx.font=`500 58px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-200);}
+  cx.shadowBlur=0;
+}
+["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
+document.getElementById("sRank").addEventListener("change",drawStory);
+
+function updateBrandDl(){
+  const brands=[...new Set(storyArchive.map(a=>a.brand).filter(Boolean))].sort();
+  document.getElementById("sBrandDl").innerHTML=brands.map(b=>`<option value="${esc(b)}">`).join("");
+}
+
+// share (1-tap save on iOS) - now saves FULL image in archive
+document.getElementById("shareBtn").addEventListener("click",async()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const fname=`story_${brand}_${Date.now()}.png`;
+  try{
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const file=new File([blob],fname,{type:"image/png"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:fname});
+      archiveStory(brand);
+      tick("✓ 共有しました");
+    }else{
+      const a=document.createElement("a");a.download=fname;a.href=cv.toDataURL("image/png");a.click();
+      archiveStory(brand);tick("✓ ダウンロードしました");
+    }
+  }catch(e){if(e.name!=="AbortError")console.error(e);}
+});
+document.getElementById("dlBtn").addEventListener("click",()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const a=document.createElement("a");a.download=`story_${brand}_${Date.now()}.png`;a.href=cv.toDataURL("image/png");a.click();
+  archiveStory(brand);
+});
+function tick(msg){const t=document.getElementById("shareTick");t.textContent=msg;t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);}
+
+function archiveStory(brand){
+  const thumb=document.createElement("canvas");
+  thumb.width=180;thumb.height=320;
+  thumb.getContext("2d").drawImage(cv,0,0,180,320);
+  // Save full image (compressed JPEG) so it can be viewed/re-shared later
+  const full=cv.toDataURL("image/jpeg",0.75);
+  storyArchive.unshift({brand,date:today(),thumb:thumb.toDataURL("image/jpeg",0.6),full});
+  if(storyArchive.length>40)storyArchive=storyArchive.slice(0,40);
+  try{localStorage.setItem("story-archive-v2",JSON.stringify(storyArchive));}catch(e){
+    // storage full - trim and retry
+    storyArchive=storyArchive.slice(0,20);
+    try{localStorage.setItem("story-archive-v2",JSON.stringify(storyArchive));}catch(e2){}
+  }
+  renderArchive();updateBrandDl();
+}
+function renderArchive(){
+  const el=document.getElementById("archiveList");
+  if(!storyArchive.length){el.innerHTML='<div class="empty">まだ作成した画像はありません</div>';return;}
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;">'+
+    storyArchive.map((a,i)=>`<div style="text-align:center;cursor:pointer;" onclick="openViewer(${i})">
+      <img src="${a.thumb}" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+      <div style="font-size:9.5px;color:var(--t3);margin-top:3px;">${esc(a.brand)}<br>${a.date}</div>
+    </div>`).join("")+'</div>';
+}
+
+// Full-size viewer
+let viewerIdx=-1;
+window.openViewer=function(i){
+  viewerIdx=i;
+  const a=storyArchive[i];
+  document.getElementById("viewerImg").src=a.full||a.thumb;
+  document.getElementById("viewerModal").style.display="flex";
+};
+window.closeViewer=function(e){
+  if(e&&e.target.id!=="viewerModal"&&e.target.id!=="viewerClose")return;
+  document.getElementById("viewerModal").style.display="none";
+};
+document.getElementById("viewerClose").addEventListener("click",()=>document.getElementById("viewerModal").style.display="none");
+document.getElementById("viewerShare").addEventListener("click",async()=>{
+  const a=storyArchive[viewerIdx];if(!a)return;
+  try{
+    const blob=await(await fetch(a.full||a.thumb)).blob();
+    const file=new File([blob],`story_${a.brand}_${a.date}.jpg`,{type:"image/jpeg"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file]});
+    }else{
+      const dl=document.createElement("a");dl.download=file.name;dl.href=a.full||a.thumb;dl.click();
+    }
+  }catch(e){if(e.name!=="AbortError")console.error(e);}
+});
+
+updateBrandDl();renderArchive();drawStory();
+</script>
+</body>
+</html>
