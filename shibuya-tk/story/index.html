@@ -605,50 +605,74 @@ async function fetchRakuten(url){
 
   const out={ok:true,brand:"",size:"",rank:"",price:0};
 
-  // 1) JSON-LD structured data (most reliable for price & name)
-  try{
-    const ldMatches=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
-    for(const m of ldMatches){
-      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
-      const arr=Array.isArray(data)?data:[data];
-      for(const d of arr){
-        const offers=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
-        if(offers&&offers.price){const p=Number(String(offers.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
-        if(d.brand){out.brand=typeof d.brand==="string"?d.brand:(d.brand.name||"");}
-      }
-    }
-  }catch(e){}
-
-  // 2) Extract title (RINKAN format: usually "...ブランド... rinkan X")
+  // Gather title from multiple sources (og:title is usually cleanest)
   let title="";
-  const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);
-  if(tM)title=tM[1];
   const ogT=html2.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-  if(ogT&&ogT[1].length>title.length/2)title=ogT[1];
-  title=title.replace(/【[^】]*】/g,"").replace(/[｜|].*$/,"").trim();
+  if(ogT)title=ogT[1];
+  if(!title){const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);if(tM)title=tM[1];}
+  title=title.replace(/【楽天市場】/g,"").replace(/｜.*$/,"").trim();
   console.log("Rakuten title:",title);
 
-  // 3) Rank: "rinkan X" at end
-  const rkM=title.match(/rinkan\s*([SABCD])\b/i)||html2.match(/rinkan\s*([SABCD])\b/i);
+  // Also grab full product name area for pattern matching (title + description)
+  let searchText=title;
+  const descM=html2.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  if(descM)searchText+=" "+descM[1];
+
+  // RANK: RINKAN uses "#rinkan*X" format
+  const rkM=html2.match(/#rinkan\*([SABCD])/i)||searchText.match(/#rinkan\*([SABCD])/i)||searchText.match(/rinkan[*＊]?\s*([SABCD])\b/i);
   if(rkM)out.rank=rkM[1].toUpperCase();
 
-  // 4) Brand (English): find longest Latin-letter phrase in title
-  if(!out.brand||!/[A-Za-z]/.test(out.brand)){
-    const engPhrases=title.match(/[A-Z][A-Za-z][A-Za-z&'.\- ]*[A-Za-z]/g);
-    if(engPhrases){
-      // Filter out "rinkan" and pick the longest meaningful phrase
-      const cand=engPhrases.map(s=>s.trim()).filter(s=>!/^rinkan/i.test(s)&&s.length>=2).sort((a,b)=>b.length-a.length);
-      if(cand.length)out.brand=cand[0];
+  // SIZE: "サイズ:XX" format
+  const szM=searchText.match(/サイズ[:：]\s*([A-Za-z0-9.\/]+)/);
+  if(szM&&szM[1].length<=6)out.size=szM[1];
+
+  // BRAND (English): RINKAN title starts with "カタカナ英語ブランド Englishブランド ..."
+  // Use known-brand dictionary for clean names
+  const brandMap={
+    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
+    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
+    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
+    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
+    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
+    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
+    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
+    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
+    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
+    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
+    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
+    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
+    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING"
+  };
+  // Match leading katakana brand
+  for(const[jp,en]of Object.entries(brandMap)){
+    if(title.startsWith(jp)){out.brand=en;break;}
+  }
+  // Fallback: extract English text right after leading Japanese brand word
+  if(!out.brand){
+    const bM=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+([A-Za-z][A-Za-z'&.\- ]{1,30}?)(?=[\s　]+[A-Z0-9]{2,}[\s　]|[\s　]+サイズ|[\s　]*[\u3040-\u30FF\u4E00-\u9FFF]|[\s　]*$)/);
+    if(bM)out.brand=bM[1].trim();
+    else{
+      // Last resort: first Latin phrase in title
+      const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
+      if(eng)out.brand=eng[0];
     }
   }
 
-  // 5) Size: from title or page
-  const szM=title.match(/(?:size|サイズ)[：:\s]*([A-Z0-9]{1,4})/i)||html2.match(/サイズ[／/]?[：:\s]*([A-Z0-9]{1,4})\b/i);
-  if(szM&&!["A","B","C","D"].includes(szM[1].toUpperCase()))out.size=szM[1].toUpperCase();
-
-  // 6) Price fallback if JSON-LD missed it
+  // PRICE: try JSON-LD first, then patterns
+  try{
+    const lds=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for(const m of lds){
+      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
+      const arr=Array.isArray(data)?data:[data];
+      for(const d of arr){
+        const off=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
+        if(off&&off.price){const p=Number(String(off.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
+      }
+    }
+  }catch(e){}
   if(!out.price){
-    const pats=[/税込[^\d]{0,6}(\d[\d,]{3,})/,/["']price["']\s*:\s*["']?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
+    const pats=[/itemprice["'\s:]*(\d[\d,]{3,})/i,/税込[^\d]{0,6}(\d[\d,]{3,})/,/"price"\s*:\s*"?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
     for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
   }
 
