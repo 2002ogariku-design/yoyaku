@@ -105,7 +105,7 @@ header p{font-size:11.5px;color:#aeaeb2;margin-top:3px;}
 </div>
 
 <script>
-const PHRASES=["📩DMにて割引可能","📩コメント・DMお気軽に","✨新入荷","🔥売切れ次第終了","📦全国発送可能","💎美品","🆕新品未使用","⭐️店頭にて販売中","💰お値下げ交渉可","📸スタッフ着用"];
+const PHRASES=["📩DMにて割引可能","📩コメント・DMお気軽に","🔥SALE MAX 8%OFF","💰買取で最大10%OFF","✨新入荷","🆕新品未使用","💎美品","📦全国発送可能","⭐️店頭にて販売中","💰お値下げ交渉可","DM for price 📩","SALE UP TO 8% OFF","10% OFF with trade-in","IN STORE NOW","Worldwide shipping 📦","New arrival ✨"];
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
 
@@ -238,30 +238,39 @@ async function scanTagQR(file){
 async function ocrTagPrice(dataUrl){
   try{
     const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-    const cx=Math.round(img.width*0.40), cy=Math.round(img.height*0.10);
-    const cw=Math.round(img.width*0.58), ch=Math.round(img.height*0.55);
-    const cv=document.createElement("canvas");
-    const sc=2;
-    cv.width=cw*sc;cv.height=ch*sc;
-    const cx2=cv.getContext("2d");
-    cx2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
-    const idd=cx2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
-    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>135?255:0;d[i]=d[i+1]=d[i+2]=g;}
-    cx2.putImageData(idd,0,0);
-    const res=await Tesseract.recognize(cv,"eng",{tessedit_char_whitelist:"0123456789,.exctaxRANKSEO:¥ "});
-    const text=res.data.text;
-    console.log("Tag price OCR:",JSON.stringify(text));
-    // Only accept comma-formatted numbers (real prices like 181,500), reject model numbers like 000000078
-    const taxIncluded=[], allPrices=[];
-    for(const ln of text.split("\n")){
-      const isExTax=/exc|tax/i.test(ln);
-      const priceNums=[...ln.matchAll(/(\d{1,3},\d{3})/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
-      for(const n of priceNums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+    // Crop the lower-right area where both prices are printed
+    const cx=Math.round(img.width*0.36), cy=Math.round(img.height*0.38);
+    const cw=Math.round(img.width*0.62), ch=Math.round(img.height*0.36);
+    // Try multiple thresholds; collect the first that yields a valid tax-included price
+    const thresholds=[135,120,150,105];
+    let best=0, bestAll=0;
+    for(const thr of thresholds){
+      const cv=document.createElement("canvas");
+      const sc=3; // higher upscale = better digit recognition
+      cv.width=cw*sc;cv.height=ch*sc;
+      const c2=cv.getContext("2d");
+      c2.imageSmoothingEnabled=true;c2.imageSmoothingQuality="high";
+      c2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
+      const idd=c2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
+      for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>thr?255:0;d[i]=d[i+1]=d[i+2]=g;}
+      c2.putImageData(idd,0,0);
+      // No whitelist — restrictive whitelists corrupt digit recognition. Use psm 6.
+      const res=await Tesseract.recognize(cv,"eng",{tessedit_pageseg_mode:"6"});
+      const text=res.data.text;
+      console.log("Tag OCR thr="+thr+":",JSON.stringify(text));
+      const taxIncluded=[],allPrices=[];
+      for(const ln of text.split("\n")){
+        const isExTax=/exc|tax|税抜|外/i.test(ln);
+        // Comma-formatted price like 181,500 or 1,699,500
+        const nums=[...ln.matchAll(/(\d{1,3}(?:,\d{3})+)/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+        for(const n of nums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+      }
+      if(taxIncluded.length){best=Math.max(...taxIncluded);break;}
+      if(allPrices.length&&!bestAll)bestAll=Math.max(...allPrices);
     }
-    console.log("taxIncluded:",taxIncluded,"all:",allPrices);
-    if(taxIncluded.length)return Math.max(...taxIncluded);
-    if(allPrices.length)return Math.max(...allPrices);
-    return 0;
+    const result=best||bestAll||0;
+    console.log("price result:",result);
+    return result;
   }catch(e){console.log("tag OCR error:",e);return 0;}
 }
 
@@ -388,7 +397,7 @@ function drawStory(){
   if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
   if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
   if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
-  if(tag){cx.font=`500 58px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-200);}
+  if(tag){cx.font=`600 70px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-190);}
   cx.shadowBlur=0;
 }
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
