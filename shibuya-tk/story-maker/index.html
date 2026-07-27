@@ -367,30 +367,46 @@ async function fetchRakuten(url){
   for(const jp of sortedJp){
     if(title.startsWith(jp)){out.brand=brandMap[jp];break;}
   }
-  // Fallback: extract English brand right after leading Japanese brand word.
-  // Capture multiple English words (e.g. "ACNE STUDIOS", "STONE ISLAND") — stop at
-  // a Japanese char, "サイズ", or an obvious model code (word mixing digits, or 4th+ word).
-  if(!out.brand){
+  // If dictionary hit, still verify against the title's own English (RINKAN always
+  // prints "カタカナ English" — the English there is authoritative for spelling/multi-word)
+  {
     const afterJp=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+(.+)/);
     if(afterJp){
-      const rest=afterJp[1];
-      const words=rest.split(/[\s　]+/);
+      const words=afterJp[1].split(/[\s　]+/);
       const brandWords=[];
+      let allCapsRun=0;
       for(const w of words){
-        // stop conditions
-        if(/[\u3040-\u30FF\u4E00-\u9FFF]/.test(w))break;       // hit Japanese
+        if(/[\u3040-\u30FF\u4E00-\u9FFF]/.test(w))break;   // hit Japanese → brand ended
         if(/サイズ|size/i.test(w))break;
-        if(/\d/.test(w))break;                                  // model codes have digits
-        if(!/^[A-Za-z][A-Za-z'&.\-]*$/.test(w))break;          // not a clean word
+        if(/\d/.test(w))break;                             // model codes contain digits
+        if(!/^[A-Za-z][A-Za-z'&.\-]*$/.test(w)&&w!=="&"&&w!=="des"&&w!=="by")break;
+        // Detect model-code run: short ALL-CAPS tokens (PT, TNY, CRSF...) appearing after
+        // we already have a brand word. Two such in a row = model codes, stop.
+        const isShortCaps=/^[A-Z]{2,4}$/.test(w);
+        if(brandWords.length>=1&&isShortCaps){allCapsRun++;if(allCapsRun>=1)break;}
+        else allCapsRun=0;
         brandWords.push(w);
-        if(brandWords.length>=3)break;                          // brands rarely >3 words
+        if(brandWords.length>=4)break;                     // brands rarely exceed 4 words
       }
-      if(brandWords.length)out.brand=brandWords.join(" ");
+      if(brandWords.length){
+        const titleBrand=brandWords.join(" ");
+        if(!out.brand || titleBrand.split(" ").length>out.brand.split(" ").length){
+          out.brand=titleBrand;
+        }
+      }
     }
-    if(!out.brand){
-      const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
-      if(eng)out.brand=eng[0];
-    }
+  }
+  // Structured-data brand as another fallback
+  if(!out.brand){
+    const sdBrand=html2.match(/itemprop=["']brand["'][^>]*>[\s\S]{0,120}?itemprop=["']name["'][^>]*content=["']([^"']+)["']/i)
+      ||html2.match(/"brand"\s*:\s*{[^}]*"name"\s*:\s*"([^"]+)"/i)
+      ||html2.match(/"brand"\s*:\s*"([^"]+)"/i);
+    if(sdBrand)out.brand=sdBrand[1].trim();
+  }
+  // Absolute last resort: first English phrase
+  if(!out.brand){
+    const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
+    if(eng)out.brand=eng[0];
   }
 
   // PRICE: try JSON-LD first, then patterns
