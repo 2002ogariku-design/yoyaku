@@ -212,6 +212,25 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 
 <script>
 const PHRASES=["📩DMにて割引可能","📩コメント・DMお気軽に","🔥SALE MAX 8%OFF","💰買取で最大10%OFF","✨新入荷","🆕新品未使用","💎美品","📦全国発送可能","⭐️店頭にて販売中","💰お値下げ交渉可","DM for price 📩","SALE UP TO 8% OFF","10% OFF with trade-in","IN STORE NOW","Worldwide shipping 📦","New arrival ✨"];
+
+// Persistent Tesseract worker — created once, reused. Re-creating per call reloads
+// the language model (~2-4s each time), which is the main source of slowness.
+let _ocrWorker=null, _ocrWorkerPromise=null;
+async function getOcrWorker(){
+  if(_ocrWorker)return _ocrWorker;
+  if(_ocrWorkerPromise)return _ocrWorkerPromise;
+  _ocrWorkerPromise=(async()=>{
+    const w=await Tesseract.createWorker("eng");
+    await w.setParameters({tessedit_pageseg_mode:"6"});
+    _ocrWorker=w;return w;
+  })();
+  return _ocrWorkerPromise;
+}
+async function ocrText(canvas){
+  const w=await getOcrWorker();
+  const {data}=await w.recognize(canvas);
+  return data.text;
+}
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
 
@@ -282,36 +301,24 @@ async function scanTagQR(file, prefix){
   document.getElementById("tagRefImg").src=dataUrl;
   document.getElementById("tagRefArea").style.display="block";
 
-  // Scan QR code from image
+  // Scan QR code from image (capped resolution — full-res is slow and rarely needed)
   const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-  const canvas=document.createElement("canvas");
-  canvas.width=img.width;canvas.height=img.height;
-  const ctx2=canvas.getContext("2d");
-  ctx2.drawImage(img,0,0);
-  const imageData=ctx2.getImageData(0,0,canvas.width,canvas.height);
-  // Try multiple resolutions for better detection
   let qr=null;
-  const sizes=[canvas.width, 1500, 1000, 600];
+  const sizes=[1400, 900];
   for(const sz of sizes){
     if(qr)break;
-    const scale=sz/Math.max(img.width,img.height);
+    const scale=Math.min(sz/Math.max(img.width,img.height),1);
     const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
     const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
     const tctx=tc.getContext("2d");
     tctx.drawImage(img,0,0,sw,sh);
-    // Also try with inverted colors
     const td3=tctx.getImageData(0,0,sw,sh);
-    qr=jsQR(td3.data,sw,sh);
+    qr=jsQR(td3.data,sw,sh,{inversionAttempts:"dontInvert"});
     if(!qr){
-      // Try with increased contrast
       const d=td3.data;
-      for(let i=0;i<d.length;i+=4){
-        let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-        g=g>128?255:0;
-        d[i]=g;d[i+1]=g;d[i+2]=g;
-      }
+      for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>128?255:0;d[i]=g;d[i+1]=g;d[i+2]=g;}
       tctx.putImageData(td3,0,0);
-      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh);
+      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh,{inversionAttempts:"dontInvert"});
     }
   }
 
@@ -321,34 +328,29 @@ async function scanTagQR(file, prefix){
     url=qr.data;
   }else{
     // No QR (accessory/small-item tags) — OCR the product number instead
-    status.textContent="🔍 QRなし。商品番号を読み取り中...";
+    status.textContent="🔍 "+prefix+"商品番号を読み取り中...";
     const pn=await ocrProductNumber(dataUrl);
-    if(pn){
-      url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;
-      console.log("product number → url:",url);
-    }
+    if(pn)url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;
   }
 
   const filled=[];
+  status.textContent="🔍 "+prefix+"情報を取得中...";
 
-  // Always try to read a tax-included price from THIS photo (front of accessory tags,
-  // or the price row on clothing tags). Only fill if we find one — never wipe existing.
-  status.textContent="🔍 値札から税込価格を読み取り中...";
-  const tagPrice=await ocrTagPrice(dataUrl);
-  if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+  // Run tag-price OCR and Rakuten fetch in PARALLEL (big speed win)
+  const pricePromise=ocrTagPrice(dataUrl);
+  const rakutenPromise=(url&&url.includes("item.rakuten.co.jp"))?fetchRakuten(url):Promise.resolve(null);
+  const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
 
-  // If we got a Rakuten URL (from QR or product number), pull brand/size/rank/price
-  if(url&&url.includes("item.rakuten.co.jp")){
-    status.textContent="🔍 楽天ページから商品情報を取得中...";
-    status.style.color="var(--blue)";
-    const got=await fetchRakuten(url);
-    if(got.ok){
-      if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
-      if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
-      if(got.rank){setRank(got.rank);filled.push("ランク");}
-      // Only use Rakuten price if the tag OCR didn't already give one
-      if(!tagPrice&&got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
-    }
+  if(got&&got.ok){
+    if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
+    if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
+    if(got.rank){setRank(got.rank);filled.push("ランク");}
+    // Rakuten price is accurate; prefer it. Fall back to tag OCR only if Rakuten had none.
+    if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
+    else if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+  }else if(tagPrice){
+    // No Rakuten data (e.g. front of accessory tag) — use the OCR'd price
+    document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");
   }
 
   drawStory();
@@ -384,12 +386,11 @@ async function ocrProductNumber(dataUrl){
     const c2=cv.getContext("2d");
     c2.imageSmoothingQuality="high";
     c2.drawImage(img,0,0,cv.width,cv.height);
-    // contrast boost
+    // contrast boost — threshold 170 works best for the small printed number
     const idd=c2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
-    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>135?255:0;d[i]=d[i+1]=d[i+2]=g;}
+    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>165?255:0;d[i]=d[i+1]=d[i+2]=g;}
     c2.putImageData(idd,0,0);
-    const res=await Tesseract.recognize(cv,"eng",{tessedit_pageseg_mode:"6"});
-    const text=res.data.text;
+    const text=await ocrText(cv);
     console.log("Product-number OCR:",JSON.stringify(text));
     // RINKAN product number: 5-6-4 digits
     const m=text.match(/(\d{5}[-–]\d{6}[-–]\d{4})/);
@@ -398,35 +399,31 @@ async function ocrProductNumber(dataUrl){
   }catch(e){console.log("product number OCR error:",e);return "";}
 }
 
-// OCR the tax-included price from the RINKAN tag photo
-// Tax-included = the comma-formatted price on a line WITHOUT "exc.tax"
+// OCR the tax-included price from the RINKAN tag photo.
+// Tax-included = comma-formatted price on a line WITHOUT "exc.tax".
 async function ocrTagPrice(dataUrl){
   try{
     const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-    // Crop the lower-right area where both prices are printed
-    const cx=Math.round(img.width*0.36), cy=Math.round(img.height*0.38);
-    const cw=Math.round(img.width*0.62), ch=Math.round(img.height*0.36);
-    // Try multiple thresholds; collect the first that yields a valid tax-included price
-    const thresholds=[135,120,150,105];
-    let best=0, bestAll=0;
-    for(const thr of thresholds){
+    // Scan the whole tag (accessory tags have price center; clothing tags right side).
+    // Downscale big photos so OCR is fast.
+    const maxDim=1800;
+    const sc=Math.min(maxDim/Math.max(img.width,img.height),1.5);
+    const cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
+    let best=0,bestAll=0;
+    for(const thr of [150,175]){ // 2 passes only — faster
       const cv=document.createElement("canvas");
-      const sc=3; // higher upscale = better digit recognition
-      cv.width=cw*sc;cv.height=ch*sc;
-      const c2=cv.getContext("2d");
-      c2.imageSmoothingEnabled=true;c2.imageSmoothingQuality="high";
-      c2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
-      const idd=c2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
+      cv.width=cw;cv.height=ch;
+      const c2=cv.getContext("2d");c2.imageSmoothingQuality="high";
+      c2.drawImage(img,0,0,cw,ch);
+      const idd=c2.getImageData(0,0,cw,ch);const d=idd.data;
       for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>thr?255:0;d[i]=d[i+1]=d[i+2]=g;}
       c2.putImageData(idd,0,0);
-      // No whitelist — restrictive whitelists corrupt digit recognition. Use psm 6.
-      const res=await Tesseract.recognize(cv,"eng",{tessedit_pageseg_mode:"6"});
-      const text=res.data.text;
-      console.log("Tag OCR thr="+thr+":",JSON.stringify(text));
+      const text=await ocrText(cv);
+      console.log("Tag price OCR thr="+thr+":",JSON.stringify(text));
       const taxIncluded=[],allPrices=[];
       for(const ln of text.split("\n")){
         const isExTax=/exc|tax|税抜|外/i.test(ln);
-        // Comma-formatted price like 181,500 or 1,699,500
+        // Prefer full prices with 2+ commas (¥1,029,600), also accept 1-comma (181,500)
         const nums=[...ln.matchAll(/(\d{1,3}(?:,\d{3})+)/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
         for(const n of nums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
       }
