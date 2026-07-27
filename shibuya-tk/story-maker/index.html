@@ -723,12 +723,57 @@ function drawStory(){
   const rank=document.getElementById("sRank").value.trim();
   const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
   const tag=document.getElementById("sTag").value.trim();
+  const MARGIN=70, MAXW=W-MARGIN*2; // usable text width
+
+  // Fit a font size so text fits MAXW (down to a minimum), returns px size
+  function fitSize(text,base,min,weight){
+    let s=base;
+    while(s>min){cx.font=`${weight} ${s}px ${serif}`;if(cx.measureText(text).width<=MAXW)break;s-=2;}
+    return s;
+  }
+  // Split long text into <=2 lines that each fit at the given size
+  function wrapWords(text,size,weight){
+    cx.font=`${weight} ${size}px ${serif}`;
+    if(cx.measureText(text).width<=MAXW)return [text];
+    const words=text.split(" ");
+    if(words.length<2)return [text];
+    let best=null;
+    for(let i=1;i<words.length;i++){
+      const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");
+      const w=Math.max(cx.measureText(a).width,cx.measureText(b).width);
+      if(!best||w<best.w)best={a,b,w};
+    }
+    return [best.a,best.b];
+  }
+
   let y=220;
-  if(brand){cx.font=`500 72px ${serif}`;cx.fillText(brand,70,y);y+=86;}
-  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
-  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
-  if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
-  if(tag){cx.fillStyle=tagColor;cx.font=`600 70px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-190);}
+  if(brand){
+    // Try to fit on one line down to 52px; if still too wide, wrap to 2 lines and fit those
+    let bs=fitSize(brand,72,52,500);
+    cx.font=`500 ${bs}px ${serif}`;
+    if(cx.measureText(brand).width>MAXW){
+      const lines=wrapWords(brand,bs,500);
+      // shrink so the widest wrapped line fits
+      bs=Math.min(bs,fitSize(lines.reduce((a,b)=>a.length>=b.length?a:b),72,40,500));
+      cx.font=`500 ${bs}px ${serif}`;
+      for(const ln of lines){cx.fillText(ln,MARGIN,y);y+=bs+12;}
+    }else{
+      cx.fillText(brand,MARGIN,y);y+=bs+14;
+    }
+  }
+  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,MARGIN,y);y+=74;}
+  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,MARGIN,y);}
+  if(price){
+    const ptxt="¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)";
+    const ps=fitSize(ptxt,74,44,500);
+    cx.font=`500 ${ps}px ${serif}`;cx.fillText(ptxt,MARGIN,H-280);
+  }
+  if(tag){
+    cx.fillStyle=tagColor;
+    const ts=fitSize(tag,70,40,600);
+    cx.font=`600 ${ts}px ${serif}`;
+    const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-MARGIN,H-190);
+  }
   cx.shadowBlur=0;
 }
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
