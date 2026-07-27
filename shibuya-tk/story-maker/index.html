@@ -343,18 +343,51 @@ async function fetchRakuten(url){
     "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
     "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
     "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
-    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING"
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING",
+    "アクネストゥディオズ":"ACNE STUDIOS","アクネ":"ACNE STUDIOS","マルタンマルジェラ":"MAISON MARGIELA",
+    "コムデギャルソン":"COMME des GARCONS","イヴサンローラン":"SAINT LAURENT","イブサンローラン":"SAINT LAURENT",
+    "アレキサンダーマックイーン":"ALEXANDER McQUEEN","トムブラウン":"THOM BROWNE","ヨウジヤマモト":"YOHJI YAMAMOTO",
+    "アンダーカバー":"UNDERCOVER","ワコマリア":"WACKO MARIA","ヒステリックグラマー":"HYSTERIC GLAMOUR",
+    "エンノイ":"ENNOY","エフシーアールビー":"F.C.Real Bristol","フラグメント":"fragment design",
+    "キャピタル":"KAPITAL","サカイ":"sacai","ジュンヤワタナベ":"JUNYA WATANABE","カラー":"kolor",
+    "ニードルス":"Needles","エムエムシックス":"MM6","ジルサンダー":"JIL SANDER","マルニ":"MARNI",
+    "ドリスヴァンノッテン":"DRIES VAN NOTEN","ラフシモンズ":"RAF SIMONS","ヴィヴィアンウエストウッド":"Vivienne Westwood",
+    "ディースクエアード":"DSQUARED2","ヴァレンティノ":"VALENTINO","フェラガモ":"Salvatore Ferragamo",
+    "トッズ":"TOD'S","コーチ":"COACH","マイケルコース":"MICHAEL KORS","トリーバーチ":"TORY BURCH",
+    "ケンゾー":"KENZO","イッセイミヤケ":"ISSEY MIYAKE","ポールスミス":"Paul Smith","エトロ":"ETRO",
+    "モンブラン":"MONTBLANC","グッチ":"GUCCI","ゼニア":"Ermenegildo Zegna","ブリオーニ":"BRIONI",
+    "オーラリー":"AURALEE","コモリ":"COMOLI","グラフペーパー":"Graphpaper","ヒューマンメイド":"HUMAN MADE",
+    "ガールズドントクライ":"Girls Don't Cry","ヴァーディ":"Verdy","ノースフェイス":"THE NORTH FACE",
+    "パタゴニア":"patagonia","カナダグース":"CANADA GOOSE","モンクレールジーニアス":"MONCLER GENIUS",
+    "ディオールオム":"Dior Homme","バルマン":"BALMAIN","ケイタマルヤマ":"KEITA MARUYAMA",
+    "エンポリオアルマーニ":"EMPORIO ARMANI","ジョルジオアルマーニ":"GIORGIO ARMANI","アルマーニ":"ARMANI"
   };
-  // Match leading katakana brand
-  for(const[jp,en]of Object.entries(brandMap)){
-    if(title.startsWith(jp)){out.brand=en;break;}
+  // Match leading katakana brand — longest match first (so ボッテガヴェネタ beats ボッテガ)
+  const sortedJp=Object.keys(brandMap).sort((a,b)=>b.length-a.length);
+  for(const jp of sortedJp){
+    if(title.startsWith(jp)){out.brand=brandMap[jp];break;}
   }
-  // Fallback: extract English text right after leading Japanese brand word
+  // Fallback: extract English brand right after leading Japanese brand word.
+  // Capture multiple English words (e.g. "ACNE STUDIOS", "STONE ISLAND") — stop at
+  // a Japanese char, "サイズ", or an obvious model code (word mixing digits, or 4th+ word).
   if(!out.brand){
-    const bM=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+([A-Za-z][A-Za-z'&.\- ]{1,30}?)(?=[\s　]+[A-Z0-9]{2,}[\s　]|[\s　]+サイズ|[\s　]*[\u3040-\u30FF\u4E00-\u9FFF]|[\s　]*$)/);
-    if(bM)out.brand=bM[1].trim();
-    else{
-      // Last resort: first Latin phrase in title
+    const afterJp=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+(.+)/);
+    if(afterJp){
+      const rest=afterJp[1];
+      const words=rest.split(/[\s　]+/);
+      const brandWords=[];
+      for(const w of words){
+        // stop conditions
+        if(/[\u3040-\u30FF\u4E00-\u9FFF]/.test(w))break;       // hit Japanese
+        if(/サイズ|size/i.test(w))break;
+        if(/\d/.test(w))break;                                  // model codes have digits
+        if(!/^[A-Za-z][A-Za-z'&.\-]*$/.test(w))break;          // not a clean word
+        brandWords.push(w);
+        if(brandWords.length>=3)break;                          // brands rarely >3 words
+      }
+      if(brandWords.length)out.brand=brandWords.join(" ");
+    }
+    if(!out.brand){
       const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
       if(eng)out.brand=eng[0];
     }
