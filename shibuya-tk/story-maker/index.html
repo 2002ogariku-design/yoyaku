@@ -9,30 +9,126 @@
 <style>
 :root{
   --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
-  --bg:#f2f2f7;--card:#fff;--card2:#f7f7fa;--line:#e2e2e8;
+  --bg:#f2f2f7;--card:#ffffff;--card2:#f7f7fa;--line:#e5e5ea;
   --t1:#1d1d1f;--t2:#48484a;--t3:#8e8e93;
   --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;
+  --spring:cubic-bezier(.34,1.4,.5,1); /* under-damped: slight overshoot for tactile feel */
+  --smooth:cubic-bezier(.32,.72,0,1);  /* critically-damped-ish: smooth settle */
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:40px;}
-header{background:#000;color:#fff;padding:20px 18px;position:sticky;top:0;z-index:10;}
-header h1{font-size:19px;font-weight:800;letter-spacing:.02em;}
-header p{font-size:11.5px;color:#aeaeb2;margin-top:3px;}
-.wrap{max-width:640px;margin:0 auto;padding:14px;}
-.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
-.c-title{font-size:15px;font-weight:800;margin-bottom:14px;}
-.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:48px;
+  /* subtle ambient gradient — depth without stealing focus */
+  background-image:radial-gradient(120% 60% at 50% -10%,rgba(0,122,255,.06),transparent 60%);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+
+/* Translucent floating chrome — content scrolls under it */
+header{
+  background:rgba(248,248,251,.72);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  color:var(--t1);padding:16px 18px calc(16px + env(safe-area-inset-top,0));
+  padding-top:max(16px,env(safe-area-inset-top,0));
+  position:sticky;top:0;z-index:20;
+  border-bottom:1px solid rgba(0,0,0,.06);
+}
+header h1{font-size:22px;font-weight:800;letter-spacing:-.02em;} /* negative tracking on large type */
+header p{font-size:12px;color:var(--t3);margin-top:2px;letter-spacing:0;font-weight:500;}
+
+.wrap{max-width:640px;margin:0 auto;padding:16px;}
+
+/* Cards read as light material with real depth */
+.c{
+  background:var(--card);border-radius:20px;padding:18px;margin-bottom:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+  animation:cardIn .5s var(--smooth) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.99);}to{opacity:1;transform:none;}}
+.c:nth-child(2){animation-delay:.05s;}
+.c:nth-child(3){animation-delay:.1s;}
+.c-title{font-size:13px;font-weight:700;margin-bottom:16px;color:var(--t3);letter-spacing:.02em;text-transform:uppercase;}
+
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .f{margin-bottom:0;}
 .f.full{grid-column:1/-1;}
-.f label{display:block;font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:5px;}
-.f input,.f select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:16px;font-family:var(--font);}
-.f input:focus,.f select:focus{outline:none;border-color:var(--blue);}
-.save-btn{width:100%;padding:16px;border-radius:14px;border:none;background:var(--t1);color:#fff;font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;}
-.pill{padding:12px 20px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);}
-.empty{text-align:center;color:var(--t3);font-size:13px;padding:24px;}
-.chip{display:inline-block;padding:8px 13px;margin:3px;border-radius:20px;border:1px solid var(--line);background:var(--card2);font-size:12.5px;cursor:pointer;font-family:var(--font);}
-.chip.on{background:var(--t1);color:#fff;border-color:var(--t1);}
-.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;}
+.f label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin-bottom:6px;letter-spacing:0;}
+.f input,.f select{
+  width:100%;padding:13px 14px;border-radius:13px;border:1px solid var(--line);
+  background:var(--card2);font-size:16px;font-family:var(--font);color:var(--t1);
+  transition:border-color .2s var(--smooth),box-shadow .2s var(--smooth),background .2s var(--smooth);
+}
+.f input:focus,.f select:focus{
+  outline:none;border-color:var(--blue);background:#fff;
+  box-shadow:0 0 0 4px rgba(0,122,255,.12);
+}
+
+/* Buttons: respond on press, spring back on release */
+.save-btn{
+  width:100%;padding:16px;border-radius:15px;border:none;background:var(--t1);color:#fff;
+  font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;
+  transition:transform .13s var(--smooth),opacity .13s;
+}
+.pill{
+  padding:13px 22px;border-radius:14px;border:1px solid var(--line);background:var(--card);
+  font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);color:var(--t1);
+  transition:transform .13s var(--smooth),box-shadow .2s var(--smooth),background .2s;
+}
+/* Instant tactile feedback on pointer-down (Apple §1) */
+.save-btn:active,.pill:active,.chip:active,.drop:active{transform:scale(.96);}
+.pill:active{box-shadow:0 1px 4px rgba(0,0,0,.08);}
+
+.empty{text-align:center;color:var(--t3);font-size:13px;padding:28px 16px;line-height:1.6;}
+
+/* Chips: selectable, spring on tap */
+.chip{
+  display:inline-flex;align-items:center;padding:9px 14px;margin:3px;border-radius:20px;
+  border:1px solid var(--line);background:var(--card2);font-size:12.5px;cursor:pointer;
+  font-family:var(--font);color:var(--t1);font-weight:500;
+  transition:transform .16s var(--spring),background .22s var(--smooth),color .22s,border-color .22s;
+}
+.chip.on{background:var(--t1);color:#fff;border-color:var(--t1);transform:scale(1.04);}
+
+/* Drop zones — material that responds */
+.drop{
+  border:2px dashed var(--line);border-radius:14px;padding:30px 10px;text-align:center;
+  cursor:pointer;color:var(--t3);font-size:12.5px;font-weight:600;background:var(--card2);
+  transition:transform .16s var(--spring),border-color .2s var(--smooth),background .2s,color .2s;
+}
+.drop:hover{border-color:#c7c7cc;color:var(--t2);}
+
+/* Canvas: floating object with depth; springs in on first paint */
+#storyCanvas{
+  max-width:100%;max-height:65vh;border-radius:14px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1),0 20px 48px rgba(0,0,0,.14);
+  transition:transform .4s var(--spring);
+}
+
+/* Archive thumbnails — press feedback, staggered spring-in */
+.arch-item{text-align:center;cursor:pointer;transition:transform .18s var(--spring);}
+.arch-item:active{transform:scale(.93);}
+.arch-item img{width:100%;border-radius:10px;border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.06);}
+
+/* Full-size viewer — materializes (blur+scale together), dimming scrim */
+#viewerModal{
+  -webkit-backdrop-filter:blur(0);backdrop-filter:blur(0);
+  transition:backdrop-filter .35s var(--smooth),-webkit-backdrop-filter .35s var(--smooth),background .35s var(--smooth);
+}
+#viewerModal.show{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+#viewerImg{transition:transform .4s var(--spring),opacity .3s var(--smooth);}
+
+.tick{font-size:14px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s var(--smooth);margin-top:10px;}
+
+/* Small text wants positive tracking; large wants negative (Apple §15) */
+.brand-big{letter-spacing:-.01em;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;transition-duration:.1ms !important;}
+  .c{animation:none;}
+}
+@media (prefers-reduced-transparency: reduce){
+  header{background:#f8f8fb;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  #viewerModal.show{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.92);}
+}
 </style>
 </head>
 <body>
@@ -515,26 +611,35 @@ function archiveStory(brand){
 function renderArchive(){
   const el=document.getElementById("archiveList");
   if(!storyArchive.length){el.innerHTML='<div class="empty">まだ作成した画像はありません</div>';return;}
-  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;">'+
-    storyArchive.map((a,i)=>`<div style="text-align:center;cursor:pointer;" onclick="openViewer(${i})">
-      <img src="${a.thumb}" style="width:100%;border-radius:8px;border:1px solid var(--line);">
-      <div style="font-size:9.5px;color:var(--t3);margin-top:3px;">${esc(a.brand)}<br>${a.date}</div>
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:12px;">'+
+    storyArchive.map((a,i)=>`<div class="arch-item" onclick="openViewer(${i})">
+      <img src="${a.thumb}">
+      <div style="font-size:10px;color:var(--t3);margin-top:5px;font-weight:500;">${esc(a.brand)}<br>${a.date}</div>
     </div>`).join("")+'</div>';
 }
 
-// Full-size viewer
+// Full-size viewer — materializes with blur+scale, dismisses along the same path
 let viewerIdx=-1;
 window.openViewer=function(i){
   viewerIdx=i;
   const a=storyArchive[i];
-  document.getElementById("viewerImg").src=a.full||a.thumb;
-  document.getElementById("viewerModal").style.display="flex";
+  const m=document.getElementById("viewerModal"),im=document.getElementById("viewerImg");
+  im.src=a.full||a.thumb;
+  m.style.display="flex";
+  im.style.transform="scale(.88)";im.style.opacity="0";
+  requestAnimationFrame(()=>{m.classList.add("show");im.style.transform="scale(1)";im.style.opacity="1";});
 };
 window.closeViewer=function(e){
   if(e&&e.target.id!=="viewerModal"&&e.target.id!=="viewerClose")return;
-  document.getElementById("viewerModal").style.display="none";
+  dismissViewer();
 };
-document.getElementById("viewerClose").addEventListener("click",()=>document.getElementById("viewerModal").style.display="none");
+function dismissViewer(){
+  const m=document.getElementById("viewerModal"),im=document.getElementById("viewerImg");
+  m.classList.remove("show");
+  im.style.transform="scale(.88)";im.style.opacity="0";
+  setTimeout(()=>{m.style.display="none";},320);
+}
+document.getElementById("viewerClose").addEventListener("click",dismissViewer);
 document.getElementById("viewerShare").addEventListener("click",async()=>{
   const a=storyArchive[viewerIdx];if(!a)return;
   try{
