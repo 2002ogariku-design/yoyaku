@@ -134,11 +134,54 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </style>
 </head>
 <body>
-<header>
-  <div class="eyebrow">RINKAN SHIBUYA</div>
-  <h1>ストーリー作成</h1>
-  <p>値札スキャンで自動入力、ワンタップで保存</p>
+<header style="display:flex;justify-content:space-between;align-items:flex-end;">
+  <div>
+    <div class="eyebrow">RINKAN SHIBUYA</div>
+    <h1>ストーリー作成</h1>
+    <p>値札スキャンで自動入力、ワンタップで保存</p>
+  </div>
+  <button type="button" onclick="openHelp()" style="flex-shrink:0;background:rgba(0,122,255,.12);color:var(--blue);border:none;border-radius:20px;padding:9px 16px;font-size:14px;font-weight:700;font-family:var(--font);cursor:pointer;">? 使い方</button>
 </header>
+
+<!-- Help sheet -->
+<div id="helpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-end;justify-content:center;" onclick="closeHelp(event)">
+  <div id="helpSheet" style="background:#fff;width:100%;max-width:600px;max-height:88vh;overflow-y:auto;border-radius:24px 24px 0 0;padding:24px 22px calc(30px + env(safe-area-inset-bottom,0));transform:translateY(100%);transition:transform .42s cubic-bezier(.32,.72,0,1);">
+    <div style="width:38px;height:5px;background:#d1d1d6;border-radius:3px;margin:0 auto 18px;"></div>
+    <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;">使い方</h2>
+    <p style="font-size:14px;color:var(--t3);margin-bottom:22px;font-weight:500;">値札をスキャンして、インスタ用のストーリー画像を数タップで作れます。</p>
+
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">1</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">商品写真を選ぶ</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「タップして選択」から投稿したい商品の写真を選びます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">2</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">値札をスキャン</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「値札を追加」で値札を撮影/選択 →「スキャン開始」。<br><b>衣類などQR付きタグ</b>は1枚でOK。<br><b>アクセサリー・小物</b>は<b>表面（税込価格）＋裏面（商品番号）の2枚</b>を追加してからスキャン。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">3</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">自動入力を確認</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">ブランド・サイズ・ランク・価格が自動で入ります。違っていれば手で直せます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">4</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">下部テキストを選ぶ</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「DMにて割引可能」「SALE MAX 8%OFF」などをタップ。文字色も選べます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">5</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">保存・共有</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「保存・共有」ボタンでiPhoneの共有メニューが開き、そのままインスタに投稿できます。作った画像はアーカイブに残り、後から見返せます。</div></div>
+      </div>
+    </div>
+
+    <div style="background:var(--card2);border-radius:16px;padding:16px;margin-top:22px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">📸 スキャンのコツ</div>
+      <div style="font-size:13.5px;color:var(--t2);line-height:1.7;">値札は文字を読み取るので、<b>明るく・ピントを合わせて・まっすぐ</b>撮ると精度が上がります。価格は値札の税込金額をそのまま使うので正確です（楽天の手数料込み価格ではありません）。</div>
+    </div>
+
+    <button type="button" onclick="closeHelp()" style="width:100%;margin-top:22px;padding:16px;border-radius:15px;border:none;background:var(--t1);color:#fff;font-size:17px;font-weight:700;font-family:var(--font);cursor:pointer;">閉じる</button>
+  </div>
+</div>
+
 <div class="wrap">
 
   <div class="c">
@@ -235,6 +278,19 @@ async function ocrText(canvas){
 }
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
+
+// Help sheet (slide-up)
+window.openHelp=function(){
+  const m=document.getElementById("helpModal"),s=document.getElementById("helpSheet");
+  m.style.display="flex";
+  requestAnimationFrame(()=>{s.style.transform="translateY(0)";});
+};
+window.closeHelp=function(e){
+  if(e&&e.target.id!=="helpModal"&&e.target.tagName!=="BUTTON")return;
+  const m=document.getElementById("helpModal"),s=document.getElementById("helpSheet");
+  s.style.transform="translateY(100%)";
+  setTimeout(()=>{m.style.display="none";},420);
+};
 
 let photoImg=null, storyArchive=[];
 try{storyArchive=JSON.parse(localStorage.getItem("story-archive-v2")||"[]");}catch(e){}
