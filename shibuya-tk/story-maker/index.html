@@ -151,8 +151,8 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       </div>
       <div>
         <div class="f"><label>🏷️ 値札スキャン</label></div>
-        <div id="tagDrop" class="drop">🏷️ 値札を撮影/選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表裏2面ともスキャン</span></div>
-        <input type="file" id="tagIn" accept="image/*" style="display:none;">
+        <div id="tagDrop" class="drop">🏷️ 値札を撮影/選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表裏2枚まとめて選択</span></div>
+        <input type="file" id="tagIn" accept="image/*" multiple style="display:none;">
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
       </div>
     </div>
@@ -257,15 +257,23 @@ function loadPhoto(file){
 // tag scan
 const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
 td2.addEventListener("click",()=>ti.click());
-ti.addEventListener("change",e=>{if(e.target.files[0])scanTagQR(e.target.files[0]);ti.value="";});
+ti.addEventListener("change",e=>{if(e.target.files.length)scanTags([...e.target.files]);ti.value="";});
 ["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
 ["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
-td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)scanTagQR(f);});
+td2.addEventListener("drop",e=>{const f=[...e.dataTransfer.files];if(f.length)scanTags(f);});
 
-async function scanTagQR(file){
+// Scan one or more tag photos (front + back), accumulating results
+async function scanTags(files){
+  for(let i=0;i<files.length;i++){
+    await scanTagQR(files[i], files.length>1?`(${i+1}/${files.length}) `:"");
+  }
+}
+
+async function scanTagQR(file, prefix){
+  prefix=prefix||"";
   const status=document.getElementById("ocrStatus");
   status.style.display="block";
-  status.textContent="🔍 QRコードを読み取り中...";
+  status.textContent="🔍 "+prefix+"読み取り中...";
   status.style.color="var(--blue)";
   td2.innerHTML="🏷️ 読み取り中...";
 
