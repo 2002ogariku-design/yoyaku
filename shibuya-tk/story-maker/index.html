@@ -150,8 +150,8 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <input type="file" id="photoIn" accept="image/*" style="display:none;">
       </div>
       <div>
-        <div class="f"><label>🏷️ 値札スキャン（QR＋価格）</label></div>
-        <div id="tagDrop" class="drop">🏷️ 値札を撮影/選択</div>
+        <div class="f"><label>🏷️ 値札スキャン</label></div>
+        <div id="tagDrop" class="drop">🏷️ 値札を撮影/選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表裏2面ともスキャン</span></div>
         <input type="file" id="tagIn" accept="image/*" style="display:none;">
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
       </div>
@@ -321,45 +321,47 @@ async function scanTagQR(file){
     }
   }
 
-  if(!url){
-    td2.innerHTML="🏷️ 読み取れず（値札を見て入力）";
-    status.textContent="⚠ QR・商品番号どちらも読み取れませんでした。値札がはっきり写るよう撮り直してください。";
-    status.style.color="var(--red)";
-    setTimeout(()=>{status.style.display="none";},4000);
-    return;
-  }
+  const filled=[];
 
-  // Check if it's a Rakuten URL
-  if(url.includes("item.rakuten.co.jp")){
-    td2.innerHTML="🏷️ 成功 → 商品情報を取得中...";
+  // Always try to read a tax-included price from THIS photo (front of accessory tags,
+  // or the price row on clothing tags). Only fill if we find one — never wipe existing.
+  status.textContent="🔍 値札から税込価格を読み取り中...";
+  const tagPrice=await ocrTagPrice(dataUrl);
+  if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+
+  // If we got a Rakuten URL (from QR or product number), pull brand/size/rank/price
+  if(url&&url.includes("item.rakuten.co.jp")){
     status.textContent="🔍 楽天ページから商品情報を取得中...";
     status.style.color="var(--blue)";
     const got=await fetchRakuten(url);
     if(got.ok){
-      const filled=[];
       if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
       if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
       if(got.rank){setRank(got.rank);filled.push("ランク");}
-      // Read tax-included price from the TAG photo (overrides Rakuten price)
-      status.textContent="🔍 値札から税込価格を読み取り中...";
-      const tagPrice=await ocrTagPrice(dataUrl);
-      if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
-      else if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
-      drawStory();
-      td2.innerHTML="🏷️ 自動入力完了 ✓";
-      status.innerHTML=(filled.length?'✓ '+filled.join("・")+'を自動入力しました（確認してください）':'⚠ 情報を読み取れませんでした')+'<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを開いて確認</a>';
-      status.style.color=filled.length?"var(--green)":"var(--orange)";
-    }else{
-      td2.innerHTML="🏷️ 自動取得できず";
-      status.innerHTML='⚠ 楽天ページを自動取得できませんでした。<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:14px;text-decoration:underline;">👆 楽天ページを開く</a><br><span style="font-size:11px;color:var(--t2);">値札を見ながら入力してください</span>';
-      status.style.color="var(--orange)";
+      // Only use Rakuten price if the tag OCR didn't already give one
+      if(!tagPrice&&got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
     }
-    status.style.display="block";
-  }else{
-    status.textContent="QR内容: "+url;
-    td2.innerHTML="🏷️ QR読み取り完了";
-    setTimeout(()=>{status.style.display="none";},5000);
   }
+
+  drawStory();
+
+  // Report result. Guide the user to scan the other side for accessory tags.
+  const missing=[];
+  if(!document.getElementById("sBrand").value)missing.push("ブランド");
+  if(!document.getElementById("sPrice").value)missing.push("価格");
+  if(filled.length){
+    td2.innerHTML="🏷️ もう一度タップで別の面をスキャン";
+    let msg='✓ '+filled.join("・")+'を入力しました';
+    if(missing.length)msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力。小物は<b>裏面（商品番号）と表面（税込金額）の両方</b>をスキャンしてください。</span>';
+    if(url)msg+='<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを確認</a>';
+    status.innerHTML=msg;
+    status.style.color="var(--green)";
+  }else{
+    td2.innerHTML="🏷️ 読み取れず（もう一度/手入力）";
+    status.innerHTML='⚠ この面からは読み取れませんでした。<br><span style="font-size:12px;color:var(--t2);">小物タグは<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>の2面をそれぞれスキャンしてください。ピントを合わせて明るく撮るのがコツです。</span>';
+    status.style.color="var(--orange)";
+  }
+  status.style.display="block";
 }
 
 // OCR the RINKAN product number (format: 5digits-6digits-4digits) from tag photo.
