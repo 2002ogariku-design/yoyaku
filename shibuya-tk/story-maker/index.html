@@ -8,133 +8,136 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root{
-  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
-  --bg:#f2f2f7;--card:#ffffff;--card2:#f7f7fa;--line:#e5e5ea;
-  --t1:#1d1d1f;--t2:#48484a;--t3:#8e8e93;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Hiragino Sans","Yu Gothic",sans-serif;
+  --bg:#ececf0;--card:#ffffff;--card2:#f2f2f7;--line:#e0e0e6;
+  --t1:#000000;--t2:#3c3c43;--t3:#8e8e93;
   --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;
-  --spring:cubic-bezier(.34,1.4,.5,1); /* under-damped: slight overshoot for tactile feel */
-  --smooth:cubic-bezier(.32,.72,0,1);  /* critically-damped-ish: smooth settle */
+  --spring:cubic-bezier(.34,1.56,.5,1);
+  --smooth:cubic-bezier(.32,.72,0,1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{
-  font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:48px;
-  /* subtle ambient gradient — depth without stealing focus */
-  background-image:radial-gradient(120% 60% at 50% -10%,rgba(0,122,255,.06),transparent 60%);
+  font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:60px;
+  background-image:radial-gradient(140% 80% at 50% -20%,rgba(0,122,255,.10),transparent 55%),radial-gradient(120% 60% at 100% 0%,rgba(175,82,222,.06),transparent 50%);
+  background-attachment:fixed;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
 }
 
-/* Translucent floating chrome — content scrolls under it */
+/* iOS large-title style header */
 header{
-  background:rgba(248,248,251,.72);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
-  color:var(--t1);padding:16px 18px calc(16px + env(safe-area-inset-top,0));
-  padding-top:max(16px,env(safe-area-inset-top,0));
-  position:sticky;top:0;z-index:20;
-  border-bottom:1px solid rgba(0,0,0,.06);
+  background:rgba(236,236,240,.7);
+  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  color:var(--t1);padding:14px 20px;
+  padding-top:max(14px,env(safe-area-inset-top,0));
+  position:sticky;top:0;z-index:20;border-bottom:.5px solid rgba(0,0,0,.08);
 }
-header h1{font-size:22px;font-weight:800;letter-spacing:-.02em;} /* negative tracking on large type */
-header p{font-size:12px;color:var(--t3);margin-top:2px;letter-spacing:0;font-weight:500;}
+header .eyebrow{font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase;}
+header h1{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-top:2px;}
+header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-spacing:-.01em;}
 
-.wrap{max-width:640px;margin:0 auto;padding:16px;}
+.wrap{max-width:600px;margin:0 auto;padding:20px 16px;}
 
-/* Cards read as light material with real depth */
 .c{
-  background:var(--card);border-radius:20px;padding:18px;margin-bottom:16px;
-  box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
-  animation:cardIn .5s var(--smooth) both;
+  background:var(--card);border-radius:24px;padding:22px;margin-bottom:18px;
+  box-shadow:0 1px 1px rgba(0,0,0,.03),0 10px 34px rgba(0,0,0,.07);
+  animation:cardIn .6s var(--smooth) both;
 }
-@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.99);}to{opacity:1;transform:none;}}
-.c:nth-child(2){animation-delay:.05s;}
-.c:nth-child(3){animation-delay:.1s;}
-.c-title{font-size:13px;font-weight:700;margin-bottom:16px;color:var(--t3);letter-spacing:.02em;text-transform:uppercase;}
+@keyframes cardIn{from{opacity:0;transform:translateY(18px) scale(.98);}to{opacity:1;transform:none;}}
+.c:nth-child(2){animation-delay:.06s;}
+.c:nth-child(3){animation-delay:.12s;}
+.c-title{font-size:12px;font-weight:700;margin-bottom:18px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;}
 
-.fg{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .f{margin-bottom:0;}
 .f.full{grid-column:1/-1;}
-.f label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin-bottom:6px;letter-spacing:0;}
+.f label{display:block;font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px;letter-spacing:-.01em;}
 .f input,.f select{
-  width:100%;padding:13px 14px;border-radius:13px;border:1px solid var(--line);
-  background:var(--card2);font-size:16px;font-family:var(--font);color:var(--t1);
-  transition:border-color .2s var(--smooth),box-shadow .2s var(--smooth),background .2s var(--smooth);
+  width:100%;padding:15px 16px;border-radius:15px;border:1.5px solid transparent;
+  background:var(--card2);font-size:17px;font-weight:500;font-family:var(--font);color:var(--t1);
+  transition:border-color .22s var(--smooth),box-shadow .22s var(--smooth),background .22s var(--smooth),transform .13s var(--smooth);
 }
 .f input:focus,.f select:focus{
   outline:none;border-color:var(--blue);background:#fff;
-  box-shadow:0 0 0 4px rgba(0,122,255,.12);
+  box-shadow:0 0 0 5px rgba(0,122,255,.14);
 }
 
-/* Buttons: respond on press, spring back on release */
+/* Segmented control for rank (iOS style) */
+.seg{display:flex;gap:4px;background:var(--card2);border-radius:14px;padding:4px;}
+.seg button{
+  flex:1;border:none;background:transparent;padding:11px 0;border-radius:11px;
+  font-size:16px;font-weight:700;font-family:var(--font);color:var(--t2);cursor:pointer;
+  transition:transform .16s var(--spring),color .2s,box-shadow .25s var(--smooth),background .25s var(--smooth);
+}
+.seg button.on{background:#fff;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,.12),0 3px 8px rgba(0,0,0,.06);}
+.seg button:active{transform:scale(.92);}
+
 .save-btn{
-  width:100%;padding:16px;border-radius:15px;border:none;background:var(--t1);color:#fff;
-  font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;
-  transition:transform .13s var(--smooth),opacity .13s;
+  width:100%;padding:18px;border-radius:17px;border:none;
+  background:linear-gradient(180deg,#0a84ff,#007aff);color:#fff;
+  font-size:18px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px;letter-spacing:-.01em;
+  box-shadow:0 4px 16px rgba(0,122,255,.3);
+  transition:transform .14s var(--smooth),box-shadow .2s,filter .15s;
 }
 .pill{
-  padding:13px 22px;border-radius:14px;border:1px solid var(--line);background:var(--card);
-  font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);color:var(--t1);
-  transition:transform .13s var(--smooth),box-shadow .2s var(--smooth),background .2s;
+  padding:14px 24px;border-radius:16px;border:none;background:var(--card);color:var(--t1);
+  font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font);
+  box-shadow:0 1px 3px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.06);
+  transition:transform .14s var(--smooth),box-shadow .2s var(--smooth);
 }
-/* Instant tactile feedback on pointer-down (Apple §1) */
-.save-btn:active,.pill:active,.chip:active,.drop:active{transform:scale(.96);}
-.pill:active{box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.save-btn:active,.pill:active,.chip:active,.drop:active{transform:scale(.95);}
+.save-btn:active{filter:brightness(.94);}
 
-.empty{text-align:center;color:var(--t3);font-size:13px;padding:28px 16px;line-height:1.6;}
+.empty{text-align:center;color:var(--t3);font-size:14px;padding:32px 16px;line-height:1.6;font-weight:500;}
 
-/* Chips: selectable, spring on tap */
 .chip{
-  display:inline-flex;align-items:center;padding:9px 14px;margin:3px;border-radius:20px;
-  border:1px solid var(--line);background:var(--card2);font-size:12.5px;cursor:pointer;
-  font-family:var(--font);color:var(--t1);font-weight:500;
-  transition:transform .16s var(--spring),background .22s var(--smooth),color .22s,border-color .22s;
+  display:inline-flex;align-items:center;padding:11px 17px;margin:4px;border-radius:22px;
+  border:none;background:var(--card2);font-size:14px;cursor:pointer;
+  font-family:var(--font);color:var(--t1);font-weight:600;letter-spacing:-.01em;
+  transition:transform .18s var(--spring),background .24s var(--smooth),color .24s,box-shadow .24s;
 }
-.chip.on{background:var(--t1);color:#fff;border-color:var(--t1);transform:scale(1.04);}
+.chip.on{background:var(--t1);color:#fff;transform:scale(1.06);box-shadow:0 4px 14px rgba(0,0,0,.22);}
 
-/* Drop zones — material that responds */
 .drop{
-  border:2px dashed var(--line);border-radius:14px;padding:30px 10px;text-align:center;
-  cursor:pointer;color:var(--t3);font-size:12.5px;font-weight:600;background:var(--card2);
-  transition:transform .16s var(--spring),border-color .2s var(--smooth),background .2s,color .2s;
+  border:2px dashed #c7c7cc;border-radius:18px;padding:34px 12px;text-align:center;
+  cursor:pointer;color:var(--t3);font-size:14px;font-weight:600;background:var(--card2);
+  transition:transform .18s var(--spring),border-color .22s var(--smooth),background .22s,color .22s;
 }
-.drop:hover{border-color:#c7c7cc;color:var(--t2);}
+.drop:hover{border-color:var(--blue);color:var(--blue);}
 
-/* Canvas: floating object with depth; springs in on first paint */
 #storyCanvas{
-  max-width:100%;max-height:65vh;border-radius:14px;
-  box-shadow:0 4px 16px rgba(0,0,0,.1),0 20px 48px rgba(0,0,0,.14);
+  max-width:100%;max-height:62vh;border-radius:18px;
+  box-shadow:0 6px 20px rgba(0,0,0,.12),0 26px 60px rgba(0,0,0,.18);
   transition:transform .4s var(--spring);
 }
 
-/* Archive thumbnails — press feedback, staggered spring-in */
 .arch-item{text-align:center;cursor:pointer;transition:transform .18s var(--spring);}
-.arch-item:active{transform:scale(.93);}
-.arch-item img{width:100%;border-radius:10px;border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.arch-item:active{transform:scale(.92);}
+.arch-item img{width:100%;border-radius:14px;box-shadow:0 3px 12px rgba(0,0,0,.1);}
 
-/* Full-size viewer — materializes (blur+scale together), dimming scrim */
 #viewerModal{
   -webkit-backdrop-filter:blur(0);backdrop-filter:blur(0);
-  transition:backdrop-filter .35s var(--smooth),-webkit-backdrop-filter .35s var(--smooth),background .35s var(--smooth);
+  transition:backdrop-filter .4s var(--smooth),-webkit-backdrop-filter .4s var(--smooth),background .4s var(--smooth);
 }
-#viewerModal.show{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
-#viewerImg{transition:transform .4s var(--spring),opacity .3s var(--smooth);}
+#viewerModal.show{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+#viewerImg{transition:transform .45s var(--spring),opacity .3s var(--smooth);}
 
-.tick{font-size:14px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s var(--smooth);margin-top:10px;}
-
-/* Small text wants positive tracking; large wants negative (Apple §15) */
-.brand-big{letter-spacing:-.01em;}
+.tick{font-size:15px;color:var(--green);font-weight:700;opacity:0;transition:opacity .4s var(--smooth);margin-top:12px;}
 
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.01ms !important;transition-duration:.1ms !important;}
   .c{animation:none;}
 }
 @media (prefers-reduced-transparency: reduce){
-  header{background:#f8f8fb;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  header{background:#ececeF;backdrop-filter:none;-webkit-backdrop-filter:none;}
   #viewerModal.show{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.92);}
 }
 </style>
 </head>
 <body>
 <header>
-  <h1>📸 RINKAN ストーリー作成</h1>
-  <p>値札スキャンで自動入力 → ワンタップでインスタ用画像を保存</p>
+  <div class="eyebrow">RINKAN SHIBUYA</div>
+  <h1>ストーリー作成</h1>
+  <p>値札スキャンで自動入力、ワンタップで保存</p>
 </header>
 <div class="wrap">
 
@@ -161,9 +164,14 @@ header p{font-size:12px;color:var(--t3);margin-top:2px;letter-spacing:0;font-wei
       <div class="f"><label>ブランド</label><input type="text" id="sBrand" placeholder="CHROME HEARTS" list="sBrandDl"></div>
       <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="54"></div>
       <div class="f"><label>ランク</label>
-        <select id="sRank">
-          <option value="">選択...</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-        </select>
+        <div class="seg" id="rankSeg">
+          <button type="button" data-r="S">S</button>
+          <button type="button" data-r="A">A</button>
+          <button type="button" data-r="B">B</button>
+          <button type="button" data-r="C">C</button>
+          <button type="button" data-r="D">D</button>
+        </div>
+        <input type="hidden" id="sRank" value="">
       </div>
       <div class="f"><label>価格（税込・数字のみ）</label><input type="number" id="sPrice" placeholder="172480"></div>
       <div class="f full"><label>下部テキスト</label><input type="text" id="sTag" value="📩DMにて割引可能"></div>
@@ -320,7 +328,7 @@ async function scanTagQR(file){
       const filled=[];
       if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
       if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
-      if(got.rank){const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===got.rank)){sel.value=got.rank;filled.push("ランク");}}
+      if(got.rank){setRank(got.rank);filled.push("ランク");}
       // Read tax-included price from the TAG photo (overrides Rakuten price)
       status.textContent="🔍 値札から税込価格を読み取り中...";
       const tagPrice=await ocrTagPrice(dataUrl);
@@ -560,7 +568,17 @@ function drawStory(){
   cx.shadowBlur=0;
 }
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
-document.getElementById("sRank").addEventListener("change",drawStory);
+function setRank(r){
+  document.getElementById("sRank").value=r||"";
+  document.querySelectorAll("#rankSeg button").forEach(b=>b.classList.toggle("on",b.dataset.r===r));
+  drawStory();
+}
+document.querySelectorAll("#rankSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const cur=document.getElementById("sRank").value;
+    setRank(cur===b.dataset.r?"":b.dataset.r); // tap again to deselect
+  });
+});
 
 function updateBrandDl(){
   const brands=[...new Set(storyArchive.map(a=>a.brand).filter(Boolean))].sort();
