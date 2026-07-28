@@ -234,21 +234,23 @@ function renderDash(){
   const cost=valid.reduce((a,r)=>a+(r.cost||0),0);
   const profit=total-cost;
   const dates=valid.map(r=>r.date).sort();
+  const months=[...new Set(valid.map(r=>r.date.slice(0,6)))].length;
+  const period=dates.length?fmtD(dates[0])+" 〜 "+fmtD(dates[dates.length-1]):"-";
   const kpis=[
-    ["総売上",YENk(total),valid.length+"点販売"],
+    ["総売上",YENk(total),valid.length.toLocaleString()+"点販売"],
     ["粗利",YENk(profit),total>0?Math.round(profit/total*100)+"% 粗利率":""],
-    ["販売点数",valid.length.toLocaleString()+"点",""],
-    ["期間",dates.length?fmtD(dates[0])+"〜":"" ,dates.length?fmtD(dates[dates.length-1]):""],
+    ["販売点数",valid.length.toLocaleString()+"点",months+"ヶ月分"],
+    ["データ期間","<span style='font-size:15px;'>"+period+"</span>",""],
   ];
   document.getElementById("dashKpis").innerHTML=kpis.map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join("");
 
   // monthly
   const byMonth={};
   valid.forEach(r=>{const m=r.date.slice(0,6);byMonth[m]=(byMonth[m]||0)+r.price;});
-  const months=Object.keys(byMonth).sort();
+  const mkeys=Object.keys(byMonth).sort();
   drawChart("chMonthly","line",{
-    labels:months.map(m=>m.slice(0,4)+"/"+m.slice(4,6)),
-    datasets:[{data:months.map(m=>byMonth[m]),borderColor:"#0071e3",backgroundColor:"rgba(0,113,227,.1)",fill:true,tension:.35,pointRadius:2,borderWidth:2.5}]
+    labels:mkeys.map(m=>m.slice(0,4)+"/"+m.slice(4,6)),
+    datasets:[{data:mkeys.map(m=>byMonth[m]),borderColor:"#0071e3",backgroundColor:"rgba(0,113,227,.1)",fill:true,tension:.35,pointRadius:2,borderWidth:2.5}]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>YENk(v)}}}});
 
   // brand bars
@@ -268,7 +270,7 @@ function renderDash(){
     datasets:[{data:topC.map(c=>c[1]),backgroundColor:["#0071e3","#34c759","#ff9500","#af52de","#ff3b30","#5ac8fa","#ffcc00","#8e8e93"]}]
   },{plugins:{legend:{position:"right",labels:{font:{size:10},boxWidth:12}}}});
 }
-function fmtD(d){return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
+function fmtD(d){if(!d)return "-";d=String(d);return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
 
 let itemSort={key:"count",dir:-1}, itemBrandFilter="";
 function renderItems(){
@@ -392,50 +394,88 @@ function renderDataStats(){
 
 // ---- xlsx upload ----
 const HEADER_ROW=5;
-document.getElementById("xlsxDrop").addEventListener("click",()=>document.getElementById("xlsxIn").click());
-document.getElementById("xlsxIn").addEventListener("change",e=>{if(e.target.files[0])importXlsx(e.target.files[0]);e.target.value="";});
-async function importXlsx(file){
+const xd=document.getElementById("xlsxDrop"),xin=document.getElementById("xlsxIn");
+xd.addEventListener("click",()=>xin.click());
+xin.addEventListener("change",e=>{if(e.target.files.length)importFiles([...e.target.files]);e.target.value="";});
+["dragover","dragenter"].forEach(ev=>xd.addEventListener(ev,e=>{e.preventDefault();xd.style.borderColor="var(--blue)";xd.style.color="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>xd.addEventListener(ev,e=>{e.preventDefault();xd.style.borderColor="#c7c7cc";xd.style.color="var(--t3)";}));
+xd.addEventListener("drop",e=>{const fs=[...e.dataTransfer.files].filter(f=>/\.xlsx?$/i.test(f.name));if(fs.length)importFiles(fs);});
+
+async function importFiles(files){
   const msg=document.getElementById("uploadMsg");
-  msg.textContent="読み込み中...";msg.style.color="var(--blue)";
-  try{
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(buf,{type:"array"});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-    // find header row
-    let hr=-1;
-    for(let i=0;i<15;i++){if(rows[i]&&rows[i].includes("売上日付")){hr=i;break;}}
-    if(hr<0){msg.textContent="⚠ ヘッダー行が見つかりません（売上明細表の形式か確認してください）";msg.style.color="var(--red)";return;}
-    const head=rows[hr];
-    const col=name=>head.indexOf(name);
-    const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード")};
-    const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
-    const newRecs=[];
-    for(let i=hr+1;i<rows.length;i++){
-      const r=rows[i];if(!r||!r[ci.date])continue;
-      const brand=cl(r[ci.brand]),name=cl(r[ci.name]),price=Number(r[ci.price])||0;
-      if(!brand||!name||price<=0)continue;
-      if(/送料|手数料/.test(cl(r[ci.brandEn])))continue;
-      newRecs.push({date:String(r[ci.date]).slice(0,8),store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost:Number(r[ci.cost])||0,listPrice:Number(r[ci.listPrice])||0,jan:cl(r[ci.jan])});
-    }
-    // merge into DATA (dedup)
-    const seen=new Set(DATA.map(keyOf));
-    let added=0;
-    for(const rec of newRecs){if(!seen.has(keyOf(rec))){seen.add(keyOf(rec));DATA.push(rec);added++;}}
-    msg.textContent=`✓ ${added}件を追加しました（重複${newRecs.length-added}件スキップ）。保存中...`;
-    msg.style.color="var(--green)";
-    await saveUploads();
-    msg.textContent=`✓ ${added}件を追加・保存しました。`;
-    renderAll();
-  }catch(err){console.error(err);msg.textContent="⚠ 読み込みエラー: "+err.message;msg.style.color="var(--red)";}
+  const beforeCount=DATA.filter(r=>r.price>0).length;
+  const beforeDates=DATA.filter(r=>r.price>0).map(r=>r.date);
+  const beforeMin=beforeDates.length?beforeDates.reduce((a,b)=>a<b?a:b):null;
+  const beforeMax=beforeDates.length?beforeDates.reduce((a,b)=>a>b?a:b):null;
+  let totalAdded=0,totalRows=0,errors=[];
+  const seen=new Set(DATA.map(keyOf));
+  for(let fi=0;fi<files.length;fi++){
+    const file=files[fi];
+    msg.innerHTML=`<span style="color:var(--blue);">📥 読み込み中... (${fi+1}/${files.length}) ${esc(file.name)}</span>`;
+    try{
+      const recs=await parseXlsx(file);
+      totalRows+=recs.length;
+      let added=0;
+      for(const rec of recs){if(!seen.has(keyOf(rec))){seen.add(keyOf(rec));DATA.push(rec);added++;}}
+      totalAdded+=added;
+    }catch(err){console.error(err);errors.push(file.name+": "+err.message);}
+  }
+  // Results
+  const afterValid=DATA.filter(r=>r.price>0);
+  const afterDates=afterValid.map(r=>r.date);
+  const newMin=afterDates.reduce((a,b)=>a<b?a:b),newMax=afterDates.reduce((a,b)=>a>b?a:b);
+  const periodChanged=(newMin!==beforeMin||newMax!==beforeMax);
+
+  msg.innerHTML=`<span style="color:var(--blue);">💾 保存中...</span>`;
+  renderAll(); // update UI immediately even before save completes
+  let saveOk=true;
+  try{await saveUploads();}catch(e){saveOk=false;console.error(e);}
+
+  let html=`<div style="background:var(--card2);border-radius:14px;padding:16px;">`;
+  if(totalAdded>0){
+    html+=`<div style="font-size:16px;font-weight:800;color:var(--green);margin-bottom:8px;">✓ ${totalAdded.toLocaleString()}件を追加しました</div>`;
+  }else{
+    html+=`<div style="font-size:16px;font-weight:800;color:var(--orange);margin-bottom:8px;">追加された新規データはありません</div>`;
+    html+=`<div class="muted" style="margin-bottom:8px;">読み込んだ${totalRows}件はすべて既存データと重複していました（同じ期間を再アップした可能性）。</div>`;
+  }
+  html+=`<div style="font-size:13px;line-height:1.9;">
+    読込ファイル数：${files.length}件<br>
+    総レコード（処理後）：<b>${afterValid.length.toLocaleString()}件</b>（+${(afterValid.length-beforeCount).toLocaleString()}）<br>
+    期間：<b>${fmtD(newMin)} 〜 ${fmtD(newMax)}</b> ${periodChanged?'<span style="color:var(--green);font-weight:700;">← 更新！</span>':'<span class="muted">（変わらず）</span>'}<br>
+    保存：${saveOk?'<span style="color:var(--green);">✓ 全端末で共有されました</span>':'<span style="color:var(--red);">⚠ 保存失敗（アクセスキーを確認）</span>'}
+  </div>`;
+  if(errors.length)html+=`<div style="color:var(--red);font-size:12px;margin-top:8px;">エラー：${errors.map(esc).join("<br>")}</div>`;
+  html+=`</div>`;
+  msg.innerHTML=html;
+}
+
+async function parseXlsx(file){
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:"array"});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+  let hr=-1;
+  for(let i=0;i<20;i++){if(rows[i]&&rows[i].includes("売上日付")){hr=i;break;}}
+  if(hr<0)throw new Error("ヘッダー行（売上日付）が見つかりません");
+  const head=rows[hr];
+  const col=name=>head.indexOf(name);
+  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード")};
+  const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
+  const recs=[];
+  for(let i=hr+1;i<rows.length;i++){
+    const r=rows[i];if(!r||!r[ci.date])continue;
+    const brand=cl(r[ci.brand]),name=cl(r[ci.name]),price=Number(r[ci.price])||0;
+    if(!brand||!name||price<=0)continue;
+    if(/送料|手数料/.test(cl(r[ci.brandEn])))continue;
+    recs.push({date:String(r[ci.date]).slice(0,8),store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost:Number(r[ci.cost])||0,listPrice:Number(r[ci.listPrice])||0,jan:cl(r[ci.jan])});
+  }
+  return recs;
 }
 
 // Save all NON-seed uploads to GitHub (everything the user added beyond seed)
 async function saveUploads(){
-  const t=getGhTk();if(!t)return;
+  const t=getGhTk();if(!t)throw new Error("アクセスキーが未設定です");
   const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan"];
-  // We can't easily tell seed vs upload; store everything not in seed by reloading seed keys.
-  // Simpler: store the full uploads set = DATA minus seed. Track seed keys at boot.
   const uploadRows=DATA.filter(r=>!SEED_KEYS.has(keyOf(r))).map(r=>schema.map(k=>r[k]));
   const payload={schema,rows:uploadRows,updated:new Date().toISOString()};
   const body=JSON.stringify(payload);
@@ -445,7 +485,7 @@ async function saveUploads(){
   const put={message:"sales upload "+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(body)))};
   if(sha)put.sha=sha;
   const r=await fetch(api,{method:"PUT",headers:{Authorization:"Bearer "+t,Accept:"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(put)});
-  if(!r.ok)console.error("save failed",r.status);
+  if(!r.ok){const txt=await r.text();throw new Error("保存失敗 "+r.status+" "+txt.slice(0,100));}
 }
 
 // chart helper
