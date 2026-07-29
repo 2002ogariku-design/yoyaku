@@ -83,12 +83,23 @@ tbody tr:active{background:#eaeaef;}
 
   <!-- ダッシュボード -->
   <div class="view" id="v-dash">
+    <div class="card" style="padding:14px 16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.05em;margin-bottom:10px;">絞り込み</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);padding:9px 14px;border-radius:12px;">
+          <input type="checkbox" id="excludeCH" style="width:18px;height:18px;cursor:pointer;"> クロムハーツを除く
+        </label>
+        <select id="dashBrandSel" style="width:auto;flex:1;min-width:150px;"></select>
+        <select id="dashCatSel" style="width:auto;flex:1;min-width:150px;"></select>
+      </div>
+    </div>
     <div class="kpis" id="dashKpis"></div>
     <div class="card"><div class="card-t">📈 月別売上推移</div><canvas id="chMonthly" height="90"></canvas></div>
     <div class="grid2">
       <div class="card"><div class="card-t">🏆 ブランド別売上 TOP10</div><div id="brandBars"></div></div>
       <div class="card"><div class="card-t">📦 カテゴリ別売上</div><canvas id="chCat" height="200"></canvas></div>
     </div>
+    <div class="card"><div class="card-t">📊 カテゴリ別 詳細（売上・点数・粗利）</div><div id="catTable"></div></div>
   </div>
 
   <!-- 売れ筋 -->
@@ -256,14 +267,36 @@ function buildItems(){
 // ---- renders ----
 function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();renderDataStats();}
 
+let dashFilters={excludeCH:false,brand:"",cat:""};
 function renderDash(){
-  const valid=DATA.filter(r=>r.price>0);
+  let valid=DATA.filter(r=>r.price>0);
   // Restore cards / hide empty banner if data now exists
   const eb=document.getElementById("emptyBanner");
   if(valid.length>0){
     if(eb)eb.style.display="none";
     document.getElementById("v-dash").querySelectorAll(".card,.grid2").forEach(el=>el.style.display="");
   }
+
+  // Populate brand & category selectors (from full data, once per render)
+  const allBrands=[...new Set(DATA.filter(r=>r.price>0).map(r=>r.brand))].sort();
+  const allCats=[...new Set(DATA.filter(r=>r.price>0).map(r=>r.cat2||r.cat||"その他"))].sort();
+  const bsel=document.getElementById("dashBrandSel"),csel=document.getElementById("dashCatSel");
+  if(bsel.options.length<=1||bsel.dataset.n!=String(allBrands.length)){
+    bsel.innerHTML='<option value="">全ブランド</option>'+allBrands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    bsel.dataset.n=allBrands.length;
+  }
+  if(csel.options.length<=1||csel.dataset.n!=String(allCats.length)){
+    csel.innerHTML='<option value="">全カテゴリ</option>'+allCats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    csel.dataset.n=allCats.length;
+  }
+  bsel.value=dashFilters.brand;csel.value=dashFilters.cat;
+  document.getElementById("excludeCH").checked=dashFilters.excludeCH;
+
+  // Apply filters
+  if(dashFilters.excludeCH)valid=valid.filter(r=>!/クロムハーツ|CHROME/i.test(r.brand));
+  if(dashFilters.brand)valid=valid.filter(r=>r.brand===dashFilters.brand);
+  if(dashFilters.cat)valid=valid.filter(r=>(r.cat2||r.cat||"その他")===dashFilters.cat);
+
   const total=valid.reduce((a,r)=>a+r.price,0);
   const cost=valid.reduce((a,r)=>a+(r.cost||0),0);
   const profit=total-cost;
@@ -292,8 +325,8 @@ function renderDash(){
   valid.forEach(r=>{byBrand[r.brand]=(byBrand[r.brand]||0)+r.price;});
   const topB=Object.entries(byBrand).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const maxB=topB[0]?topB[0][1]:1;
-  document.getElementById("brandBars").innerHTML=topB.map(([b,v])=>
-    `<div class="bar-row"><div class="nm">${esc(b)}</div><div class="track"><div class="fill" style="width:${v/maxB*100}%"></div></div><div class="amt">${YENk(v)}</div></div>`).join("");
+  document.getElementById("brandBars").innerHTML=topB.length?topB.map(([b,v])=>
+    `<div class="bar-row"><div class="nm">${esc(b)}</div><div class="track"><div class="fill" style="width:${v/maxB*100}%"></div></div><div class="amt">${YENk(v)}</div></div>`).join(""):'<div class="muted" style="padding:16px;text-align:center;">データなし</div>';
 
   // category donut
   const byCat={};
@@ -303,7 +336,19 @@ function renderDash(){
     labels:topC.map(c=>c[0]),
     datasets:[{data:topC.map(c=>c[1]),backgroundColor:["#0071e3","#34c759","#ff9500","#af52de","#ff3b30","#5ac8fa","#ffcc00","#8e8e93"]}]
   },{plugins:{legend:{position:"right",labels:{font:{size:10},boxWidth:12}}}});
+
+  // category detail table (sales / count / profit per category)
+  const catStats={};
+  valid.forEach(r=>{const c=r.cat2||r.cat||"その他";if(!catStats[c])catStats[c]={sales:0,count:0,cost:0};catStats[c].sales+=r.price;catStats[c].count++;catStats[c].cost+=(r.cost||0);});
+  const catRows=Object.entries(catStats).sort((a,b)=>b[1].sales-a[1].sales);
+  document.getElementById("catTable").innerHTML=catRows.length?`<div style="overflow-x:auto;"><table>
+    <thead><tr><th>カテゴリ</th><th>売上</th><th>点数</th><th>平均単価</th><th>粗利</th><th>粗利率</th></tr></thead>
+    <tbody>${catRows.map(([c,s])=>`<tr style="cursor:default;"><td><b>${esc(c)}</b></td><td>${YENk(s.sales)}</td><td>${s.count}点</td><td>${YEN(s.sales/s.count)}</td><td>${YENk(s.sales-s.cost)}</td><td>${s.sales>0?Math.round((s.sales-s.cost)/s.sales*100):0}%</td></tr>`).join("")}</tbody></table></div>`:'<div class="muted" style="padding:16px;text-align:center;">データなし</div>';
 }
+// Filter event wiring
+document.getElementById("excludeCH").addEventListener("change",e=>{dashFilters.excludeCH=e.target.checked;renderDash();});
+document.getElementById("dashBrandSel").addEventListener("change",e=>{dashFilters.brand=e.target.value;renderDash();});
+document.getElementById("dashCatSel").addEventListener("change",e=>{dashFilters.cat=e.target.value;renderDash();});
 function fmtD(d){if(!d)return "-";d=String(d);return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
 
 let itemSort={key:"count",dir:-1}, itemBrandFilter="";
