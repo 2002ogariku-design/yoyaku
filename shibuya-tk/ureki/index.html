@@ -178,6 +178,7 @@ function getGhTk(){let t;try{t=localStorage.getItem(GH_TK_KEY)}catch(e){}if(!t){
 let DATA=[]; // all sale records
 let charts={};
 let SEED_KEYS=new Set();
+let lastBatchKeys=[]; // keys added in the most recent upload (for undo)
 
 async function boot(){
   try{
@@ -484,13 +485,45 @@ function renderDataStats(){
   const dates=valid.map(r=>r.date).sort();
   const months=[...new Set(valid.map(r=>r.date.slice(0,6)))].length;
   document.getElementById("dataStats").innerHTML=`
-    <div class="kpis" style="margin-bottom:0;">
+    <div class="kpis" style="margin-bottom:16px;">
       <div class="kpi"><div class="lbl">総レコード数</div><div class="val">${valid.length.toLocaleString()}</div></div>
       <div class="kpi"><div class="lbl">期間</div><div class="val" style="font-size:16px;">${dates.length?fmtD(dates[0])+"〜"+fmtD(dates[dates.length-1]):"-"}</div></div>
       <div class="kpi"><div class="lbl">カバー月数</div><div class="val">${months}ヶ月</div></div>
       <div class="kpi"><div class="lbl">ユニーク商品</div><div class="val">${buildItems().length.toLocaleString()}</div></div>
-    </div>`;
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      ${lastBatchKeys.length?`<button class="btn" style="background:var(--orange);" onclick="undoLastUpload()">↩️ 直前のアップロードを取り消す（${lastBatchKeys.length}件）</button>`:""}
+      <button class="btn" style="background:var(--red);" onclick="clearAllData()">🗑 全データを削除</button>
+    </div>
+    <p class="muted" style="margin-top:10px;line-height:1.6;">間違えて入れた場合、直前のアップロードだけ取り消すか、全データを削除してやり直せます。</p>`;
 }
+
+// Undo the most recent upload batch
+window.undoLastUpload=async function(){
+  if(!lastBatchKeys.length)return;
+  if(!confirm(`直前にアップロードした${lastBatchKeys.length}件を取り消しますか？`))return;
+  const rm=new Set(lastBatchKeys);
+  DATA=DATA.filter(r=>!rm.has(keyOf(r)));
+  lastBatchKeys=[];
+  const msg=document.getElementById("uploadMsg");
+  msg.innerHTML='<span style="color:var(--blue);">💾 取り消し中...</span>';
+  try{await saveUploads();msg.innerHTML='<span style="color:var(--green);">✓ 直前のアップロードを取り消しました。</span>';}
+  catch(e){msg.innerHTML='<span style="color:var(--red);">⚠ 保存失敗: '+e.message+'</span>';}
+  renderAll();
+};
+
+// Clear ALL data (uploads); seed is already empty
+window.clearAllData=async function(){
+  if(!confirm("本当に全データを削除しますか？この操作は元に戻せません。"))return;
+  if(!confirm("もう一度確認します。すべての売れ履歴データを削除してよろしいですか？"))return;
+  DATA=DATA.filter(r=>SEED_KEYS.has(keyOf(r))); // keep only seed (empty)
+  lastBatchKeys=[];
+  const msg=document.getElementById("uploadMsg");
+  msg.innerHTML='<span style="color:var(--blue);">💾 削除中...</span>';
+  try{await saveUploads();msg.innerHTML='<span style="color:var(--green);">✓ 全データを削除しました。最初からアップロードできます。</span>';}
+  catch(e){msg.innerHTML='<span style="color:var(--red);">⚠ 保存失敗: '+e.message+'</span>';}
+  renderAll();
+};
 
 // ---- xlsx upload ----
 const HEADER_ROW=5;
@@ -509,6 +542,7 @@ async function importFiles(files){
   const beforeMax=beforeDates.length?beforeDates.reduce((a,b)=>a>b?a:b):null;
   let totalAdded=0,totalRows=0,errors=[];
   const seen=new Set(DATA.map(keyOf));
+  lastBatchKeys=[]; // reset — this upload becomes the undoable batch
   for(let fi=0;fi<files.length;fi++){
     const file=files[fi];
     msg.innerHTML=`<span style="color:var(--blue);">📥 読み込み中... (${fi+1}/${files.length}) ${esc(file.name)}</span>`;
@@ -516,7 +550,7 @@ async function importFiles(files){
       const recs=await parseXlsx(file);
       totalRows+=recs.length;
       let added=0;
-      for(const rec of recs){if(!seen.has(keyOf(rec))){seen.add(keyOf(rec));DATA.push(rec);added++;}}
+      for(const rec of recs){const k=keyOf(rec);if(!seen.has(k)){seen.add(k);DATA.push(rec);lastBatchKeys.push(k);added++;}}
       totalAdded+=added;
     }catch(err){console.error(err);errors.push(file.name+": "+err.message);}
   }
