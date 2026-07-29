@@ -501,6 +501,10 @@ function showStaff(name){
   const byCat={};s.recs.forEach(r=>{const c=r.cat2||r.cat||"その他";if(!byCat[c])byCat[c]={sales:0,count:0};byCat[c].sales+=r.price;byCat[c].count++;});
   const topCat=Object.entries(byCat).sort((a,b)=>b[1].sales-a[1].sales).slice(0,8);
   const maxCat=topCat[0]?topCat[0][1].sales:1;
+  // brand × category combos (得意な組み合わせ)
+  const byCombo={};
+  s.recs.forEach(r=>{const c=r.cat2||r.cat||"その他";const k=r.brand+"|||"+c;if(!byCombo[k])byCombo[k]={brand:r.brand,cat:c,sales:0,count:0};byCombo[k].sales+=r.price;byCombo[k].count++;});
+  const topCombo=Object.values(byCombo).sort((a,b)=>b.sales-a.sales).slice(0,12);
   // monthly
   const byMonth={};s.recs.forEach(r=>{const m=r.date.slice(0,6);byMonth[m]=(byMonth[m]||0)+r.price;});
   const mk=Object.keys(byMonth).sort();
@@ -525,6 +529,13 @@ function showStaff(name){
     <div class="card" style="box-shadow:none;border:1px solid var(--line);">
       <div class="card-t">得意ブランド TOP8</div>
       ${topB.map(([b,v])=>`<div class="bar-row"><div class="nm">${esc(b)}</div><div class="track"><div class="fill" style="width:${v/maxB*100}%"></div></div><div class="amt">${YENk(v)}</div></div>`).join("")}
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);">
+      <div class="card-t">🔀 ブランド×カテゴリ 詳細（得意な組み合わせ）</div>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr><th>ブランド</th><th>カテゴリ</th><th>売上</th><th>点数</th><th>平均</th></tr></thead>
+        <tbody>${topCombo.map(c=>`<tr style="cursor:default;"><td><b>${esc(c.brand)}</b></td><td>${esc(c.cat)}</td><td>${YENk(c.sales)}</td><td>${c.count}点</td><td>${YEN(c.sales/c.count)}</td></tr>`).join("")}</tbody>
+      </table></div>
     </div>
     <div class="card" style="box-shadow:none;border:1px solid var(--line);">
       <div class="card-t">高額販売 TOP10</div>
