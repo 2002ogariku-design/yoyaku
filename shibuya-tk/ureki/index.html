@@ -119,6 +119,20 @@ tbody tr:active{background:#eaeaef;}
     </div>
   </div>
 
+  <!-- 個人 -->
+  <div class="view" id="v-staff">
+    <div class="card">
+      <div class="card-t">👤 個人成績（販売員別）</div>
+      <p class="muted" style="margin-bottom:14px;">スタッフを選ぶと、その人の売上・販売点数・得意ブランド・月別推移が見られます。</p>
+      <select id="staffSel"></select>
+      <div id="staffDetail" style="margin-top:18px;"></div>
+    </div>
+    <div class="card">
+      <div class="card-t">🏅 販売員ランキング（売上順）</div>
+      <div id="staffRanking"></div>
+    </div>
+  </div>
+
   <!-- データ -->
   <div class="view" id="v-data">
     <div class="card">
@@ -139,6 +153,7 @@ tbody tr:active{background:#eaeaef;}
   <button data-v="dash" class="on"><span class="ic">📊</span>概要</button>
   <button data-v="items"><span class="ic">🔥</span>売れ筋</button>
   <button data-v="price"><span class="ic">💹</span>相場</button>
+  <button data-v="staff"><span class="ic">👤</span>個人</button>
   <button data-v="data"><span class="ic">＋</span>データ</button>
 </div>
 
@@ -226,7 +241,7 @@ function buildItems(){
 }
 
 // ---- renders ----
-function renderAll(){renderDash();renderItems();renderPriceSel();renderDataStats();}
+function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();renderDataStats();}
 
 function renderDash(){
   const valid=DATA.filter(r=>r.price>0);
@@ -379,6 +394,73 @@ function showPriceDetail(key){
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>YENk(v)}}}}),50);
 }
 
+// ---- staff analysis ----
+// Exclude non-individual "staff" labels (shipping/other bucket)
+const STAFF_EXCLUDE=["発送担当","その他","",null];
+function buildStaff(){
+  const m={};
+  for(const r of DATA){
+    if(r.price<=0)continue;
+    const s=(r.staff||"").trim();
+    if(STAFF_EXCLUDE.includes(s))continue;
+    if(!m[s])m[s]={name:s,count:0,total:0,cost:0,recs:[]};
+    m[s].count++;m[s].total+=r.price;m[s].cost+=(r.cost||0);m[s].recs.push(r);
+  }
+  return Object.values(m).map(s=>({...s,profit:s.total-s.cost,avg:s.total/Math.max(1,s.count)})).sort((a,b)=>b.total-a.total);
+}
+function renderStaff(){
+  const staff=buildStaff();
+  // dropdown
+  const sel=document.getElementById("staffSel");
+  const cur=sel.value;
+  sel.innerHTML='<option value="">スタッフを選択...</option>'+staff.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}（${s.count}点・${YENk(s.total)}）</option>`).join("");
+  if(staff.some(s=>s.name===cur))sel.value=cur;
+  // ranking
+  const maxT=staff[0]?staff[0].total:1;
+  document.getElementById("staffRanking").innerHTML=staff.length?staff.slice(0,20).map((s,i)=>
+    `<div class="bar-row" style="cursor:pointer;" onclick="selStaff('${esc(s.name).replace(/'/g,"")}')">
+      <div class="nm" style="width:140px;">${i<3?["🥇","🥈","🥉"][i]:" "+(i+1)} ${esc(s.name)}</div>
+      <div class="track"><div class="fill" style="width:${s.total/maxT*100}%"></div></div>
+      <div class="amt">${YENk(s.total)}</div>
+    </div>`).join(""):'<div class="muted" style="text-align:center;padding:20px;">販売員データがありません。データを追加してください。</div>';
+}
+window.selStaff=function(name){document.getElementById("staffSel").value=name;showStaff(name);};
+document.getElementById("staffSel").addEventListener("change",e=>{if(e.target.value)showStaff(e.target.value);else document.getElementById("staffDetail").innerHTML="";});
+function showStaff(name){
+  const s=buildStaff().find(x=>x.name===name);
+  if(!s){document.getElementById("staffDetail").innerHTML="";return;}
+  // brand breakdown
+  const byBrand={};s.recs.forEach(r=>{byBrand[r.brand]=(byBrand[r.brand]||0)+r.price;});
+  const topB=Object.entries(byBrand).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxB=topB[0]?topB[0][1]:1;
+  // monthly
+  const byMonth={};s.recs.forEach(r=>{const m=r.date.slice(0,6);byMonth[m]=(byMonth[m]||0)+r.price;});
+  const mk=Object.keys(byMonth).sort();
+  // rank of this staff
+  const all=buildStaff();const rank=all.findIndex(x=>x.name===name)+1;
+  document.getElementById("staffDetail").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">売上（順位）</div><div class="val">${YENk(s.total)}</div><div class="sub">全体${rank}位 / ${all.length}人</div></div>
+      <div class="kpi"><div class="lbl">販売点数</div><div class="val">${s.count}点</div></div>
+      <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(s.avg)}</div></div>
+      <div class="kpi"><div class="lbl">粗利</div><div class="val">${YENk(s.profit)}</div><div class="sub">${s.total>0?Math.round(s.profit/s.total*100):0}%</div></div>
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);"><div class="card-t">月別売上推移</div><canvas id="chStaffMonthly" height="130"></canvas></div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);">
+      <div class="card-t">得意ブランド TOP8</div>
+      ${topB.map(([b,v])=>`<div class="bar-row"><div class="nm">${esc(b)}</div><div class="track"><div class="fill" style="width:${v/maxB*100}%"></div></div><div class="amt">${YENk(v)}</div></div>`).join("")}
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);">
+      <div class="card-t">高額販売 TOP10</div>
+      <div style="max-height:240px;overflow-y:auto;"><table><thead><tr><th>日付</th><th>ブランド</th><th>商品</th><th>価格</th></tr></thead>
+      <tbody>${s.recs.slice().sort((a,b)=>b.price-a.price).slice(0,10).map(r=>`<tr style="cursor:default;"><td>${fmtD(r.date)}</td><td>${esc(r.brand)}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.model||r.name)}</td><td><b>${YEN(r.price)}</b></td></tr>`).join("")}</tbody></table></div>
+    </div>`;
+  setTimeout(()=>drawChart("chStaffMonthly","bar",{
+    labels:mk.map(m=>m.slice(0,4)+"/"+m.slice(4,6)),
+    datasets:[{data:mk.map(m=>byMonth[m]),backgroundColor:"#0071e3",borderRadius:6}]
+  },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>YENk(v)}}}}),50);
+}
+
 function renderDataStats(){
   const valid=DATA.filter(r=>r.price>0);
   const dates=valid.map(r=>r.date).sort();
@@ -459,7 +541,7 @@ async function parseXlsx(file){
   if(hr<0)throw new Error("ヘッダー行（売上日付）が見つかりません");
   const head=rows[hr];
   const col=name=>head.indexOf(name);
-  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード")};
+  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),staff:col("販売員名称"),cust:col("客層名称")};
   const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
   const recs=[];
   for(let i=hr+1;i<rows.length;i++){
@@ -467,7 +549,7 @@ async function parseXlsx(file){
     const brand=cl(r[ci.brand]),name=cl(r[ci.name]),price=Number(r[ci.price])||0;
     if(!brand||!name||price<=0)continue;
     if(/送料|手数料/.test(cl(r[ci.brandEn])))continue;
-    recs.push({date:String(r[ci.date]).slice(0,8),store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost:Number(r[ci.cost])||0,listPrice:Number(r[ci.listPrice])||0,jan:cl(r[ci.jan])});
+    recs.push({date:String(r[ci.date]).slice(0,8),store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost:Number(r[ci.cost])||0,listPrice:Number(r[ci.listPrice])||0,jan:cl(r[ci.jan]),staff:ci.staff>=0?cl(r[ci.staff]):"",cust:ci.cust>=0?cl(r[ci.cust]):""});
   }
   return recs;
 }
@@ -475,7 +557,7 @@ async function parseXlsx(file){
 // Save all NON-seed uploads to GitHub (everything the user added beyond seed)
 async function saveUploads(){
   const t=getGhTk();if(!t)throw new Error("アクセスキーが未設定です");
-  const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan"];
+  const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust"];
   const uploadRows=DATA.filter(r=>!SEED_KEYS.has(keyOf(r))).map(r=>schema.map(k=>r[k]));
   const payload={schema,rows:uploadRows,updated:new Date().toISOString()};
   const body=JSON.stringify(payload);
