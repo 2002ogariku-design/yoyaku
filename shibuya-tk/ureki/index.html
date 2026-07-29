@@ -205,7 +205,19 @@ async function boot(){
     }
   }catch(e){}
   document.getElementById("app").style.display="none";
-  document.getElementById("v-dash").classList.add("on");
+  if(DATA.filter(r=>r.price>0).length===0){
+    // No data yet — guide user to upload
+    document.getElementById("v-dash").classList.add("on");
+    document.getElementById("dashKpis").innerHTML='';
+    const dv=document.getElementById("v-dash");
+    dv.querySelectorAll(".card,.grid2").forEach(el=>el.style.display="none");
+    let banner=document.getElementById("emptyBanner");
+    if(!banner){banner=document.createElement("div");banner.id="emptyBanner";banner.className="card";banner.style.textAlign="center";dv.prepend(banner);}
+    banner.style.display="block";
+    banner.innerHTML='<div style="padding:40px 20px;"><div style="font-size:48px;margin-bottom:12px;">📊</div><div style="font-size:18px;font-weight:800;margin-bottom:8px;">データがまだありません</div><div class="muted" style="margin-bottom:20px;line-height:1.7;">下の「＋ データ」タブから売上明細エクセルを<br>アップロードすると分析が始まります。</div><button class="btn blue" onclick="document.querySelector(\'#tabbar button[data-v=data]\').click()">＋ データを追加する</button></div>';
+  }else{
+    document.getElementById("v-dash").classList.add("on");
+  }
   renderAll();
 }
 function rowToObj(r,schema){const o={};schema.forEach((k,i)=>o[k]=r[i]);return o;}
@@ -245,6 +257,12 @@ function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();r
 
 function renderDash(){
   const valid=DATA.filter(r=>r.price>0);
+  // Restore cards / hide empty banner if data now exists
+  const eb=document.getElementById("emptyBanner");
+  if(valid.length>0){
+    if(eb)eb.style.display="none";
+    document.getElementById("v-dash").querySelectorAll(".card,.grid2").forEach(el=>el.style.display="");
+  }
   const total=valid.reduce((a,r)=>a+r.price,0);
   const cost=valid.reduce((a,r)=>a+(r.cost||0),0);
   const profit=total-cost;
