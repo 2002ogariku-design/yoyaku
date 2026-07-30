@@ -306,66 +306,55 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_DATA_PATH="shibuya-tk/ch-kaitori-data.json";
-const GH_DATA_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_DATA_PATH}`;
-const GH_TOKEN_KEY="tk-gh-token",STAFFNAME_KEY="tk-staffname";
+const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY="rinkan-app-pw";
+const TOOL="kaitori-ch";
+const STAFFNAME_KEY="tk-staffname";
 let items=[];
 let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
 let uploadHistory=[];
 let batchFilter="";
-let ghDataSha=null;
 
-function getGhToken(){
-  let t;try{t=localStorage.getItem(GH_TOKEN_KEY);}catch(e){}
-  if(!t){
-    t=prompt("共有アクセスキーを入力してください（他のツールと同じキーです）");
-    if(t){try{localStorage.setItem(GH_TOKEN_KEY,t.trim());}catch(e){}t=t.trim();}
-  }
-  return t;
+function getAppPw(){
+  let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
+  if(!p){p=prompt("共有パスワードを入力してください");if(p){p=p.trim();try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}}
+  return p||"";
 }
-function clearGhToken(){try{localStorage.removeItem(GH_TOKEN_KEY);}catch(e){}}
+function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
+function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};}
 function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
-function utf8B64(s){return btoa(unescape(encodeURIComponent(s)));}
-function b64Utf8(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))));}
 
 async function ghLoadData(){
-  const token=getGhToken();if(!token)return;
   try{
-    const r=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
-    if(r.status===401){
-      clearGhToken();
-      toast("アクセスキーが無効です。再入力してください。");
-      const newToken=prompt("アクセスキーが無効でした。新しいキーを入力してください：");
-      if(newToken){try{localStorage.setItem(GH_TOKEN_KEY,newToken.trim());}catch(e){}}
-      return ghLoadData();
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+    if(r.status===401||r.status===403){
+      clearAppPw();
+      toast("パスワードが正しくありません。再入力してください。");
+      const np=prompt("共有パスワードを再入力してください：");
+      if(np){try{sessionStorage.setItem(SB_PW_KEY,np.trim());}catch(e){}return ghLoadData();}
+      return;
     }
-    if(r.status===404){ghDataSha=null;return;}
     if(!r.ok)throw new Error("HTTP "+r.status);
-    const d=await r.json();ghDataSha=d.sha;
-    const parsed=JSON.parse(b64Utf8(d.content));
-    items=parsed.items||[];
-    uploadMeta={uploadedAt:parsed.uploadedAt||null,uploadedBy:parsed.uploadedBy||null,filename:parsed.filename||null};
-    uploadHistory=parsed.uploadHistory||[];
+    const rows=await r.json();
+    if(rows.length){
+      const parsed=rows[0].payload||{};
+      items=parsed.items||[];
+      uploadMeta={uploadedAt:parsed.uploadedAt||null,uploadedBy:parsed.uploadedBy||null,filename:parsed.filename||null};
+      uploadHistory=parsed.uploadHistory||[];
+    }
   }catch(e){console.error(e);toast("データの読み込みに失敗："+e.message);}
 }
 
 async function ghSaveData(){
-  const token=getGhToken();if(!token){toast("アクセスキーが未設定です");return;}
   const payload={items,uploadedAt:uploadMeta.uploadedAt,uploadedBy:uploadMeta.uploadedBy,filename:uploadMeta.filename,uploadHistory};
-  for(let a=0;a<3;a++){
-    try{
-      const h=await fetch(`${GH_DATA_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}});
-      if(h.status===401){clearGhToken();toast("アクセスキーが無効です");return;}
-      if(h.ok)ghDataSha=(await h.json()).sha;else if(h.status===404)ghDataSha=null;
-    }catch(e){}
-    const body={message:"kaitori update "+new Date().toISOString(),content:utf8B64(JSON.stringify(payload))};
-    if(ghDataSha)body.sha=ghDataSha;
-    const r=await fetch(GH_DATA_API,{method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(r.ok){ghDataSha=(await r.json()).content.sha;return;}
-    if(r.status===401){clearGhToken();toast("アクセスキーが無効です");return;}
-    if(r.status===409&&a<2){await new Promise(r=>setTimeout(r,400));continue;}
-    throw new Error("保存失敗 HTTP "+r.status);
-  }
+  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    method:"POST",
+    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
+  });
+  if(r.status===401||r.status===403){clearAppPw();toast("パスワードが正しくありません");return;}
+  if(!r.ok){const t=await r.text();throw new Error("保存失敗 HTTP "+r.status+" "+t.slice(0,100));}
 }
 
 window.viewBatch=function(batch){
