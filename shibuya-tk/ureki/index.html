@@ -76,7 +76,17 @@ tbody tr:active{background:#eaeaef;}
 <header>
   <div class="eyebrow">RINKAN SHIBUYA</div>
   <h1>売れ履歴 分析</h1>
+  <div id="segBar" style="display:flex;gap:6px;margin-top:12px;background:var(--card2);padding:4px;border-radius:12px;">
+    <button class="segbtn on" data-seg="all">すべて</button>
+    <button class="segbtn" data-seg="apparel">アパレル</button>
+    <button class="segbtn" data-seg="chrome">クロムハーツ</button>
+    <button class="segbtn" data-seg="watch">時計</button>
+  </div>
 </header>
+<style>
+.segbtn{flex:1;border:none;background:none;font-family:var(--font);font-size:13px;font-weight:700;color:var(--t2);padding:9px 6px;border-radius:9px;cursor:pointer;transition:all .2s var(--smooth);}
+.segbtn.on{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+</style>
 
 <div class="wrap">
   <div id="app"><div class="loading"><div class="spinner"></div>データを読み込み中...</div></div>
@@ -86,12 +96,6 @@ tbody tr:active{background:#eaeaef;}
     <div class="card" style="padding:14px 16px;">
       <div style="font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.05em;margin-bottom:10px;">絞り込み</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);padding:9px 14px;border-radius:12px;">
-          <input type="checkbox" id="excludeCH" style="width:18px;height:18px;cursor:pointer;"> クロムハーツを除く
-        </label>
-        <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);padding:9px 14px;border-radius:12px;">
-          <input type="checkbox" id="excludeWatch" style="width:18px;height:18px;cursor:pointer;"> 時計を除く
-        </label>
         <select id="dashBrandSel" style="width:auto;flex:1;min-width:150px;"></select>
         <select id="dashCatSel" style="width:auto;flex:1;min-width:150px;"></select>
       </div>
@@ -180,6 +184,22 @@ const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const RANKCOLOR={S:"#af52de",A:"#0071e3",B:"#34c759",C:"#ff9500",D:"#8e8e93"};
+
+// ===== Global segment (アパレル / クロムハーツ / 時計) =====
+let SEGMENT="all";
+const WATCH_RE=/時計|ウォッチ|WATCH/i;
+const WATCH_BRAND_RE=/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|タグ\s*ホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO|フランクミュラー|FRANCK\s*MULLER|ジャガールクルト|カルティエ.*時計|ヴァシュロン|VACHERON|ゼニス|ZENITH|チューダー|TUDOR|ブレゲ|BREGUET/i;
+const CHROME_RE=/クロムハーツ|CHROME\s*HEARTS|CHROME/i;
+function segOf(r){
+  if(CHROME_RE.test(r.brand))return "chrome";
+  if(WATCH_BRAND_RE.test(r.brand)||WATCH_RE.test((r.cat||"")+(r.cat2||"")))return "watch";
+  return "apparel";
+}
+// Data filtered by the current global segment
+function segData(){
+  if(SEGMENT==="all")return DATA;
+  return DATA.filter(r=>segOf(r)===SEGMENT);
+}
 
 // ===== Supabase config (data stored securely, password-protected) =====
 const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
@@ -277,7 +297,7 @@ const MATLABEL={PT:"プラチナ",K18:"18K",YG:"イエローG",WG:"ホワイトG
 function itemKey(r){const mat=detectMaterial(r);return r.brand+"|||"+(r.model||r.name)+(mat?"|||"+mat:"");}
 function buildItems(){
   const m={};
-  for(const r of DATA){
+  for(const r of segData()){
     const k=itemKey(r);
     const mat=detectMaterial(r);
     if(!m[k])m[k]={key:k,brand:r.brand,item:(r.model||r.name)+(mat?" ["+(MATLABEL[mat]||mat)+"]":""),cat:r.cat,mat,recs:[]};
@@ -306,9 +326,21 @@ function buildItems(){
 // ---- renders ----
 function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();renderDataStats();}
 
-let dashFilters={excludeCH:false,excludeWatch:false,brand:"",cat:""};
+// Global segment switcher
+document.querySelectorAll("#segBar .segbtn").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#segBar .segbtn").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    SEGMENT=b.dataset.seg;
+    // reset dashboard brand/cat filters when segment changes
+    dashFilters.brand="";dashFilters.cat="";
+    renderAll();
+  });
+});
+
+let dashFilters={brand:"",cat:""};
 function renderDash(){
-  let valid=DATA.filter(r=>r.price>0);
+  let valid=segData().filter(r=>r.price>0);
   // Restore cards / hide empty banner if data now exists
   const eb=document.getElementById("emptyBanner");
   if(valid.length>0){
@@ -317,8 +349,8 @@ function renderDash(){
   }
 
   // Populate brand & category selectors (from full data, once per render)
-  const allBrands=[...new Set(DATA.filter(r=>r.price>0).map(r=>r.brand))].sort();
-  const allCats=[...new Set(DATA.filter(r=>r.price>0).map(r=>r.cat2||r.cat||"その他"))].sort();
+  const allBrands=[...new Set(segData().filter(r=>r.price>0).map(r=>r.brand))].sort();
+  const allCats=[...new Set(segData().filter(r=>r.price>0).map(r=>r.cat2||r.cat||"その他"))].sort();
   const bsel=document.getElementById("dashBrandSel"),csel=document.getElementById("dashCatSel");
   if(bsel.options.length<=1||bsel.dataset.n!=String(allBrands.length)){
     bsel.innerHTML='<option value="">全ブランド</option>'+allBrands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("");
@@ -329,12 +361,8 @@ function renderDash(){
     csel.dataset.n=allCats.length;
   }
   bsel.value=dashFilters.brand;csel.value=dashFilters.cat;
-  document.getElementById("excludeCH").checked=dashFilters.excludeCH;
-  document.getElementById("excludeWatch").checked=dashFilters.excludeWatch;
 
   // Apply filters
-  if(dashFilters.excludeCH)valid=valid.filter(r=>!/クロムハーツ|CHROME/i.test(r.brand));
-  if(dashFilters.excludeWatch)valid=valid.filter(r=>!/時計|ウォッチ|WATCH/i.test((r.cat||"")+(r.cat2||""))&&!/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|カルティエ.*時計|タグホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO/i.test(r.brand));
   if(dashFilters.brand)valid=valid.filter(r=>r.brand===dashFilters.brand);
   if(dashFilters.cat)valid=valid.filter(r=>(r.cat2||r.cat||"その他")===dashFilters.cat);
 
@@ -387,8 +415,6 @@ function renderDash(){
     <tbody>${catRows.map(([c,s])=>`<tr style="cursor:default;"><td><b>${esc(c)}</b></td><td>${YENk(s.sales)}</td><td>${s.count}点</td><td>${YEN(s.sales/s.count)}</td><td>${YENk(s.sales-s.cost)}</td><td>${s.sales>0?Math.round((s.sales-s.cost)/s.sales*100):0}%</td></tr>`).join("")}</tbody></table></div>`:'<div class="muted" style="padding:16px;text-align:center;">データなし</div>';
 }
 // Filter event wiring
-document.getElementById("excludeCH").addEventListener("change",e=>{dashFilters.excludeCH=e.target.checked;renderDash();});
-document.getElementById("excludeWatch").addEventListener("change",e=>{dashFilters.excludeWatch=e.target.checked;renderDash();});
 document.getElementById("dashBrandSel").addEventListener("change",e=>{dashFilters.brand=e.target.value;renderDash();});
 document.getElementById("dashCatSel").addEventListener("change",e=>{dashFilters.cat=e.target.value;renderDash();});
 function fmtD(d){if(!d)return "-";d=String(d);return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
@@ -423,12 +449,17 @@ function drawItemsTable(items){
     return `<tr onclick='showItem(${JSON.stringify(itemKeyStr(i)).replace(/'/g,"&#39;")})'>
       <td><b>${i.count}</b>回</td>
       <td>${esc(i.brand)}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.item)}</td>
+      <td style="max-width:220px;"><div style="display:flex;align-items:center;gap:6px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.item)}</span>${gSearchBtn(i.brand,i.item)}</div></td>
       <td><b>${YEN(i.avg)}</b></td>
       <td>${tr}</td>
       <td>${YENk(i.total)}</td>
     </tr>`;
   }).join("")||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--t3);">該当なし</td></tr>';
+}
+// Google search button for an item (opens brand + item name in a new tab)
+function gSearchBtn(brand,item){
+  const q=encodeURIComponent((brand+" "+String(item).replace(/\s*\[[^\]]*\]\s*$/,"")).trim());
+  return `<a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Googleで検索" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:var(--card2);text-decoration:none;font-size:13px;">🔍</a>`;
 }
 function itemKeyStr(i){return i.key;}
 document.getElementById("itemSearch").addEventListener("input",()=>drawItemsTable(buildItems()));
@@ -448,7 +479,9 @@ window.showItem=function(key){
   const modal=document.getElementById("itemModal"),sheet=document.getElementById("itemSheet");
   sheet.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-      <div><div class="muted">${esc(it.brand)}</div><div style="font-size:20px;font-weight:800;letter-spacing:-.01em;">${esc(it.item)}</div></div>
+      <div><div class="muted">${esc(it.brand)}</div><div style="font-size:20px;font-weight:800;letter-spacing:-.01em;">${esc(it.item)}</div>
+        <a href="https://www.google.com/search?q=${encodeURIComponent((it.brand+" "+String(it.item).replace(/\s*\[[^\]]*\]\s*$/,"")).trim())}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:13px;font-weight:600;color:var(--blue);text-decoration:none;background:var(--card2);padding:6px 12px;border-radius:9px;">🔍 このアイテムをGoogle検索</a>
+      </div>
       <button onclick="closeItemModal()" style="background:var(--card2);border:none;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer;flex-shrink:0;">×</button>
     </div>
     <div class="kpis" style="margin:16px 0;">
@@ -488,6 +521,7 @@ function showPriceDetail(key){
   if(!it)return;
   const s=it.sorted;
   document.getElementById("priceDetail").innerHTML=`
+    <div style="margin-bottom:12px;"><a href="https://www.google.com/search?q=${encodeURIComponent((it.brand+" "+String(it.item).replace(/\s*\[[^\]]*\]\s*$/,"")).trim())}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--blue);text-decoration:none;background:var(--card2);padding:8px 14px;border-radius:10px;">🔍 ${esc(it.brand)} ${esc(it.item)} をGoogle検索</a></div>
     <div class="kpis">
       <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(it.avg)}</div></div>
       <div class="kpi"><div class="lbl">最安〜最高</div><div class="val" style="font-size:16px;">${YEN(it.min)}〜${YEN(it.max)}</div></div>
@@ -505,7 +539,7 @@ function showPriceDetail(key){
 const STAFF_EXCLUDE=["発送担当","その他","",null];
 function buildStaff(){
   const m={};
-  for(const r of DATA){
+  for(const r of segData()){
     if(r.price<=0)continue;
     const s=(r.staff||"").trim();
     if(STAFF_EXCLUDE.includes(s))continue;
