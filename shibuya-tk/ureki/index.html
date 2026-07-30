@@ -236,7 +236,7 @@ async function boot(){
   renderAll();
 }
 function rowToObj(r,schema){const o={};schema.forEach((k,i)=>o[k]=r[i]);return o;}
-function keyOf(o){return o.jan+"|"+o.date+"|"+o.price;}
+function keyOf(o){return o.uid||(o.jan+"|"+o.date+"|"+o.price);}
 
 // ---- item grouping ----
 // Detect precious-metal material from product name/model — gold and silver items of the
@@ -764,10 +764,12 @@ async function parseXlsx(file){
   const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),staff:col("販売員名称"),cust:col("客層名称")};
   const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
   const recs=[];
+  const occ={}; // occurrence counter per identity group within this file
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i];if(!r||!r[ci.date])continue;
     const brand=cl(r[ci.brand]),name=cl(r[ci.name]);
     let price=Number(r[ci.price])||0;
+    const origPrice=price; // pre-correction price for stable identity
     const cost=Number(r[ci.cost])||0;
     const cust=ci.cust>=0?cl(r[ci.cust]):"";
     if(!brand||!name||price<=0)continue;
@@ -775,8 +777,16 @@ async function parseXlsx(file){
     // 免税(tax-free) rows: the recorded 売価 is tax-excluded → convert to tax-included ×1.1
     let taxfree=false;
     if(/免税/.test(cust)){taxfree=true;price=Math.round(price*1.1);}
-    const profit=price-cost; // recalc profit against (possibly corrected) price
-    recs.push({date:String(r[ci.date]).slice(0,8),store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan:cl(r[ci.jan]),staff:ci.staff>=0?cl(r[ci.staff]):"",cust});
+    const profit=price-cost;
+    const date=String(r[ci.date]).slice(0,8);
+    const jan=cl(r[ci.jan]);
+    const staff=ci.staff>=0?cl(r[ci.staff]):"";
+    // Deterministic identity: same across re-uploads of the same file, but distinguishes
+    // identical same-day sales via an occurrence index. Uses ORIGINAL price (tax-correction-proof).
+    const idBase=jan+"|"+date+"|"+origPrice+"|"+staff+"|"+(r[ci.qty]||1);
+    occ[idBase]=(occ[idBase]||0)+1;
+    const uid=idBase+"#"+occ[idBase];
+    recs.push({uid,date,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,staff,cust});
   }
   return recs;
 }
@@ -784,7 +794,7 @@ async function parseXlsx(file){
 // Save all NON-seed uploads to GitHub (everything the user added beyond seed)
 async function saveUploads(){
   const t=getGhTk();if(!t)throw new Error("アクセスキーが未設定です");
-  const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree"];
+  const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
   const uploadRows=DATA.filter(r=>!SEED_KEYS.has(keyOf(r))).map(r=>schema.map(k=>r[k]));
   const payload={schema,rows:uploadRows,updated:new Date().toISOString()};
   const body=JSON.stringify(payload);
