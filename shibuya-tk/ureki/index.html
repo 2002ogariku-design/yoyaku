@@ -608,7 +608,40 @@ function showStaff(name){
       <div class="card-t">高額販売 TOP10</div>
       <div style="max-height:240px;overflow-y:auto;"><table><thead><tr><th>日付</th><th>ブランド</th><th>商品</th><th>価格</th></tr></thead>
       <tbody>${s.recs.slice().sort((a,b)=>b.price-a.price).slice(0,10).map(r=>`<tr style="cursor:default;"><td>${fmtD(r.date)}</td><td>${esc(r.brand)}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.model||r.name)}</td><td><b>${YEN(r.price)}</b></td></tr>`).join("")}</tbody></table></div>
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);">
+      <div class="card-t">📋 全販売データ（${s.recs.length}件）</div>
+      <input type="text" id="staffDetailSearch" placeholder="🔍 ブランド・商品・客層で絞り込み..." style="margin-bottom:12px;">
+      <div style="overflow-x:auto;max-height:460px;overflow-y:auto;">
+        <table id="staffAllTable">
+          <thead><tr>
+            <th>日付</th><th>ブランド</th><th>アイテム</th><th>カテゴリ</th><th>客層</th><th>標準売価(税込)</th><th>売上売価</th><th>粗利</th>
+          </tr></thead>
+          <tbody id="staffAllBody"></tbody>
+        </table>
+      </div>
     </div>`;
+  // Full sales table (all records for this staff, newest first)
+  const allSorted=s.recs.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  function renderStaffAll(q){
+    q=(q||"").toLowerCase();
+    const rows=allSorted.filter(r=>!q||((r.brand+" "+(r.model||r.name)+" "+(r.cust||"")+" "+(r.cat2||r.cat||"")).toLowerCase().includes(q)));
+    document.getElementById("staffAllBody").innerHTML=rows.map(r=>{
+      const prof=r.profit!=null?r.profit:(r.price-(r.cost||0));
+      return `<tr style="cursor:default;">
+        <td style="white-space:nowrap;">${fmtD(r.date)}</td>
+        <td>${esc(r.brand)}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.model||r.name)}${r.taxfree?' <span style="font-size:9px;color:var(--orange);font-weight:700;">免税</span>':''}</td>
+        <td style="white-space:nowrap;">${esc(r.cat2||r.cat||"-")}</td>
+        <td style="white-space:nowrap;font-size:11px;">${esc(r.cust||"-")}</td>
+        <td style="white-space:nowrap;color:var(--t3);">${r.listPrice?YEN(r.listPrice):"-"}</td>
+        <td style="white-space:nowrap;"><b>${YEN(r.price)}</b></td>
+        <td style="white-space:nowrap;color:${prof>=0?'var(--green)':'var(--red)'};">${YEN(prof)}</td>
+      </tr>`;
+    }).join("")||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3);">該当なし</td></tr>';
+  }
+  renderStaffAll("");
+  document.getElementById("staffDetailSearch").addEventListener("input",e=>renderStaffAll(e.target.value));
   setTimeout(()=>drawChart("chStaffMonthly","bar",{
     labels:mk.map(m=>m.slice(0,4)+"/"+m.slice(4,6)),
     datasets:[{data:mk.map(m=>byMonth[m]),backgroundColor:"#0071e3",borderRadius:6}]
