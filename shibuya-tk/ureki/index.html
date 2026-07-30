@@ -89,6 +89,9 @@ tbody tr:active{background:#eaeaef;}
         <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);padding:9px 14px;border-radius:12px;">
           <input type="checkbox" id="excludeCH" style="width:18px;height:18px;cursor:pointer;"> クロムハーツを除く
         </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;cursor:pointer;background:var(--card2);padding:9px 14px;border-radius:12px;">
+          <input type="checkbox" id="excludeWatch" style="width:18px;height:18px;cursor:pointer;"> 時計を除く
+        </label>
         <select id="dashBrandSel" style="width:auto;flex:1;min-width:150px;"></select>
         <select id="dashCatSel" style="width:auto;flex:1;min-width:150px;"></select>
       </div>
@@ -236,12 +239,31 @@ function rowToObj(r,schema){const o={};schema.forEach((k,i)=>o[k]=r[i]);return o
 function keyOf(o){return o.jan+"|"+o.date+"|"+o.price;}
 
 // ---- item grouping ----
-function itemKey(r){return r.brand+"|||"+(r.model||r.name);}
+// Detect precious-metal material from product name/model — gold and silver items of the
+// same design have very different prices and must NOT be averaged together for 相場.
+function detectMaterial(r){
+  const t=((r.model||"")+" "+(r.name||"")+" "+(r.size||"")).toUpperCase();
+  // Platinum
+  if(/\bPT\b|PT9\d\d|プラチナ|PLATINUM/.test(t))return "PT";
+  // Gold variants (18K/22K/K18/R18/YG/WG/PG/ゴールド/金)
+  if(/22K|22金/.test(t))return "22K";
+  if(/K18|18K|R18|\b750\b|18金/.test(t))return "K18";
+  if(/\bYG\b|YG$|イエローゴールド|YELLOW\s*GOLD/.test(t))return "YG";
+  if(/\bWG\b|WG$|ホワイトゴールド|WHITE\s*GOLD/.test(t))return "WG";
+  if(/\bPG\b|PG$|ピンクゴールド|ROSE\s*GOLD|PINK\s*GOLD/.test(t))return "PG";
+  if(/K\d{2}|ゴールド|\bGOLD\b|金無垢/.test(t))return "GOLD";
+  // Silver
+  if(/\bSV\b|SILVER|シルバー|925|銀/.test(t))return "SV";
+  return ""; // unknown/other
+}
+const MATLABEL={PT:"プラチナ",K18:"18K",YG:"イエローG",WG:"ホワイトG",PG:"ピンクG","22K":"22K",GOLD:"ゴールド",SV:"シルバー"};
+function itemKey(r){const mat=detectMaterial(r);return r.brand+"|||"+(r.model||r.name)+(mat?"|||"+mat:"");}
 function buildItems(){
   const m={};
   for(const r of DATA){
     const k=itemKey(r);
-    if(!m[k])m[k]={brand:r.brand,item:r.model||r.name,cat:r.cat,recs:[]};
+    const mat=detectMaterial(r);
+    if(!m[k])m[k]={key:k,brand:r.brand,item:(r.model||r.name)+(mat?" ["+(MATLABEL[mat]||mat)+"]":""),cat:r.cat,mat,recs:[]};
     m[k].recs.push(r);
   }
   return Object.values(m).map(it=>{
@@ -267,7 +289,7 @@ function buildItems(){
 // ---- renders ----
 function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();renderDataStats();}
 
-let dashFilters={excludeCH:false,brand:"",cat:""};
+let dashFilters={excludeCH:false,excludeWatch:false,brand:"",cat:""};
 function renderDash(){
   let valid=DATA.filter(r=>r.price>0);
   // Restore cards / hide empty banner if data now exists
@@ -291,9 +313,11 @@ function renderDash(){
   }
   bsel.value=dashFilters.brand;csel.value=dashFilters.cat;
   document.getElementById("excludeCH").checked=dashFilters.excludeCH;
+  document.getElementById("excludeWatch").checked=dashFilters.excludeWatch;
 
   // Apply filters
   if(dashFilters.excludeCH)valid=valid.filter(r=>!/クロムハーツ|CHROME/i.test(r.brand));
+  if(dashFilters.excludeWatch)valid=valid.filter(r=>!/時計|ウォッチ|WATCH/i.test((r.cat||"")+(r.cat2||""))&&!/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|カルティエ.*時計|タグホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO/i.test(r.brand));
   if(dashFilters.brand)valid=valid.filter(r=>r.brand===dashFilters.brand);
   if(dashFilters.cat)valid=valid.filter(r=>(r.cat2||r.cat||"その他")===dashFilters.cat);
 
@@ -347,6 +371,7 @@ function renderDash(){
 }
 // Filter event wiring
 document.getElementById("excludeCH").addEventListener("change",e=>{dashFilters.excludeCH=e.target.checked;renderDash();});
+document.getElementById("excludeWatch").addEventListener("change",e=>{dashFilters.excludeWatch=e.target.checked;renderDash();});
 document.getElementById("dashBrandSel").addEventListener("change",e=>{dashFilters.brand=e.target.value;renderDash();});
 document.getElementById("dashCatSel").addEventListener("change",e=>{dashFilters.cat=e.target.value;renderDash();});
 function fmtD(d){if(!d)return "-";d=String(d);return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
@@ -388,7 +413,7 @@ function drawItemsTable(items){
     </tr>`;
   }).join("")||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--t3);">該当なし</td></tr>';
 }
-function itemKeyStr(i){return i.brand+"|||"+i.item;}
+function itemKeyStr(i){return i.key;}
 document.getElementById("itemSearch").addEventListener("input",()=>drawItemsTable(buildItems()));
 document.querySelectorAll("#itemsTable thead th").forEach(th=>{
   th.addEventListener("click",()=>{
