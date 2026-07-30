@@ -181,13 +181,39 @@ const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4)
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const RANKCOLOR={S:"#af52de",A:"#0071e3",B:"#34c759",C:"#ff9500",D:"#8e8e93"};
 
-// GitHub config
-const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku";
-const SEED_URL="https://raw.githubusercontent.com/"+GH_OWNER+"/"+GH_REPO+"/main/shibuya-tk/ureki/sales-seed.json.gz";
-const UPLOAD_PATH="shibuya-tk/ureki/sales-uploads.json";
-const UPLOAD_URL="https://raw.githubusercontent.com/"+GH_OWNER+"/"+GH_REPO+"/main/"+UPLOAD_PATH;
-const GH_TK_KEY="tk-gh-token";
-function getGhTk(){let t;try{t=localStorage.getItem(GH_TK_KEY)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力（他ツールと同じ）");if(t)try{localStorage.setItem(GH_TK_KEY,t.trim())}catch(e){}}return t?t.trim():null;}
+// ===== Supabase config (data stored securely, password-protected) =====
+const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY="rinkan-app-pw";
+const TOOL="ureki";
+
+// Ask for the shared password once (kept only for this browser session)
+function getAppPw(){
+  let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
+  if(!p){p=prompt("共有パスワードを入力してください");if(p){p=p.trim();try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}}
+  return p||"";
+}
+function sbHeaders(){
+  return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};
+}
+// Load this tool's data blob from Supabase
+async function sbLoad(){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+  if(r.status===401||r.status===403)throw new Error("PW");
+  if(!r.ok)throw new Error("load "+r.status);
+  const rows=await r.json();
+  return rows.length?rows[0].payload:null;
+}
+// Save this tool's data blob to Supabase (upsert on tool)
+async function sbSave(payload){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    method:"POST",
+    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
+  });
+  if(r.status===401||r.status===403)throw new Error("PW");
+  if(!r.ok){const t=await r.text();throw new Error("save "+r.status+" "+t.slice(0,120));}
+}
 
 let DATA=[]; // all sale records
 let charts={};
@@ -195,30 +221,21 @@ let SEED_KEYS=new Set();
 let lastBatchKeys=[]; // keys added in the most recent upload (for undo)
 
 async function boot(){
+  // Load all data from Supabase (password-protected)
   try{
-    // Load seed (gzipped)
-    const seedResp=await fetch(SEED_URL+"?t="+Date.now());
-    if(seedResp.ok){
-      const buf=await seedResp.arrayBuffer();
-      let txt;
-      try{txt=pako.ungzip(new Uint8Array(buf),{to:"string"});}
-      catch(e){txt=new TextDecoder().decode(buf);}
-      const seed=JSON.parse(txt);
-      DATA=seed.rows.map(r=>rowToObj(r,seed.schema));
-      SEED_KEYS=new Set(DATA.map(keyOf));
+    const payload=await sbLoad();
+    if(payload&&payload.rows&&payload.schema){
+      DATA=payload.rows.map(r=>rowToObj(r,payload.schema));
     }
-  }catch(e){console.error("seed load fail",e);}
-  // Load uploads
-  try{
-    const upResp=await fetch(UPLOAD_URL+"?t="+Date.now());
-    if(upResp.ok){
-      const up=await upResp.json();
-      if(up.rows&&up.schema){
-        const seen=new Set(DATA.map(keyOf));
-        up.rows.map(r=>rowToObj(r,up.schema)).forEach(o=>{if(!seen.has(keyOf(o)))DATA.push(o);});
-      }
+  }catch(e){
+    if(e.message==="PW"){
+      try{sessionStorage.removeItem(SB_PW_KEY);}catch(_){}
+      document.getElementById("app").innerHTML='<div class="loading" style="color:var(--red);">パスワードが正しくありません。<br><button class="btn blue" style="margin-top:16px;" onclick="location.reload()">再入力</button></div>';
+      return;
     }
-  }catch(e){}
+    console.error("load fail",e);
+  }
+  SEED_KEYS=new Set(); // no seed anymore; all data is user-uploaded
   document.getElementById("app").style.display="none";
   if(DATA.filter(r=>r.price>0).length===0){
     // No data yet — guide user to upload
@@ -684,7 +701,7 @@ window.undoLastUpload=async function(){
 window.clearAllData=async function(){
   if(!confirm("本当に全データを削除しますか？この操作は元に戻せません。"))return;
   if(!confirm("もう一度確認します。すべての売れ履歴データを削除してよろしいですか？"))return;
-  DATA=DATA.filter(r=>SEED_KEYS.has(keyOf(r))); // keep only seed (empty)
+  DATA=[]; // clear everything
   lastBatchKeys=[];
   const msg=document.getElementById("uploadMsg");
   msg.innerHTML='<span style="color:var(--blue);">💾 削除中...</span>';
@@ -791,20 +808,11 @@ async function parseXlsx(file){
   return recs;
 }
 
-// Save all NON-seed uploads to GitHub (everything the user added beyond seed)
+// Save ALL data to Supabase (password-protected)
 async function saveUploads(){
-  const t=getGhTk();if(!t)throw new Error("アクセスキーが未設定です");
   const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
-  const uploadRows=DATA.filter(r=>!SEED_KEYS.has(keyOf(r))).map(r=>schema.map(k=>r[k]));
-  const payload={schema,rows:uploadRows,updated:new Date().toISOString()};
-  const body=JSON.stringify(payload);
-  const api="https://api.github.com/repos/"+GH_OWNER+"/"+GH_REPO+"/contents/"+UPLOAD_PATH;
-  let sha=null;
-  try{const h=await fetch(api+"?t="+Date.now(),{headers:{Authorization:"Bearer "+t,Accept:"application/vnd.github+json"}});if(h.ok)sha=(await h.json()).sha;}catch(e){}
-  const put={message:"sales upload "+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(body)))};
-  if(sha)put.sha=sha;
-  const r=await fetch(api,{method:"PUT",headers:{Authorization:"Bearer "+t,Accept:"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(put)});
-  if(!r.ok){const txt=await r.text();throw new Error("保存失敗 "+r.status+" "+txt.slice(0,100));}
+  const rows=DATA.map(r=>schema.map(k=>r[k]));
+  await sbSave({schema,rows,updated:new Date().toISOString()});
 }
 
 // chart helper
