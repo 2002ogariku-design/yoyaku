@@ -210,6 +210,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="54"></div>
       <div class="f"><label>ランク</label>
         <div class="seg" id="rankSeg">
+          <button type="button" data-r="N">N</button>
           <button type="button" data-r="S">S</button>
           <button type="button" data-r="A">A</button>
           <button type="button" data-r="B">B</button>
@@ -636,7 +637,7 @@ async function fetchRakuten(url){
   if(descM)searchText+=" "+descM[1];
 
   // RANK: RINKAN uses "#rinkan*X" format
-  const rkM=html2.match(/#rinkan\*([SABCD])/i)||searchText.match(/#rinkan\*([SABCD])/i)||searchText.match(/rinkan[*＊]?\s*([SABCD])\b/i);
+  const rkM=html2.match(/#rinkan\*([NSABCD])/i)||searchText.match(/#rinkan\*([NSABCD])/i)||searchText.match(/rinkan[*＊]?\s*([NSABCD])\b/i);
   if(rkM)out.rank=rkM[1].toUpperCase();
 
   // SIZE: "サイズ:XX" format
