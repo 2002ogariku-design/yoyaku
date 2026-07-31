@@ -189,7 +189,7 @@ const RANKCOLOR={S:"#af52de",A:"#0071e3",B:"#34c759",C:"#ff9500",D:"#8e8e93"};
 let SEGMENT="all";
 const WATCH_RE=/時計|ウォッチ|WATCH/i;
 const WATCH_BRAND_RE=/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|タグ\s*ホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO|フランクミュラー|FRANCK\s*MULLER|ジャガールクルト|カルティエ.*時計|ヴァシュロン|VACHERON|ゼニス|ZENITH|チューダー|TUDOR|ブレゲ|BREGUET/i;
-const CHROME_RE=/クロムハーツ|CHROME\s*HEARTS|CHROME/i;
+const CHROME_RE=/クロムハーツ|クロム・?ハーツ|クロムハ－ツ|CHROME\s*HEARTS|CHROMEHEARTS|C\.?H\.?ハーツ|^クロム$|^CH$|^C\.H\.?$/i;
 function segOf(r){
   if(CHROME_RE.test(r.brand))return "chrome";
   if(WATCH_BRAND_RE.test(r.brand)||WATCH_RE.test((r.cat||"")+(r.cat2||"")))return "watch";
