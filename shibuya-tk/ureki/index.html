@@ -101,6 +101,7 @@ tbody tr:active{background:#eaeaef;}
       </div>
     </div>
     <div class="kpis" id="dashKpis"></div>
+    <div class="card" id="dashCompare"></div>
     <div class="card"><div class="card-t">📈 月別売上推移</div><canvas id="chMonthly" height="90"></canvas></div>
     <div class="grid2">
       <div class="card"><div class="card-t">🏆 ブランド別売上 TOP10</div><div id="brandBars"></div></div>
@@ -112,13 +113,19 @@ tbody tr:active{background:#eaeaef;}
   <!-- 売れ筋 -->
   <div class="view" id="v-items">
     <div class="card">
-      <div class="card-t">🔥 売れ筋アイテム（販売回数順）</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div class="card-t" style="margin:0;">🔥 売れ筋アイテム（販売回数順）</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="favToggle" style="padding:8px 14px;font-size:13px;background:var(--card2);color:var(--t1);">☆ お気に入りのみ</button>
+          <button class="btn" id="csvBtn" style="padding:8px 14px;font-size:13px;background:var(--green);">⬇ CSV</button>
+        </div>
+      </div>
       <div style="margin-bottom:14px;"><input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名で検索..."></div>
       <div style="margin-bottom:12px;" id="itemBrandChips"></div>
       <div style="overflow-x:auto;">
         <table id="itemsTable">
           <thead><tr>
-            <th data-sort="count">販売数</th><th data-sort="brand">ブランド</th><th data-sort="item">アイテム</th>
+            <th>★</th><th data-sort="count">販売数</th><th data-sort="brand">ブランド</th><th data-sort="item">アイテム</th>
             <th data-sort="avg">平均単価</th><th data-sort="trend">相場推移</th><th data-sort="total">売上計</th>
           </tr></thead>
           <tbody id="itemsBody"></tbody>
@@ -151,6 +158,34 @@ tbody tr:active{background:#eaeaef;}
     </div>
   </div>
 
+  <!-- 店舗 -->
+  <div class="view" id="v-store">
+    <div class="card"><div class="card-t">🏬 店舗別 売上</div><div id="storeBars"></div></div>
+    <div class="card">
+      <div class="card-t">🏬 店舗を選んで売れ筋を見る</div>
+      <select id="storeSel" style="margin-bottom:14px;"></select>
+      <div id="storeDetail"></div>
+    </div>
+  </div>
+
+  <!-- 回転 -->
+  <div class="view" id="v-turn">
+    <div class="card">
+      <div class="card-t">🔄 売れるスピード（入荷→売却の日数）</div>
+      <p class="muted" style="margin-bottom:14px;">入金日（仕入日）から売れるまでの日数。短いほど回転が速い＝売れ筋。</p>
+      <div id="turnKpis" class="kpis" style="margin-bottom:16px;"></div>
+      <div style="overflow-x:auto;"><table id="turnTable">
+        <thead><tr><th>ブランド</th><th>カテゴリ</th><th>販売数</th><th>平均日数</th><th>最速</th></tr></thead>
+        <tbody id="turnBody"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-t">📏 サイズ別 売れ行き</div>
+      <select id="sizeCatSel" style="margin-bottom:14px;"></select>
+      <div id="sizeBreak"></div>
+    </div>
+  </div>
+
   <!-- データ -->
   <div class="view" id="v-data">
     <div class="card">
@@ -171,6 +206,8 @@ tbody tr:active{background:#eaeaef;}
   <button data-v="dash" class="on"><span class="ic">📊</span>概要</button>
   <button data-v="items"><span class="ic">🔥</span>売れ筋</button>
   <button data-v="price"><span class="ic">💹</span>相場</button>
+  <button data-v="store"><span class="ic">🏬</span>店舗</button>
+  <button data-v="turn"><span class="ic">🔄</span>回転</button>
   <button data-v="staff"><span class="ic">👤</span>個人</button>
   <button data-v="data"><span class="ic">＋</span>データ</button>
 </div>
@@ -352,7 +389,7 @@ function buildItems(){
 }
 
 // ---- renders ----
-function renderAll(){renderDash();renderItems();renderPriceSel();renderStaff();renderDataStats();}
+function renderAll(){renderDash();renderItems();renderPriceSel();renderStore();renderTurn();renderStaff();renderDataStats();}
 
 // Global segment switcher
 document.querySelectorAll("#segBar .segbtn").forEach(b=>{
@@ -407,6 +444,29 @@ function renderDash(){
     ["データ期間","<span style='font-size:15px;'>"+period+"</span>",""],
   ];
   document.getElementById("dashKpis").innerHTML=kpis.map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join("");
+
+  // 前月比・前年比（最新月ベース）
+  const byMo={};valid.forEach(r=>{const m=r.date.slice(0,6);byMo[m]=(byMo[m]||0)+r.price;});
+  const moKeys=Object.keys(byMo).sort();
+  if(moKeys.length){
+    const cur=moKeys[moKeys.length-1];
+    const curV=byMo[cur];
+    // previous month (calendar)
+    const py=+cur.slice(0,4),pm=+cur.slice(4,6);
+    const prevMo=(pm===1?(py-1)+"12":py+String(pm-1).padStart(2,"0"));
+    const prevYrMo=(py-1)+cur.slice(4,6);
+    const cmp=(a,b)=>{if(b==null)return '<span class="muted">前年データなし</span>';if(!b)return "-";const d=(a-b)/b*100;return d>=0?`<span class="trend-up">▲${d.toFixed(0)}%</span>`:`<span class="trend-down">▼${Math.abs(d).toFixed(0)}%</span>`;};
+    const cmpEl=document.getElementById("dashCompare");
+    if(cmpEl){
+      cmpEl.innerHTML=`
+        <div class="card-t">📅 ${cur.slice(0,4)}/${cur.slice(4,6)} の比較</div>
+        <div class="kpis" style="margin-bottom:0;">
+          <div class="kpi"><div class="lbl">当月売上</div><div class="val">${YENk(curV)}</div></div>
+          <div class="kpi"><div class="lbl">前月比</div><div class="val" style="font-size:20px;">${cmp(curV,byMo[prevMo])}</div><div class="sub">前月 ${byMo[prevMo]?YENk(byMo[prevMo]):"-"}</div></div>
+          <div class="kpi"><div class="lbl">前年同月比</div><div class="val" style="font-size:20px;">${cmp(curV,byMo[prevYrMo])}</div><div class="sub">前年 ${byMo[prevYrMo]?YENk(byMo[prevYrMo]):"-"}</div></div>
+        </div>`;
+    }
+  }
 
   // monthly
   const byMonth={};
@@ -463,6 +523,7 @@ function drawItemsTable(items){
   let rows=items.filter(i=>i.count>=1);
   if(itemBrandFilter)rows=rows.filter(i=>i.brand===itemBrandFilter);
   if(q)rows=rows.filter(i=>(i.brand+" "+i.item).toLowerCase().includes(q));
+  if(favOnly)rows=rows.filter(i=>FAVS.has(i.key));
   const k=itemSort.key,dir=itemSort.dir;
   rows.sort((a,b)=>{
     let va,vb;
@@ -474,7 +535,9 @@ function drawItemsTable(items){
   rows=rows.slice(0,200);
   document.getElementById("itemsBody").innerHTML=rows.map(i=>{
     const tr=i.count>=4?(i.trend>3?`<span class="trend-up">▲${Math.abs(i.trend).toFixed(0)}%</span>`:i.trend<-3?`<span class="trend-down">▼${Math.abs(i.trend).toFixed(0)}%</span>`:'<span class="muted">→ 横ばい</span>'):'<span class="muted">-</span>';
+    const fav=FAVS.has(i.key);
     return `<tr onclick='showItem(${JSON.stringify(itemKeyStr(i)).replace(/'/g,"&#39;")})'>
+      <td onclick='event.stopPropagation();toggleFav(${JSON.stringify(i.key).replace(/'/g,"&#39;")})' style="cursor:pointer;font-size:17px;color:${fav?'#ffcc00':'var(--t3)'};">${fav?'★':'☆'}</td>
       <td><b>${i.count}</b>回</td>
       <td>${esc(i.brand)}</td>
       <td style="max-width:220px;"><div style="display:flex;align-items:center;gap:6px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.item)}</span>${gSearchBtn(i.brand,i.item)}</div></td>
@@ -482,8 +545,25 @@ function drawItemsTable(items){
       <td>${tr}</td>
       <td>${YENk(i.total)}</td>
     </tr>`;
-  }).join("")||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--t3);">該当なし</td></tr>';
+  }).join("")||'<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--t3);">該当なし</td></tr>';
 }
+// ---- favorites ----
+let FAVS=new Set();let favOnly=false;
+try{FAVS=new Set(JSON.parse(localStorage.getItem("ureki-favs")||"[]"));}catch(e){}
+window.toggleFav=function(key){if(FAVS.has(key))FAVS.delete(key);else FAVS.add(key);try{localStorage.setItem("ureki-favs",JSON.stringify([...FAVS]));}catch(e){}drawItemsTable(buildItems());};
+document.getElementById("favToggle").addEventListener("click",function(){favOnly=!favOnly;this.style.background=favOnly?"var(--blue)":"var(--card2)";this.style.color=favOnly?"#fff":"var(--t1)";this.textContent=favOnly?"★ お気に入り表示中":"☆ お気に入りのみ";drawItemsTable(buildItems());});
+// ---- CSV export ----
+document.getElementById("csvBtn").addEventListener("click",()=>{
+  const items=buildItems().sort((a,b)=>b.count-a.count);
+  const head=["ブランド","アイテム","販売数","平均単価","中央値","最安","最高","売上計","相場推移%"];
+  const lines=[head.join(",")];
+  items.forEach(i=>{
+    lines.push([i.brand,'"'+String(i.item).replace(/"/g,'""')+'"',i.count,Math.round(i.avg),i.median||"",i.min,i.max,i.total,i.count>=4?i.trend.toFixed(0):""].join(","));
+  });
+  const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="相場表_"+new Date().toISOString().slice(0,10)+".csv";a.click();
+});
 // Google search button for an item (opens brand + item name in a new tab)
 function gSearchBtn(brand,item){
   const q=encodeURIComponent((brand+" "+String(item).replace(/\s*\[[^\]]*\]\s*$/,"")).trim());
@@ -729,6 +809,93 @@ function showStaff(name){
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>YENk(v)}}}}),50);
 }
 
+// ===== 店舗別 =====
+function renderStore(){
+  const valid=segData().filter(r=>r.price>0);
+  const byStore={};
+  valid.forEach(r=>{const s=r.store||"不明";if(!byStore[s])byStore[s]={sales:0,count:0};byStore[s].sales+=r.price;byStore[s].count++;});
+  const stores=Object.entries(byStore).sort((a,b)=>b[1].sales-a[1].sales);
+  const maxS=stores[0]?stores[0][1].sales:1;
+  document.getElementById("storeBars").innerHTML=stores.length?stores.map(([s,v])=>
+    `<div class="bar-row"><div class="nm" style="width:150px;">${esc(s)}</div><div class="track"><div class="fill" style="width:${v.sales/maxS*100}%"></div></div><div class="amt">${YENk(v.sales)}<br><span style="font-size:10px;color:var(--t3);font-weight:500;">${v.count}点</span></div></div>`).join(""):'<div class="muted" style="text-align:center;padding:20px;">データなし</div>';
+  // store selector
+  const sel=document.getElementById("storeSel");const cur=sel.value;
+  sel.innerHTML='<option value="">店舗を選択...</option>'+stores.map(([s])=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  if(stores.some(x=>x[0]===cur))sel.value=cur;
+}
+document.getElementById("storeSel").addEventListener("change",e=>{if(e.target.value)showStore(e.target.value);else document.getElementById("storeDetail").innerHTML="";});
+function showStore(store){
+  const recs=segData().filter(r=>r.price>0&&(r.store||"不明")===store);
+  // top items in this store vs overall — what's hot / not here
+  const byItem={};recs.forEach(r=>{const k=r.brand+" "+(r.model||r.name);if(!byItem[k])byItem[k]={sales:0,count:0,brand:r.brand};byItem[k].sales+=r.price;byItem[k].count++;});
+  const top=Object.entries(byItem).sort((a,b)=>b[1].count-a[1].count).slice(0,20);
+  const byBrand={};recs.forEach(r=>{byBrand[r.brand]=(byBrand[r.brand]||0)+r.price;});
+  const topBrand=Object.entries(byBrand).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxB=topBrand[0]?topBrand[0][1]:1;
+  const total=recs.reduce((a,r)=>a+r.price,0);
+  document.getElementById("storeDetail").innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">売上</div><div class="val">${YENk(total)}</div></div>
+      <div class="kpi"><div class="lbl">販売点数</div><div class="val">${recs.length}点</div></div>
+      <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(total/Math.max(1,recs.length))}</div></div>
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);"><div class="card-t">この店舗の得意ブランド</div>
+      ${topBrand.map(([b,v])=>`<div class="bar-row"><div class="nm">${esc(b)}</div><div class="track"><div class="fill" style="width:${v/maxB*100}%"></div></div><div class="amt">${YENk(v)}</div></div>`).join("")}
+    </div>
+    <div class="card" style="box-shadow:none;border:1px solid var(--line);"><div class="card-t">この店舗の売れ筋 TOP20</div>
+      <div style="overflow-x:auto;"><table><thead><tr><th>販売数</th><th>ブランド</th><th>アイテム</th><th>売上</th></tr></thead>
+      <tbody>${top.map(([k,v])=>`<tr style="cursor:default;"><td><b>${v.count}</b>回</td><td>${esc(v.brand)}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(k.replace(v.brand+" ",""))}</td><td>${YENk(v.sales)}</td></tr>`).join("")}</tbody></table></div>
+    </div>`;
+}
+
+// ===== 回転（売れるスピード） =====
+function daysBetween(pdate,sdate){
+  if(!pdate||!sdate||pdate.length<8||sdate.length<8)return null;
+  const p=new Date(pdate.slice(0,4),pdate.slice(4,6)-1,pdate.slice(6,8));
+  const s=new Date(sdate.slice(0,4),sdate.slice(4,6)-1,sdate.slice(6,8));
+  const d=Math.round((s-p)/86400000);
+  return (d>=0&&d<3650)?d:null; // sane range
+}
+function renderTurn(){
+  const valid=segData().filter(r=>r.price>0);
+  const withDays=valid.map(r=>({...r,days:daysBetween(r.pdate,r.date)})).filter(r=>r.days!=null);
+  const kEl=document.getElementById("turnKpis");
+  if(!withDays.length){
+    kEl.innerHTML='<div class="muted" style="padding:16px;">入金日（仕入日）データがありません。新しい売上明細をアップすると回転日数が計算されます。</div>';
+    document.getElementById("turnBody").innerHTML="";
+    return;
+  }
+  const allDays=withDays.map(r=>r.days).sort((a,b)=>a-b);
+  const avg=Math.round(allDays.reduce((a,b)=>a+b,0)/allDays.length);
+  const med=allDays[Math.floor(allDays.length/2)];
+  const fast=allDays.filter(d=>d<=7).length;
+  kEl.innerHTML=`
+    <div class="kpi"><div class="lbl">平均回転日数</div><div class="val">${avg}<span style="font-size:13px;">日</span></div></div>
+    <div class="kpi"><div class="lbl">中央値</div><div class="val">${med}<span style="font-size:13px;">日</span></div></div>
+    <div class="kpi"><div class="lbl">7日以内に売れた</div><div class="val">${Math.round(fast/withDays.length*100)}<span style="font-size:13px;">%</span></div><div class="sub">${fast}点</div></div>
+    <div class="kpi"><div class="lbl">対象データ</div><div class="val">${withDays.length}点</div></div>`;
+  // by brand+category turnover
+  const byBC={};
+  withDays.forEach(r=>{const k=r.brand+"|"+(r.cat2||r.cat||"その他");if(!byBC[k])byBC[k]={brand:r.brand,cat:r.cat2||r.cat||"その他",days:[],count:0};byBC[k].days.push(r.days);byBC[k].count++;});
+  const rows=Object.values(byBC).filter(x=>x.count>=2).map(x=>({...x,avg:Math.round(x.days.reduce((a,b)=>a+b,0)/x.days.length),min:Math.min(...x.days)})).sort((a,b)=>a.avg-b.avg);
+  document.getElementById("turnBody").innerHTML=rows.slice(0,60).map(x=>
+    `<tr style="cursor:default;"><td><b>${esc(x.brand)}</b></td><td>${esc(x.cat)}</td><td>${x.count}点</td><td><b style="color:${x.avg<=14?'var(--green)':x.avg<=45?'var(--orange)':'var(--red)'};">${x.avg}日</b></td><td>${x.min}日</td></tr>`).join("")||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--t3);">データ不足</td></tr>';
+  // size selector for size breakdown
+  const cats=[...new Set(valid.map(r=>r.cat2||r.cat).filter(Boolean))].sort();
+  const scSel=document.getElementById("sizeCatSel");const cur=scSel.value;
+  scSel.innerHTML='<option value="">カテゴリを選択（サイズ別に見る）...</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  if(cats.includes(cur))scSel.value=cur;
+}
+document.getElementById("sizeCatSel").addEventListener("change",e=>{if(e.target.value)showSizeBreak(e.target.value);else document.getElementById("sizeBreak").innerHTML="";});
+function showSizeBreak(cat){
+  const recs=segData().filter(r=>r.price>0&&(r.cat2||r.cat)===cat&&r.size);
+  const bySize={};recs.forEach(r=>{const s=r.size||"不明";if(!bySize[s])bySize[s]={count:0,sales:0};bySize[s].count++;bySize[s].sales+=r.price;});
+  const sizes=Object.entries(bySize).sort((a,b)=>b[1].count-a[1].count);
+  const maxC=sizes[0]?sizes[0][1].count:1;
+  document.getElementById("sizeBreak").innerHTML=sizes.length?sizes.map(([s,v])=>
+    `<div class="bar-row"><div class="nm" style="width:90px;">${esc(s)}</div><div class="track"><div class="fill" style="width:${v.count/maxC*100}%;background:linear-gradient(90deg,#34c759,#7ae08f);"></div></div><div class="amt">${v.count}点<br><span style="font-size:10px;color:var(--t3);font-weight:500;">${YENk(v.sales)}</span></div></div>`).join(""):'<div class="muted" style="text-align:center;padding:16px;">サイズデータなし</div>';
+}
+
 function renderDataStats(){
   const valid=DATA.filter(r=>r.price>0);
   const dates=valid.map(r=>r.date).sort();
@@ -842,7 +1009,7 @@ async function parseXlsx(file){
   if(hr<0)throw new Error("ヘッダー行（売上日付）が見つかりません");
   const head=rows[hr];
   const col=name=>head.indexOf(name);
-  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),staff:col("販売員名称"),cust:col("客層名称")};
+  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),staff:col("販売員名称"),cust:col("客層名称"),pdate:col("入金日")};
   const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
   const recs=[];
   const occ={}; // occurrence counter per identity group within this file
@@ -860,6 +1027,7 @@ async function parseXlsx(file){
     if(/免税/.test(cust)){taxfree=true;price=Math.round(price*1.1);}
     const profit=price-cost;
     const date=String(r[ci.date]).slice(0,8);
+    const pdate=ci.pdate>=0&&r[ci.pdate]?String(r[ci.pdate]).slice(0,8):""; // 入金日=仕入日
     const jan=cl(r[ci.jan]);
     const staff=ci.staff>=0?cl(r[ci.staff]):"";
     // Deterministic identity: same across re-uploads of the same file, but distinguishes
@@ -867,14 +1035,14 @@ async function parseXlsx(file){
     const idBase=jan+"|"+date+"|"+origPrice+"|"+staff+"|"+(r[ci.qty]||1);
     occ[idBase]=(occ[idBase]||0)+1;
     const uid=idBase+"#"+occ[idBase];
-    recs.push({uid,date,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,staff,cust});
+    recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,staff,cust});
   }
   return recs;
 }
 
 // Save ALL data to Supabase (password-protected)
 async function saveUploads(){
-  const schema=["date","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
+  const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
   const rows=DATA.map(r=>schema.map(k=>r[k]));
   await sbSave({schema,rows,updated:new Date().toISOString()});
 }
