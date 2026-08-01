@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f5f5f7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>タスク集計｜RINKAN渋谷</title>
@@ -40,9 +40,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
 .si .val{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--t1);min-height:36px;line-height:36px;}
 .si .btns{display:flex;justify-content:center;gap:8px;margin-top:8px;}
 .si .btns button{
-  width:36px;height:36px;border-radius:50%;border:none;font-size:20px;font-weight:600;
+  width:44px;height:44px;border-radius:50%;border:none;font-size:22px;font-weight:600;
   cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;
-  transition:transform .1s;
+  transition:transform .1s;touch-action:manipulation;-webkit-user-select:none;user-select:none;
 }
 .si .btns button:active{transform:scale(.9);}
 .si .btns .minus{background:#f0f0f5;color:var(--t2);}
@@ -170,7 +170,9 @@ tr:last-child td{border-bottom:none;}
 <!-- ===== TODAY ===== -->
 <div class="vw" id="vw-today">
   <div class="c">
-    <div class="c-title" id="todayTitle">本日の入力状況</div>
+    <div class="c-title" id="todayTitle" style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span id="todayTitleText">本日の入力状況</span>
+      <button id="reloadToday" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer;touch-action:manipulation;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;">🔄 更新</button>
+    </div>
     <div class="chip-row" id="chips"></div>
     <div class="today-scroll"><table><thead><tr>
       <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
@@ -353,19 +355,24 @@ function buildSteppers(containerId, fields){
       </div>
     </div>`;
   }).join("");
-  // bind steppers
+  // bind steppers — pointer-based, no double firing, immediate response
   el.querySelectorAll("button[data-k]").forEach(b=>{
-    const tap=()=>{
+    const step=()=>{
       const k=b.dataset.k, d=Number(b.dataset.d);
       vals[k]=Math.max(0,vals[k]+d);
       document.getElementById("v_"+k).textContent=vals[k];
     };
-    b.addEventListener("click",tap);
-    // long press for rapid increment
-    let iv;
-    b.addEventListener("pointerdown",()=>{iv=setInterval(tap,150);});
-    b.addEventListener("pointerup",()=>clearInterval(iv));
-    b.addEventListener("pointerleave",()=>clearInterval(iv));
+    let holdTimer=null, repeatIv=null;
+    const start=(e)=>{
+      e.preventDefault(); // stops the synthetic double-tap/zoom & ghost click
+      step(); // immediate single increment
+      holdTimer=setTimeout(()=>{repeatIv=setInterval(step,120);},450); // rapid only after a real hold
+    };
+    const stop=()=>{clearTimeout(holdTimer);clearInterval(repeatIv);holdTimer=repeatIv=null;};
+    b.addEventListener("pointerdown",start);
+    b.addEventListener("pointerup",stop);
+    b.addEventListener("pointerleave",stop);
+    b.addEventListener("pointercancel",stop);
   });
   // bind amount inputs
   el.querySelectorAll(".amt-input").forEach(inp=>{
@@ -426,7 +433,7 @@ async function doSave(){
 // today
 function renderToday(){
   const date=document.getElementById("inDate").value||today();
-  document.getElementById("todayTitle").textContent=`入力状況（${date}）`;
+  document.getElementById("todayTitleText").textContent=`入力状況（${date}）`;
   const td=records.filter(r=>r.date===date);
   const tb=document.getElementById("tBody");
   if(!td.length){tb.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
@@ -552,6 +559,21 @@ function renderMonth(){
 }
 document.getElementById("monthPrev").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()-1,1);renderMonth();});
 document.getElementById("monthNext").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()+1,1);renderMonth();});
+
+// Reload button — refetch latest records and re-render today's status
+document.getElementById("reloadToday").addEventListener("click",async function(){
+  const btn=this;const orig=btn.innerHTML;
+  btn.innerHTML="⏳ 更新中";btn.style.opacity=".6";btn.disabled=true;
+  try{
+    records=await ghGet()||[];
+    renderToday();renderCharts();
+    btn.innerHTML="✓ 完了";
+    setTimeout(()=>{btn.innerHTML=orig;btn.style.opacity="1";btn.disabled=false;},1000);
+  }catch(e){
+    btn.innerHTML="⚠ 失敗";
+    setTimeout(()=>{btn.innerHTML=orig;btn.style.opacity="1";btn.disabled=false;},1500);
+  }
+});
 
 (async function init(){
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
