@@ -176,7 +176,7 @@ tr:last-child td{border-bottom:none;}
     <div class="chip-row" id="chips"></div>
     <div class="today-scroll"><table><thead><tr>
       <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
-      <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th>
+      <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th><th style="color:var(--teal);">閲覧</th><th style="color:var(--teal);">ﾌﾟﾛﾌ</th><th style="color:var(--teal);">Fﾃﾞｲ</th><th style="color:var(--teal);">Fﾛﾜｰ</th>
 
     </tr></thead><tbody id="tBody"></tbody></table></div>
   </div>
@@ -278,6 +278,10 @@ const INSTA_FIELDS=[
   {key:"instaSaleAmount",label:"販売 金額",color:"orange",isAmt:true},
   {key:"instaBuyClients",label:"買取 客数",color:"green"},
   {key:"instaBuyItems",label:"買取 点数",color:"green"},
+  {key:"instaViews",label:"閲覧数(全体)",color:"teal",isNum:true},
+  {key:"instaProfileAccess",label:"プロフアクセス",color:"teal",isNum:true},
+  {key:"instaFollowDay",label:"当日フォロー数",color:"teal",isNum:true},
+  {key:"instaFollowers",label:"現在のフォロワー",color:"teal",isNum:true},
 ];
 const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS];
 
@@ -346,6 +350,11 @@ function buildSteppers(containerId, fields){
       <div class="val" id="v_${f.key}">¥0</div>
       <input type="number" class="amt-input" id="amt_${f.key}" placeholder="金額を入力" min="0" value="">
     </div>`;
+    if(f.isNum) return `<div class="si ${f.color}">
+      <div class="label">${f.label}</div>
+      <div class="val" id="v_${f.key}">0</div>
+      <input type="number" class="amt-input num-input" id="amt_${f.key}" placeholder="数値を入力" min="0" value="">
+    </div>`;
     return `<div class="si ${f.color}">
       <div class="label">${f.label}</div>
       <div class="val" id="v_${f.key}">0</div>
@@ -377,9 +386,10 @@ function buildSteppers(containerId, fields){
   // bind amount inputs
   el.querySelectorAll(".amt-input").forEach(inp=>{
     const k=inp.id.replace("amt_","");
+    const isNum=inp.classList.contains("num-input");
     inp.addEventListener("input",()=>{
       vals[k]=Number(inp.value)||0;
-      document.getElementById("v_"+k).textContent="¥"+nf(vals[k]);
+      document.getElementById("v_"+k).textContent=isNum?nf(vals[k]):"¥"+nf(vals[k]);
     });
   });
 }
@@ -436,11 +446,11 @@ function renderToday(){
   document.getElementById("todayTitleText").textContent=`入力状況（${date}）`;
   const td=records.filter(r=>r.date===date);
   const tb=document.getElementById("tBody");
-  if(!td.length){tb.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
+  if(!td.length){tb.innerHTML=`<tr><td colspan="19" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
   tb.innerHTML=td.map(r=>`<tr>
     <td class="name">${r.staff}</td>
     ${STORE_FIELDS.map(f=>`<td>${r[f.key]||0}</td>`).join("")}
-    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(r[f.key]||0)}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(f.isNum?nf(r[f.key]||0):(r[f.key]||0))}</td>`).join("")}
 
   </tr>`).join("");
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=td.reduce((s,r)=>s+(r[f.key]||0),0);});
@@ -521,7 +531,7 @@ function renderMonth(){
   });
   const tb=document.getElementById("monthBody");
   if(!entries.length){
-    tb.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="19" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
     document.getElementById("monthFoot").innerHTML="";
     document.getElementById("monthChips").innerHTML="";
     kill("chMonth");
