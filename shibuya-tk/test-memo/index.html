@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>暗記シート｜時計・バッグ｜RINKAN</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--t1:#1d1d1f;--t2:#6e6e73;--t3:#a1a1a6;--line:#e5e5ea;--blue:#0071e3;--green:#34c759;--red:#ff3b30;--gold:#b8860b;--font:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--font);line-height:1.6;padding-bottom:60px;}
+header{background:linear-gradient(135deg,#1d1d1f,#3a3a3c);color:#fff;padding:24px 18px 20px;position:sticky;top:0;z-index:10;}
+.eyebrow{font-size:11px;letter-spacing:.15em;color:#a1a1a6;font-weight:700;}
+h1{font-size:22px;margin:6px 0 4px;font-weight:800;}
+.sub{font-size:13px;color:#c7c7cc;}
+.controls{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.ctrl{flex:1;min-width:130px;background:rgba(255,255,255,.14);border:none;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;padding:10px;border-radius:10px;cursor:pointer;}
+.ctrl.on{background:var(--blue);}
+.wrap{max-width:720px;margin:0 auto;padding:18px;}
+.tabbar{display:flex;gap:6px;margin-bottom:18px;background:var(--card);padding:5px;border-radius:14px;position:sticky;top:135px;z-index:9;box-shadow:0 2px 12px rgba(0,0,0,.05);}
+.tabbar button{flex:1;border:none;background:none;font-family:var(--font);font-size:14px;font-weight:700;color:var(--t2);padding:11px;border-radius:10px;cursor:pointer;}
+.tabbar button.on{background:var(--t1);color:#fff;}
+.section{display:none;}
+.section.on{display:block;}
+.brand-h{font-size:19px;font-weight:800;margin:24px 0 12px;padding-left:12px;border-left:4px solid var(--blue);}
+.brand-h.gold{border-color:var(--gold);}
+.brand-h.green{border-color:var(--green);}
+.card{background:var(--card);border-radius:14px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.card .q{font-size:14px;color:var(--t2);font-weight:600;margin-bottom:6px;}
+.card .a{font-size:16px;font-weight:700;color:var(--blue);}
+.card .a.hidden{background:#ffd6d6;color:transparent;border-radius:6px;user-select:none;}
+.card .a.hidden *{color:transparent;}
+.card .exp{font-size:13px;color:var(--t2);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+.keypoint{background:linear-gradient(135deg,#fff9e6,#fff);border:1px solid #f0e0a0;border-radius:14px;padding:14px 16px;margin-bottom:12px;}
+.keypoint .kp-t{font-size:13px;font-weight:800;color:var(--gold);margin-bottom:6px;}
+.keypoint ul{margin:0;padding-left:18px;}
+.keypoint li{font-size:14px;margin-bottom:4px;}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--line);color:var(--t2);margin-bottom:6px;}
+.note{background:#e8f4ff;border-radius:12px;padding:12px 14px;font-size:13px;color:#0055aa;margin-bottom:16px;}
+b.hl{color:var(--red);}
+table.cmp{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:7px 9px;text-align:left;}
+table.cmp th{background:var(--bg);font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">RINKAN 再テスト対策</div>
+  <h1>暗記シート｜時計・バッグ</h1>
+  <div class="sub">合格ライン135点 / 苦手分野を確実に</div>
+  <div class="controls">
+    <button class="ctrl on" id="showBtn" onclick="toggleHide()">👁 答えを表示中</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="note">💡 使い方：「答えを表示中」ボタンを押すと答えが赤く隠れます（赤シート代わり）。もう一度押すと表示。通勤中やスキマ時間に繰り返し確認しましょう。</div>
+  <div class="tabbar">
+    <button class="on" onclick="tab('watch')">⌚ 時計</button>
+    <button onclick="tab('bag')">👜 バッグ</button>
+  </div>
+
+  <!-- ========== 時計 ========== -->
+  <div class="section on" id="s-watch">
+
+    <div class="keypoint">
+      <div class="kp-t">⚡ まず押さえる！時計の最重要ポイント</div>
+      <ul>
+        <li>相場3要因＝<b class="hl">流通量・為替・定価</b></li>
+        <li>円安→相場<b class="hl">上昇</b>（海外の人が日本で買う）</li>
+        <li>ロレックスの値入れ率＝<b class="hl">85〜95%</b>（リセール最強）</li>
+        <li>付属品で最重要＝<b class="hl">保証書</b>（有無で10%以上変動）</li>
+        <li>磨きは<b class="hl">ノンポリッシュ</b>の方が高評価</li>
+      </ul>
+    </div>
+
+    <div class="brand-h">📊 相場・買取の基礎</div>
+    <div class="card"><div class="tag">相場</div><div class="q">腕時計の相場を決める3要因は？</div><div class="a">流通量・為替・定価</div><div class="exp">①流通量（減ると上昇）②為替（円安で上昇）③定価（二次流通は定価の影響大）</div></div>
+    <div class="card"><div class="tag">相場</div><div class="q">円安に振れると日本の時計相場はどうなる？</div><div class="a">上昇する</div><div class="exp">円安→海外の人が日本で購入→相場上昇。円高→消費者が海外で買う→下落</div></div>
+    <div class="card"><div class="tag">買取</div><div class="q">ロレックスの買取値入れ率の目安は？</div><div class="a">85〜95%</div><div class="exp">ロレックスのリセールが最も良く85〜95%。他ブランドは60〜85%</div></div>
+    <div class="card"><div class="tag">買取</div><div class="q">付属品で最も重要とされるのは？</div><div class="a">保証書</div><div class="exp">保証書の有無で値入れ率が10%以上変動、買取を断る場合も</div></div>
+    <div class="card"><div class="tag">買取</div><div class="q">磨きについて正しいのは？</div><div class="a">ノンポリッシュの方が評価が高い</div><div class="exp">磨きすぎは重量減・ケース形状変化のため敬遠される</div></div>
+
+    <div class="brand-h">👑 パテック・フィリップ</div>
+    <div class="card"><div class="tag">Patek</div><div class="q">創業年と創業地は？</div><div class="a">1839年 ジュネーブ</div><div class="exp">ポーランド亡命貴族パテックと時計職人チャペックが設立</div></div>
+    <div class="card"><div class="tag">Patek</div><div class="q">1932年に買収した現オーナー家は？</div><div class="a">スターン兄弟</div><div class="exp">世界大恐慌の影響で1932年に買収。同年カラトラバ(Ref.96)発表</div></div>
+    <div class="card"><div class="tag">Patek</div><div class="q">ノーチラスのデザイナーは？</div><div class="a">ジェラルド・ジェンタ</div><div class="exp">APロイヤルオークも彼のデザイン</div></div>
+    <div class="card"><div class="tag">Patek</div><div class="q">ノーチラス5711の特徴は？</div><div class="a">SS3針の最終モデル、2021年廃盤</div><div class="exp">最後の限定ティファニーブルーは650万ドルで落札</div></div>
+    <div class="card"><div class="tag">Patek</div><div class="q">世界初に腕時計商品化した機構は？</div><div class="a">ワールドタイム</div><div class="exp">世界24都市の時刻が確認できる</div></div>
+    <div class="card"><div class="tag">Patek</div><div class="q">2024年発表、25年ぶりの新モデルは？</div><div class="a">キュビタス</div><div class="exp">45mmスクエア型ケース、30m防水</div></div>
+
+    <div class="brand-h">🔱 オーデマ・ピゲ</div>
+    <div class="card"><div class="tag">AP</div><div class="q">創業年と創業地は？</div><div class="a">1875年 ル・ブラッシュ</div><div class="exp">設立から同じ家系で経営</div></div>
+    <div class="card"><div class="tag">AP</div><div class="q">1972年ロイヤルオークの革新性は？</div><div class="a">ステンレスを貴金属として扱った世界初のラグスポ</div><div class="exp">39mmステンレスケースを貴金属扱いした世界初のラグジュアリースポーツウォッチ</div></div>
+    <div class="card"><div class="tag">AP</div><div class="q">初代ロイヤルオーク5402の通称は？</div><div class="a">ジャンボ</div><div class="exp">当時大きかった39mmケースから</div></div>
+    <div class="card"><div class="tag">AP</div><div class="q">三大時計で唯一コラボ作品があるのは？</div><div class="a">オーデマピゲ</div><div class="exp">マーベル、KAWS、1017 ALYX 9SMなど</div></div>
+
+    <div class="brand-h">✚ ヴァシュロン・コンスタンタン</div>
+    <div class="card"><div class="tag">VC</div><div class="q">創業年は？</div><div class="a">1755年</div><div class="exp">ジュネーブ。三大ブランドで最も歴史が長い。現リシュモン傘下</div></div>
+    <div class="card"><div class="tag">VC</div><div class="q">シンボル「マルタ十字」誕生年は？</div><div class="a">1880年</div><div class="exp">ムーブメントの一部パーツに酷似していたことからロゴ採用</div></div>
+    <div class="card"><div class="tag">VC</div><div class="q">ヒストリーク・アメリカン1921の特徴は？</div><div class="a">文字盤が45°回転</div><div class="exp">運転中でも時刻を読めるよう。1920年代アメリカの車社会が背景</div></div>
+
+    <div class="brand-h">👑 ロレックス</div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">創業者と創業地は？</div><div class="a">ハンス・ウイルスドルフ・ロンドン</div><div class="exp">1905年創業</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">三大発明は？</div><div class="a">オイスター・パーペチュアル・デイトジャスト</div><div class="exp">防水(1926)、自動巻き(1931)、日付(1945)</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">1927年「泳げる腕時計」を証明した出来事は？</div><div class="a">グライツ嬢のドーバー海峡横断</div><div class="exp">オイスター着用で横断成功</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">KING OF ROLEXと称されるモデルは？</div><div class="a">コスモグラフデイトナ</div><div class="exp">唯一のクロノグラフ。「デイトナマラソン」の造語も</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">デイデイトに存在しない素材は？</div><div class="a">ステンレス</div><div class="exp">PT/WG/YG/PGの4素材のみ。「プレジデントブレス」</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">GMTマスター「ペプシ」のベゼル配色は？</div><div class="a">赤×青</div><div class="exp">コーク=赤×黒、バットマン=青×黒、スプライト=黒×緑、ルートビア=黒×茶</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">サブマリーナー「ハルク」の特徴は？</div><div class="a">オールグリーン文字盤×緑ベゼル</div><div class="exp">116610LV。黒文字盤×緑ベゼルはスターバックス(126610LV)</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">ミルガウスの名前の由来は？</div><div class="a">フランス語1000＋磁束密度の単位</div><div class="exp">1000ガウスの磁気に耐える耐磁特化モデル</div></div>
+    <div class="card"><div class="tag">Rolex</div><div class="q">2025年新作でハイビート仕様のモデルは？</div><div class="a">ランドドゥエラー</div><div class="exp">36,000振動/時。フラットジュビリーブレス、シースルーバック</div></div>
+
+    <div class="keypoint">
+      <div class="kp-t">🎯 ロレックス ニックネーム総まとめ（頻出！）</div>
+      <table class="cmp">
+        <tr><th>愛称</th><th>ベゼル配色/特徴</th></tr>
+        <tr><td>ペプシ</td><td>赤×青</td></tr>
+        <tr><td>コーク</td><td>赤×黒</td></tr>
+        <tr><td>バットマン</td><td>青×黒</td></tr>
+        <tr><td>スプライト</td><td>黒×緑（レフティ）</td></tr>
+        <tr><td>ルートビア</td><td>黒×茶</td></tr>
+        <tr><td>ハルク</td><td>緑文字盤×緑ベゼル</td></tr>
+        <tr><td>スターバックス</td><td>黒文字盤×緑ベゼル</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========== バッグ ========== -->
+  <div class="section" id="s-bag">
+
+    <div class="keypoint">
+      <div class="kp-t">⚡ まず押さえる！バッグの最重要ポイント</div>
+      <ul>
+        <li>キャビアスキン＝<b class="hl">型押しした牛革</b></li>
+        <li>ラムスキン＝柔らかいが<b class="hl">傷・水に弱い</b></li>
+        <li>2.55＝<b class="hl">1955年2月</b>／11.12＝<b class="hl">商品コード01112</b></li>
+        <li>バーキン＝ハンドル2つ／ケリー＝ハンドル1つ</li>
+        <li>エルメス人気レザー＝<b class="hl">トゴ</b>（1997年、扱いやすい）</li>
+      </ul>
+    </div>
+
+    <div class="brand-h gold">👜 シャネル（素材）</div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">キャビアスキンの元になる革は？</div><div class="a">型押しした牛革</div><div class="exp">表面ざらつきの牛革に型押し。模様がキャビアに似ている</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">ラムスキンの特徴は？</div><div class="a">非常に柔らかいが傷・水に弱い</div><div class="exp">生後1年未満の子羊。しなやかだがデリケート</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">エキゾチックレザー廃止を発表した年は？</div><div class="a">2018年</div><div class="exp">クロコ、パイソン、リザード、ガルーシャ、ファーが対象</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">ファンシーツイードの生地メーカーは？</div><div class="a">リントン・ツイード社</div><div class="exp">1912年イギリス創業</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">シリアルが「ランダム英数8桁」になったのは？</div><div class="a">2023年〜</div><div class="exp">2021年〜はシールからプレートに変化</div></div>
+
+    <div class="brand-h gold">👜 シャネル（モデル）</div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">「2.55」の名前の由来は？</div><div class="a">1955年2月の誕生年月</div><div class="exp">ガブリエル・シャネルがデザイン</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">「11.12」の名前の由来は？</div><div class="a">当時の商品コード01112</div><div class="exp">1983年カール・ラガーフェルドが2.55を再解釈。正式名称クラシックハンドバッグ</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">2.55と11.12のロック金具の違いは？</div><div class="a">2.55=マドモアゼルロック／11.12=ココマークロック</div><div class="exp">チェーンも2.55はチェーンのみ、11.12はレザー編み込み</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">マトラッセ25(ラムスキン)の2026年定価は？</div><div class="a">1,925,000円</div><div class="exp">2025年は1,744,600円</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">ボーイシャネルの着想元は？</div><div class="a">弾薬保管バッグ</div><div class="exp">オーバーステッチの縁取りとアンティークな留め具</div></div>
+    <div class="card"><div class="tag">CHANEL</div><div class="q">内フラップ裏のジップポケットの通称は？</div><div class="a">ラブレターポケット</div><div class="exp">背面ポケットは「スマイルポケット」(モナリザの微笑み)</div></div>
+
+    <div class="brand-h green">👜 エルメス</div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">バーキンの原型となったバッグは？</div><div class="a">オータクロア</div><div class="exp">1984年、馬の鞍を入れるサドルバッグ。ジェーン・バーキンにちなみ命名</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">ケリーの発売当初(1936年)の名称は？</div><div class="a">サック・ア・クロア</div><div class="exp">グレース・ケリー愛用で1955年頃「ケリー」に改名</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">バーキンとケリーのハンドルの数は？</div><div class="a">バーキン2つ・ケリー1つ</div><div class="exp">バーキンはオープンフラップ可。ケリーはフラップを閉じて持つ、ショルダー付き</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">人気バッグを探して通うことを俗に何と呼ぶ？</div><div class="a">エルパト</div><div class="exp">エルメスパトロール。人気バッグはバックヤード保管が多い</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">1997年登場、扱いやすい雄仔牛レザーは？</div><div class="a">トゴ</div><div class="exp">エプソンは2003年型押し、スイフトは2006年で発色良い</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">ヴォーエプソンの特徴は？</div><div class="a">プレス加工の細かな型押し</div><div class="exp">雄仔牛レザー、2003年登場</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">バーキン/ケリーの刻印位置が変わったのは？</div><div class="a">2015年(T刻印)から内側ベルト付近</div><div class="exp">それ以前は正面クロアベルトの裏</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">バーキン25(トゴ)の2025年定価は？</div><div class="a">1,881,000円</div><div class="exp">2024年173.8万円、2022年133.1万円</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">ケリーの外縫いの特徴は？</div><div class="a">ステッチが見えカッチリした印象</div><div class="exp">内縫い＝柔らかい印象</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">バーキン唯一の外縫いモデルは？</div><div class="a">バーキンセリエ</div><div class="exp">シャドウ=だまし絵、カーゴ=2021年キャンバス×スイフト、ギリーズ=通気口デザイン</div></div>
+    <div class="card"><div class="tag">Hermes</div><div class="q">ニロティカスの名前の由来は？</div><div class="a">ナイル川</div><div class="exp">アフリカ・ナイル川流域原産のクロコ。ポロサスは東南アジア・豪州原産</div></div>
+
+    <div class="keypoint">
+      <div class="kp-t">🎯 バーキン vs ケリー 違いまとめ（頻出！）</div>
+      <table class="cmp">
+        <tr><th></th><th>バーキン</th><th>ケリー</th></tr>
+        <tr><td>ハンドル</td><td>2つ</td><td>1つ</td></tr>
+        <tr><td>原型</td><td>オータクロア</td><td>サック・ア・クロア</td></tr>
+        <tr><td>持ち方</td><td>フラップ開けたまま可</td><td>閉じて持つ・肩掛け可</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+let hidden=false;
+function toggleHide(){
+  hidden=!hidden;
+  document.querySelectorAll(".card .a").forEach(a=>a.classList.toggle("hidden",hidden));
+  const b=document.getElementById("showBtn");
+  b.textContent=hidden?"🙈 答えを隠し中（タップで表示）":"👁 答えを表示中";
+  b.classList.toggle("on",!hidden);
+}
+function tab(id){
+  document.querySelectorAll(".tabbar button").forEach(b=>b.classList.remove("on"));
+  event.target.classList.add("on");
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("on"));
+  document.getElementById("s-"+id).classList.add("on");
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>
