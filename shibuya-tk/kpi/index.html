@@ -177,7 +177,7 @@ tr:last-child td{border-bottom:none;}
         <input type="date" id="insightFrom" style="flex:1;">
         <span style="color:var(--t3);">〜</span>
         <input type="date" id="insightTo" style="flex:1;">
-        <button type="button" id="insightAuto" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:12px;font-weight:700;padding:9px 12px;border-radius:9px;cursor:pointer;touch-action:manipulation;white-space:nowrap;">2日前に</button>
+        <button type="button" id="insightAuto" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:12px;font-weight:700;padding:9px 12px;border-radius:9px;cursor:pointer;touch-action:manipulation;white-space:nowrap;">最新2日間</button>
       </div>
     </div>
     <div class="sg" id="sgInsight" style="margin-top:14px;"></div>
@@ -318,8 +318,8 @@ function fmtDate(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(
 // ends about 2 days ago. So default: from = day-3, to = day-2.
 function setInsightPeriodDefault(){
   const base=document.getElementById("inDate").value?new Date(document.getElementById("inDate").value):new Date();
-  const to=new Date(base);to.setDate(to.getDate()-2);
-  const from=new Date(base);from.setDate(from.getDate()-3);
+  const to=new Date(base);to.setDate(to.getDate()-1);
+  const from=new Date(base);from.setDate(from.getDate()-2);
   document.getElementById("insightFrom").value=fmtDate(from);
   document.getElementById("insightTo").value=fmtDate(to);
 }
