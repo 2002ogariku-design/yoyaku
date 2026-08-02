@@ -191,14 +191,13 @@ tr:last-child td{border-bottom:none;}
 <div class="vw" id="vw-today">
   <div class="c">
     <div class="c-title" id="todayTitle" style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span id="todayTitleText">本日の入力状況</span>
-      <button id="reloadToday" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer;touch-action:manipulation;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;">🔄 更新</button>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button id="csvToday" style="border:none;background:var(--card2);color:var(--green);font-family:var(--font);font-size:13px;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;touch-action:manipulation;">⬇ CSV</button>
+        <button id="reloadToday" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;touch-action:manipulation;">🔄 更新</button>
+      </div>
     </div>
     <div class="chip-row" id="chips"></div>
-    <div class="today-scroll"><table><thead><tr>
-      <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
-      <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th><th style="color:var(--teal);">閲覧</th><th style="color:var(--teal);">ﾌﾟﾛﾌ</th><th style="color:var(--teal);">Fﾃﾞｲ</th><th style="color:var(--teal);">Fﾛﾜｰ</th>
-
-    </tr></thead><tbody id="tBody"></tbody></table></div>
+    <div id="todayCards"></div>
   </div>
 </div>
 
@@ -213,10 +212,7 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div class="chip-row" id="monthChips"></div>
     <div class="today-scroll"><table>
-      <thead><tr>
-        <th>名前</th><th>ﾌﾟﾛｰﾁ</th><th>接客</th><th>取置</th><th>古物</th><th>連絡先</th><th>買取概算</th>
-        <th style="color:var(--pink);">DM</th><th style="color:var(--pink);">販問</th><th style="color:var(--pink);">買問</th><th style="color:var(--pink);">販客</th><th style="color:var(--pink);">販点</th><th style="color:var(--pink);">販額</th><th style="color:var(--pink);">買客</th><th style="color:var(--pink);">買点</th>
-      </tr></thead>
+      <thead><tr id="monthHead"></tr></thead>
       <tbody id="monthBody"></tbody>
       <tfoot id="monthFoot"></tfoot>
     </table></div>
@@ -237,7 +233,7 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div class="cpanel on" id="cp-store">
       <div class="toolbar">
-        <select id="mStore"><option value="approach">アプローチ</option><option value="service">接客</option><option value="hold">取り置き</option><option value="kobutsu">古物取得</option><option value="contact">連絡先</option><option value="kaitori">買取概算</option></select>
+        <select id="mStore"><option value="approach">アプローチ</option><option value="service">接客人数</option><option value="hold">ありあり取置</option><option value="kaitoriHold">なしなし取置</option><option value="contact">連絡先</option><option value="kobutsu">クーポン(古物)</option><option value="kaitori">買取概算</option></select>
         <select id="rStore"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
         <select id="dStore"><option value="total">全体</option><option value="staff">担当者別</option></select>
       </div>
@@ -283,10 +279,11 @@ Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
 
 const STORE_FIELDS=[
   {key:"approach",label:"アプローチ",color:""},
-  {key:"service",label:"接客",color:""},
-  {key:"hold",label:"新入荷取置",color:""},
-  {key:"kobutsu",label:"古物取得",color:""},
-  {key:"contact",label:"連絡先取得",color:""},
+  {key:"service",label:"接客人数",color:""},
+  {key:"hold",label:"ありあり取置",color:""},
+  {key:"kaitoriHold",label:"なしなし取置",color:""},
+  {key:"contact",label:"連絡先",color:""},
+  {key:"kobutsu",label:"クーポン(古物)",color:""},
   {key:"kaitori",label:"買取概算",color:""},
 ];
 const INSTA_FIELDS=[
@@ -482,22 +479,41 @@ function renderToday(){
   const date=document.getElementById("inDate").value||today();
   document.getElementById("todayTitleText").textContent=`入力状況（${date}）`;
   const td=records.filter(r=>r.date===date);
-  const tb=document.getElementById("tBody");
-  if(!td.length){tb.innerHTML=`<tr><td colspan="19" style="text-align:center;color:var(--t3);padding:20px;">まだ入力なし</td></tr>`;document.getElementById("chips").innerHTML="";return;}
-  tb.innerHTML=td.map(r=>`<tr>
-    <td class="name">${r.staff}</td>
-    ${STORE_FIELDS.map(f=>`<td>${r[f.key]||0}</td>`).join("")}
-    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(f.isNum?nf(r[f.key]||0):(r[f.key]||0))}</td>`).join("")}
-    ${INSIGHT_FIELDS.map(f=>`<td>${nf(r[f.key]||0)}</td>`).join("")}
-  </tr>`).join("");
-  // insight period note (if anyone recorded insights with a period)
-  const withPeriod=td.find(r=>r.insightFrom&&r.insightTo);
-  const periodNote=withPeriod?`<div style="font-size:11.5px;color:var(--teal);margin-top:8px;">📈 インサイト対象期間：${withPeriod.insightFrom} 〜 ${withPeriod.insightTo}</div>`:"";
+  const cont=document.getElementById("todayCards");
+  if(!td.length){cont.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px;">まだ入力なし</div>`;document.getElementById("chips").innerHTML="";return;}
+  // group definitions for each person's card
+  const groups=[
+    {title:"店頭タスク",color:"var(--blue)",fields:STORE_FIELDS},
+    {title:"個人インスタ",color:"var(--pink)",fields:INSTA_FIELDS},
+    {title:"インサイト",color:"var(--teal)",fields:INSIGHT_FIELDS},
+  ];
+  const fmtV=(f,v)=>f.isAmt?"¥"+nf(v||0):nf(v||0);
+  cont.innerHTML=td.map(r=>{
+    const period=(r.insightFrom&&r.insightTo)?`<span style="font-size:10.5px;color:var(--teal);font-weight:600;">📈 ${r.insightFrom}〜${r.insightTo}</span>`:"";
+    const groupHtml=groups.map(g=>{
+      // only show fields that have a value (keeps card clean), but always show store tasks
+      const show=g.fields.filter(f=>g.title==="店頭タスク"||r[f.key]);
+      if(!show.length)return "";
+      return `<div style="margin-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:${g.color};margin-bottom:6px;letter-spacing:.02em;">${g.title}${g.title==="インサイト"?" "+period:""}</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">
+          ${show.map(f=>`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border-radius:9px;padding:8px 11px;">
+            <span style="font-size:12px;color:var(--t2);">${f.label}</span>
+            <span style="font-size:15px;font-weight:700;color:var(--t1);font-variant-numeric:tabular-nums;">${fmtV(f,r[f.key])}</span>
+          </div>`).join("")}
+        </div>
+      </div>`;
+    }).join("");
+    return `<div class="c" style="margin-bottom:14px;padding:16px;">
+      <div style="font-size:16px;font-weight:800;color:var(--t1);padding-bottom:8px;border-bottom:2px solid var(--line);">${r.staff}</div>
+      ${groupHtml}
+    </div>`;
+  }).join("");
+  // summary chips (totals across everyone)
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=td.reduce((s,r)=>s+(r[f.key]||0),0);});
   document.getElementById("chips").innerHTML=
-    STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
-    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("")+
-    INSIGHT_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip" style="background:rgba(90,200,250,.15);color:#0a84c4;">${f.label} <b>${nf(tot[f.key])}</b></span>`).join("")+periodNote;
+    STORE_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip">${f.label} <b>${nf(tot[f.key])}</b></span>`).join("")+
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):nf(tot[f.key])}</b></span>`).join("");
 }
 
 // charts
@@ -559,6 +575,10 @@ function monthRecords(){
 function renderMonth(){
   const m=monthStr(currentMonth);
   document.getElementById("monthLabel").textContent=`${currentMonth.getFullYear()}年${currentMonth.getMonth()+1}月`;
+  // dynamic header (always matches fields)
+  document.getElementById("monthHead").innerHTML=`<th>名前</th>`+
+    STORE_FIELDS.map(f=>`<th>${f.label}</th>`).join("")+
+    INSTA_FIELDS.map(f=>`<th style="color:var(--pink);">${f.label}</th>`).join("");
   const mr=monthRecords();
   const staffMap={};
   mr.forEach(r=>{
@@ -570,9 +590,10 @@ function renderMonth(){
     const sb=STORE_FIELDS.reduce((s,f)=>s+(b[1][f.key]||0),0);
     return sb-sa;
   });
+  const colCount=1+STORE_FIELDS.length+INSTA_FIELDS.length;
   const tb=document.getElementById("monthBody");
   if(!entries.length){
-    tb.innerHTML=`<tr><td colspan="19" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="${colCount}" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
     document.getElementById("monthFoot").innerHTML="";
     document.getElementById("monthChips").innerHTML="";
     kill("chMonth");
@@ -580,15 +601,15 @@ function renderMonth(){
   }
   tb.innerHTML=entries.map(([name,v])=>`<tr>
     <td class="name">${name}</td>
-    ${STORE_FIELDS.map(f=>`<td>${v[f.key]||0}</td>`).join("")}
-    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(v[f.key]||0):(v[f.key]||0)}</td>`).join("")}
+    ${STORE_FIELDS.map(f=>`<td>${nf(v[f.key]||0)}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(v[f.key]||0):nf(v[f.key]||0)}</td>`).join("")}
   </tr>`).join("");
   // totals row
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=entries.reduce((s,[,v])=>s+(v[f.key]||0),0);});
   document.getElementById("monthFoot").innerHTML=`<tr style="font-weight:800;border-top:2px solid var(--line);">
     <td>合計</td>
-    ${STORE_FIELDS.map(f=>`<td>${tot[f.key]}</td>`).join("")}
-    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</td>`).join("")}
+    ${STORE_FIELDS.map(f=>`<td>${nf(tot[f.key])}</td>`).join("")}
+    ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(tot[f.key]):nf(tot[f.key])}</td>`).join("")}
   </tr>`;
   document.getElementById("monthChips").innerHTML=`<span class="kchip">入力日数 <b>${new Set(mr.map(r=>r.date)).size}</b>日</span>`+
     `<span class="kchip">入力人数 <b>${entries.length}</b>名</span>`+
@@ -610,6 +631,29 @@ function renderMonth(){
 }
 document.getElementById("monthPrev").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()-1,1);renderMonth();});
 document.getElementById("monthNext").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()+1,1);renderMonth();});
+
+// CSV export — matches the Excel column order for easy transcription
+document.getElementById("csvToday").addEventListener("click",()=>{
+  const date=document.getElementById("inDate").value||today();
+  const td=records.filter(r=>r.date===date);
+  if(!td.length){alert("この日のデータがありません");return;}
+  // Excel order: アプローチ, 接客人数, 購入客数(空欄), 販売営業=ありあり取置+なしなし取置, 連絡先, クーポン(古物)
+  const head=["名前","アプローチ","接客人数","購入客数","ありあり取置","なしなし取置","連絡先","クーポン(古物)","買取概算",
+    "DM","販売問合","買取問合","販売客数","販売点数","販売金額","買取客数","買取点数",
+    "閲覧数","プロフアクセス","フォロー数","現在フォロワー","インサイト期間"];
+  const lines=[head.join(",")];
+  td.forEach(r=>{
+    lines.push([
+      r.staff, r.approach||0, r.service||0, "", r.hold||0, r.kaitoriHold||0, r.contact||0, r.kobutsu||0, r.kaitori||0,
+      r.instaDM||0, r.instaInquirySales||0, r.instaInquiryBuy||0, r.instaSaleClients||0, r.instaSaleItems||0, r.instaSaleAmount||0, r.instaBuyClients||0, r.instaBuyItems||0,
+      r.instaViews||0, r.instaProfileAccess||0, r.instaFollowDay||0, r.instaFollowers||0,
+      (r.insightFrom&&r.insightTo)?`${r.insightFrom}〜${r.insightTo}`:""
+    ].join(","));
+  });
+  const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=`タスク集計_${date}.csv`;a.click();
+});
 
 // Reload button — refetch latest records and re-render today's status
 document.getElementById("reloadToday").addEventListener("click",async function(){
