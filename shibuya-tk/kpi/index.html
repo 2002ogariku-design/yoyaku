@@ -58,6 +58,11 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
   background:#fff;font-size:16px;text-align:center;font-variant-numeric:tabular-nums;
   font-family:var(--font);color:var(--t1);
 }
+.insight-period{background:var(--card2);border-radius:12px;padding:12px 14px;}
+.insight-period input[type=date]{
+  padding:9px;border-radius:9px;border:1px solid var(--line);background:#fff;
+  font-family:var(--font);font-size:14px;color:var(--t1);
+}
 
 /* save button */
 .save-btn{
@@ -161,6 +166,21 @@ tr:last-child td{border-bottom:none;}
   <div class="c">
     <div class="c-title">📸 個人インスタ</div>
     <div class="sg" id="sgInsta"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📈 インサイト</div>
+    <p style="font-size:12px;color:var(--t2);margin:0 0 12px;line-height:1.5;">当日のインサイトは確定していないため、<b>実際に見られる最新2日間</b>の数字を入力し、その対象期間を選んでください。</p>
+    <div class="insight-period">
+      <label style="font-size:12px;font-weight:600;color:var(--t2);">対象期間</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <input type="date" id="insightFrom" style="flex:1;">
+        <span style="color:var(--t3);">〜</span>
+        <input type="date" id="insightTo" style="flex:1;">
+        <button type="button" id="insightAuto" style="border:none;background:var(--card2);color:var(--blue);font-family:var(--font);font-size:12px;font-weight:700;padding:9px 12px;border-radius:9px;cursor:pointer;touch-action:manipulation;white-space:nowrap;">2日前に</button>
+      </div>
+    </div>
+    <div class="sg" id="sgInsight" style="margin-top:14px;"></div>
   </div>
 
   <button class="save-btn" id="saveBtn">保存する</button>
@@ -278,12 +298,16 @@ const INSTA_FIELDS=[
   {key:"instaSaleAmount",label:"販売 金額",color:"orange",isAmt:true},
   {key:"instaBuyClients",label:"買取 客数",color:"green"},
   {key:"instaBuyItems",label:"買取 点数",color:"green"},
+];
+// Instagram insights — reported for a 2-day period a few days behind, so they
+// carry their own 対象期間 (from/to) rather than being tied to the record date.
+const INSIGHT_FIELDS=[
   {key:"instaViews",label:"閲覧数(全体)",color:"teal",isNum:true},
   {key:"instaProfileAccess",label:"プロフアクセス",color:"teal",isNum:true},
-  {key:"instaFollowDay",label:"当日フォロー数",color:"teal",isNum:true},
+  {key:"instaFollowDay",label:"フォロー数",color:"teal",isNum:true},
   {key:"instaFollowers",label:"現在のフォロワー",color:"teal",isNum:true},
 ];
-const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS];
+const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...INSIGHT_FIELDS];
 
 function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力してください");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
 function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
@@ -292,6 +316,16 @@ function updBadge(){document.getElementById("badge").textContent=getName()?`👤
 function err(m){const el=document.getElementById("errBanner");el.style.display="block";el.textContent=m;}
 function clrErr(){document.getElementById("errBanner").style.display="none";}
 function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function fmtDate(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+// Instagram insights lag ~2 days; the latest viewable complete 2-day window
+// ends about 2 days ago. So default: from = day-3, to = day-2.
+function setInsightPeriodDefault(){
+  const base=document.getElementById("inDate").value?new Date(document.getElementById("inDate").value):new Date();
+  const to=new Date(base);to.setDate(to.getDate()-2);
+  const from=new Date(base);from.setDate(from.getDate()-3);
+  document.getElementById("insightFrom").value=fmtDate(from);
+  document.getElementById("insightTo").value=fmtDate(to);
+}
 function nf(n){return Number(n||0).toLocaleString("ja-JP");}
 function u2b(s){return btoa(unescape(encodeURIComponent(s)))}
 function b2u(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))))}
@@ -421,6 +455,9 @@ async function doSave(){
   const date=document.getElementById("inDate").value||today();
   const entry={date, staff:name, savedAt:new Date().toISOString()};
   ALL_FIELDS.forEach(f=>{entry[f.key]=vals[f.key];});
+  // insight period (対象期間) — records which 2-day window the insight numbers cover
+  entry.insightFrom=document.getElementById("insightFrom").value||"";
+  entry.insightTo=document.getElementById("insightTo").value||"";
   clrErr();
   const btn=document.getElementById("saveBtn");
   btn.textContent="保存中...";btn.disabled=true;
@@ -451,12 +488,16 @@ function renderToday(){
     <td class="name">${r.staff}</td>
     ${STORE_FIELDS.map(f=>`<td>${r[f.key]||0}</td>`).join("")}
     ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(r[f.key]||0):(f.isNum?nf(r[f.key]||0):(r[f.key]||0))}</td>`).join("")}
-
+    ${INSIGHT_FIELDS.map(f=>`<td>${nf(r[f.key]||0)}</td>`).join("")}
   </tr>`).join("");
+  // insight period note (if anyone recorded insights with a period)
+  const withPeriod=td.find(r=>r.insightFrom&&r.insightTo);
+  const periodNote=withPeriod?`<div style="font-size:11.5px;color:var(--teal);margin-top:8px;">📈 インサイト対象期間：${withPeriod.insightFrom} 〜 ${withPeriod.insightTo}</div>`:"";
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=td.reduce((s,r)=>s+(r[f.key]||0),0);});
   document.getElementById("chips").innerHTML=
     STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
-    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("")+
+    INSIGHT_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip" style="background:rgba(90,200,250,.15);color:#0a84c4;">${f.label} <b>${nf(tot[f.key])}</b></span>`).join("")+periodNote;
 }
 
 // charts
@@ -588,9 +629,14 @@ document.getElementById("reloadToday").addEventListener("click",async function()
 (async function init(){
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
   document.getElementById("inDate").value=today();
+  document.getElementById("inDate").addEventListener("change",()=>{setInsightPeriodDefault();renderToday();});
   updBadge();
   buildSteppers("sgStore",STORE_FIELDS);
   buildSteppers("sgInsta",INSTA_FIELDS);
+  buildSteppers("sgInsight",INSIGHT_FIELDS);
+  // default insight period = the latest available 2-day window (day-3 to day-2)
+  setInsightPeriodDefault();
+  document.getElementById("insightAuto").addEventListener("click",setInsightPeriodDefault);
   await ensureName(true);
   try{records=await ghGet()||[];}catch(e){err("読み込み失敗："+e.message);}
   renderToday();
