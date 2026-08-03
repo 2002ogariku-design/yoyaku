@@ -613,86 +613,66 @@ function excelDateToYMD(v){
   return m ? m[0] : s;
 }
 
-const GH_OWNER = "2002ogariku-design";
-const GH_REPO = "yoyaku";
-const GH_PATH = "shibuya-tk/data.json";
-const GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
-const WB_GH_PATH = "shibuya-tk/wb.json";
-const WB_GH_API = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${WB_GH_PATH}`;
-let wbGhSha = null;
-let sharedWbVersion = 0; // version seen from the shared store
+// ===== Supabase config (password-protected shared storage) =====
+const SB_URL = "https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY = "sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY = "rinkan-app-pw";
+const TOOL_EDITS = "hold-edits";   // per-item 確認/備考/本部指示 blob
+const TOOL_WB = "hold-wb";         // shared workbook (base64)
+let sharedWbVersion = 0;
+
+// Ask for the shared password once (kept only for this browser session).
+function getAppPw(){
+  let p; try{ p = sessionStorage.getItem(SB_PW_KEY); }catch(e){}
+  if(!p){
+    p = window.prompt("共有パスワードを入力してください（他のツールと同じパスワードです）");
+    if(p){ p = p.trim(); try{ sessionStorage.setItem(SB_PW_KEY, p); }catch(e){} }
+  }
+  return p || "";
+}
+function clearAppPw(){ try{ sessionStorage.removeItem(SB_PW_KEY); }catch(e){} }
+function sbHeaders(){
+  return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};
+}
+// Read one tool blob's payload from Supabase; returns parsed object or null.
+async function sbGetPayload(tool){
+  const res = await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+tool+"&select=payload", {headers:sbHeaders()});
+  if(res.status === 401 || res.status === 403){
+    clearAppPw();
+    showError("共有パスワードが正しくありません。ページを再読み込みして、もう一度入力してください。");
+    throw new Error("PW");
+  }
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const rows = await res.json();
+  return rows.length ? rows[0].payload : null;
+}
+// Upsert one tool blob's payload into Supabase.
+async function sbSetPayload(tool, payload){
+  const res = await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool", {
+    method:"POST",
+    headers:Object.assign(sbHeaders(), {"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool, payload, updated_at:new Date().toISOString()})
+  });
+  if(res.status === 401 || res.status === 403){ clearAppPw(); throw new Error("共有パスワードが正しくありません。再読み込みして入力し直してください。"); }
+  if(!res.ok){ const t=await res.text().catch(()=> ""); throw new Error("保存に失敗（HTTP "+res.status+"）"+t.slice(0,120)); }
+}
 
 async function fetchSharedWorkbook(){
-  const token = getGhToken();
-  if(!token) return null;
   try{
-    const res = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
-      headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
-    });
-    if(res.status === 404){ wbGhSha = null; return null; }
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    wbGhSha = data.sha;
-    return JSON.parse(b64ToUtf8(data.content));
-  }catch(e){ console.error("fetchSharedWorkbook failed", e); return null; }
+    const payload = await sbGetPayload(TOOL_WB);
+    return payload || null; // {b64, filename, version}
+  }catch(e){ if(e.message==="PW") return null; console.error("fetchSharedWorkbook failed", e); return null; }
 }
 
 async function saveSharedWorkbook(b64, filename){
-  const token = getGhToken();
-  if(!token) throw new Error("アクセスキーが未設定です");
   const version = Date.now();
-  const payload = utf8ToB64(JSON.stringify({b64, filename, version}));
-  // GitHub Contents API rejects files over ~1MB. Guard with a clear message.
-  if(payload.length > 950000){
-    throw new Error(`ファイルが大きすぎて共有できません（約${Math.round(payload.length/1024)}KB）。エクセルの店舗シート数が多すぎる可能性があります。担当者に相談してください。`);
-  }
-  try{
-    const head = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
-      headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
-    });
-    if(head.ok){ wbGhSha = (await head.json()).sha; }
-    else if(head.status === 404){ wbGhSha = null; }
-  }catch(e){}
-  const body = {
-    message: "update workbook " + new Date().toISOString(),
-    content: payload
-  };
-  if(wbGhSha) body.sha = wbGhSha;
-  const res = await fetch(WB_GH_API, {
-    method:"PUT",
-    headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
-    body: JSON.stringify(body)
-  });
-  if(!res.ok){
-    const errText = await res.text().catch(()=> "");
-    throw new Error("ファイルの共有保存に失敗しました（HTTP " + res.status + "）" + errText.slice(0,120));
-  }
-  const d = await res.json();
-  wbGhSha = d.content.sha;
+  await sbSetPayload(TOOL_WB, {b64, filename, version});
   sharedWbVersion = version;
   return version;
 }
-const GH_TOKEN_KEY = "tk-gh-token";
 
-function getGhToken(){
-  let t = null;
-  try{ t = localStorage.getItem(GH_TOKEN_KEY); }catch(e){ /* ignore */ }
-  if(!t){
-    t = window.prompt("共有用のアクセスキーを入力してください（担当者から共有された文字列。この端末にのみ保存され、コードには残りません）");
-    if(t){
-      try{ localStorage.setItem(GH_TOKEN_KEY, t.trim()); }catch(e){ /* ignore */ }
-      t = t.trim();
-    }
-  }
-  return t;
-}
-
-function utf8ToB64(str){
-  return btoa(unescape(encodeURIComponent(str)));
-}
-function b64ToUtf8(b64){
-  return decodeURIComponent(escape(atob(b64.replace(/\n/g,""))));
-}
+function utf8ToB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,"")))); }
 
 const localStore = {
   get(key){
@@ -707,99 +687,22 @@ const localStore = {
   }
 };
 
-// Shared storage backed by a single JSON file in a GitHub repo (via the Contents API).
-// All keys map to the same file; we only ever store the "edits" blob this way.
-let ghLastSha = null;
-
+// Shared storage backed by Supabase (password-gated). The edits blob is stored as a
+// JSON string in the TOOL_EDITS payload. Interface matches the old GitHub store.
 const sharedStore = {
   async get(key){
-    const token = getGhToken();
-    if(!token) return null;
     try{
-      const res = await fetch(`${GH_API}?ts=${Date.now()}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/vnd.github+json"
-        }
-      });
-      if(res.status === 401){
-        try{ localStorage.removeItem(GH_TOKEN_KEY); }catch(e){}
-        showError("共有アクセスキーが正しくありません。ページを再読み込みして、もう一度入力してください。");
-        return null;
-      }
-      if(res.status === 404){ ghLastSha = null; return null; }
-      if(!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      ghLastSha = data.sha;
-      return {value: b64ToUtf8(data.content)};
-    }catch(e){
-      console.error("github get failed", e);
-      return null;
-    }
+      const payload = await sbGetPayload(TOOL_EDITS);
+      if(payload == null) return null;
+      // payload is stored as {json: "<stringified edits>"}
+      return {value: (payload && payload.json != null) ? payload.json : JSON.stringify(payload)};
+    }catch(e){ if(e.message!=="PW") console.error("supabase get failed", e); return null; }
   },
   async set(key, value){
-    const token = getGhToken();
-    if(!token) throw new Error("共有アクセスキーが入力されていません。");
-
-    const MAX_RETRIES = 3;
-    for(let attempt = 0; attempt < MAX_RETRIES; attempt++){
-      // refresh sha right before writing to minimize lost-update races
-      try{
-        const head = await fetch(`${GH_API}?ts=${Date.now()}`, {
-          headers: {"Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json"}
-        });
-        if(head.ok){ const hd = await head.json(); ghLastSha = hd.sha; }
-        else if(head.status === 404){ ghLastSha = null; }
-      }catch(e){ /* fall through with whatever sha we last had */ }
-
-      const body = {
-        message: "update edits " + new Date().toISOString(),
-        content: utf8ToB64(value)
-      };
-      if(ghLastSha) body.sha = ghLastSha;
-      const res = await fetch(GH_API, {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-      });
-      if(res.ok){
-        const data = await res.json();
-        ghLastSha = data.content.sha;
-        return;
-      }
-      if(res.status === 409 && attempt < MAX_RETRIES - 1){
-        // someone else saved at the same moment; retry with a fresh sha
-        await new Promise(r => setTimeout(r, 300 + attempt * 300));
-        continue;
-      }
-      const errText = await res.text().catch(()=> "");
-      throw new Error(`共有データベース（GitHub）への保存に失敗しました（HTTP ${res.status}）${errText}`);
-    }
+    await sbSetPayload(TOOL_EDITS, {json: value});
   },
   async delete(key){
-    const token = getGhToken();
-    if(!token) return;
-    try{
-      const head = await fetch(`${GH_API}?ts=${Date.now()}`, {
-        headers: {"Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json"}
-      });
-      if(!head.ok) return;
-      const hd = await head.json();
-      await fetch(GH_API, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({message: "reset edits", sha: hd.sha})
-      });
-      ghLastSha = null;
-    }catch(e){ /* ignore */ }
+    try{ await sbSetPayload(TOOL_EDITS, {json: "{}"}); }catch(e){ /* ignore */ }
   }
 };
 
@@ -809,10 +712,10 @@ let pendingSyncFlash = false;
 
 async function loadFromStorage(){
   try{
-    // 1. First check GitHub for the current shared workbook
+    // 1. First check the shared database (Supabase) for the current workbook
     const shared = await fetchSharedWorkbook().catch(()=>null);
     if(shared && shared.b64 && shared.version){
-      // GitHub has a file — use it (it's always the authoritative source)
+      // Shared file exists — it is the authoritative source
       parseWorkbookFromB64(shared.b64, shared.filename || "共有ファイル");
       localStore.set(STORAGE_WORKBOOK, shared.b64);
       localStore.set(STORAGE_FILENAME, shared.filename || "");
@@ -928,40 +831,27 @@ function lastUpdatedLabel(ed){
 
 // Poll the shared database periodically so everyone's 確認・備考 converge, like a slow-motion shared sheet.
 async function pollSharedUpdates(){
-  // Always check if someone uploaded a new file — compare SHA cheaply using HEAD-like check
+  // Check if someone uploaded a new file — compare version from Supabase.
   try{
-    const token = getGhToken();
-    if(token){
-      const wbMeta = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
-        headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
-      });
-      if(wbMeta.ok){
-        const meta = await wbMeta.json();
-        if(meta.sha && meta.sha !== wbGhSha){
-          // File changed — download and apply
-          wbGhSha = meta.sha;
-          const shared = JSON.parse(b64ToUtf8(meta.content));
-          if(shared && shared.b64 && shared.version && shared.version !== sharedWbVersion){
-            sharedWbVersion = shared.version;
-            const fname = shared.filename || "共有ファイル";
-            parseWorkbookFromB64(shared.b64, fname);
-            localStore.set(STORAGE_WORKBOOK, shared.b64);
-            localStore.set(STORAGE_FILENAME, fname);
-            // Also refresh edits for the new file
-            try{
-              const editRes = await sharedStore.get(STORAGE_EDITS);
-              if(editRes && editRes.value){
-                edits = JSON.parse(editRes.value);
-                lastEditsSerialized = editRes.value;
-              }
-            }catch(e){}
-            populateFilters();
-            render();
-            flashSyncIndicator(`📂 ${fname} を自動で読み込みました`);
-            return; // skip further polling this cycle
-          }
+    const shared = await fetchSharedWorkbook();
+    if(shared && shared.b64 && shared.version && shared.version !== sharedWbVersion){
+      sharedWbVersion = shared.version;
+      const fname = shared.filename || "共有ファイル";
+      parseWorkbookFromB64(shared.b64, fname);
+      localStore.set(STORAGE_WORKBOOK, shared.b64);
+      localStore.set(STORAGE_FILENAME, fname);
+      // Also refresh edits for the new file
+      try{
+        const editRes = await sharedStore.get(STORAGE_EDITS);
+        if(editRes && editRes.value){
+          edits = JSON.parse(editRes.value);
+          lastEditsSerialized = editRes.value;
         }
-      }
+      }catch(e){}
+      populateFilters();
+      render();
+      flashSyncIndicator(`📂 ${fname} を自動で読み込みました`);
+      return; // skip further polling this cycle
     }
   }catch(e){ console.error("wb poll error", e); }
 
@@ -1756,16 +1646,9 @@ document.getElementById("clearBtn").addEventListener("click", async ()=>{
     localStore.delete(STORAGE_WORKBOOK);
     localStore.delete(STORAGE_FILENAME);
     await sharedStore.delete(STORAGE_EDITS);
-    // Also delete the shared workbook file
-    const token = getGhToken();
-    if(token && wbGhSha){
-      await fetch(WB_GH_API, {
-        method:"DELETE",
-        headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
-        body: JSON.stringify({message:"clear workbook for next week", sha: wbGhSha})
-      }).catch(e=>console.error("wb delete failed", e));
-      wbGhSha = null;
-    }
+    // Also clear the shared workbook
+    try{ await sbSetPayload(TOOL_WB, {b64:"", filename:"", version:Date.now()}); }catch(e){ console.error("wb clear failed", e); }
+    sharedWbVersion = 0;
   }catch(e){ /* keys may not exist */ }
   document.getElementById("fileNameLabel").textContent = "—";
   populateFilters();
@@ -1778,60 +1661,11 @@ function formatHistoryDate(iso){
 }
 
 document.getElementById("historyBtn").addEventListener("click", async ()=>{
-  const token = getGhToken();
-  if(!token) return;
   const listEl = document.getElementById("historyList");
-  listEl.innerHTML = "読み込み中...";
   document.getElementById("historyModalOverlay").style.display = "flex";
-  try{
-    const res = await fetch(
-      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/commits?path=${GH_PATH}&per_page=20`,
-      { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" } }
-    );
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const commits = await res.json();
-    if(!commits.length){
-      listEl.innerHTML = "<div style='color:var(--text-dim);'>履歴がまだありません。</div>";
-      return;
-    }
-    listEl.innerHTML = commits.map((c, i)=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);">
-        <span>${formatHistoryDate(c.commit.author.date)}${i===0 ? '<span style="color:var(--ok);font-weight:700;margin-left:6px;">（最新）</span>' : ""}</span>
-        <button class="btn" data-sha="${c.sha}" style="padding:5px 12px;font-size:11.5px;" ${i===0 ? "disabled" : ""}>この時点に戻す</button>
-      </div>
-    `).join("");
-    listEl.querySelectorAll("button[data-sha]").forEach(btn=>{
-      btn.addEventListener("click", async ()=>{
-        const sha = btn.getAttribute("data-sha");
-        if(!confirm("この時点の内容に戻します。今ある共有データはこの内容で上書きされます。よろしいですか？")) return;
-        btn.textContent = "復元中...";
-        btn.disabled = true;
-        try{
-          const fileRes = await fetch(
-            `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}?ref=${sha}`,
-            { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" } }
-          );
-          if(!fileRes.ok) throw new Error("HTTP " + fileRes.status);
-          const fileData = await fileRes.json();
-          const restoredRaw = b64ToUtf8(fileData.content);
-          await sharedStore.set(STORAGE_EDITS, restoredRaw);
-          edits = JSON.parse(restoredRaw);
-          lastEditsSerialized = restoredRaw;
-          document.getElementById("historyModalOverlay").style.display = "none";
-          render();
-          flashSyncIndicator("過去の状態に復元しました");
-        }catch(err){
-          console.error(err);
-          alert("復元に失敗しました：" + (err && err.message ? err.message : err));
-          btn.textContent = "この時点に戻す";
-          btn.disabled = false;
-        }
-      });
-    });
-  }catch(err){
-    console.error(err);
-    listEl.innerHTML = "<div style='color:var(--danger);'>履歴の取得に失敗しました：" + (err && err.message ? err.message : err) + "</div>";
-  }
+  // The old version history relied on GitHub commit history. The tool now uses a
+  // password-protected shared database (Supabase), which keeps only the current state.
+  listEl.innerHTML = "<div style='color:var(--text-dim);line-height:1.7;'>共有方式が変わったため、過去バージョンへの巻き戻し機能は現在ご利用いただけません。<br>入力内容はこれまで通り自動保存され、全員で共有されます。</div>";
 });
 document.getElementById("historyCloseBtn").addEventListener("click", ()=>{
   document.getElementById("historyModalOverlay").style.display = "none";
