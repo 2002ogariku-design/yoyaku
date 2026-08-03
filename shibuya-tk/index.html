@@ -155,6 +155,10 @@
   .pending-chip .n{background:var(--warn);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;}
   .pending-chip.all-done{background:var(--ok-bg);color:var(--ok);border-color:#bfe0c6;}
   .unfilled-badge{display:inline-block;margin-top:4px;font-size:10.5px;color:var(--danger);font-weight:600;}
+  td.biko-required{background:#fff0f0 !important;}
+  input.cell-input.biko-error{border:2px solid var(--danger) !important;background:#fff5f5;}
+  .biko-warn{font-size:11px;color:var(--danger);font-weight:600;margin-top:5px;line-height:1.4;background:#ffe8e8;padding:6px 8px;border-radius:7px;}
+  .biko-warn b{color:#c00;}
   .row-save-btn{
     background:var(--accent);color:#fff;border:none;border-radius:6px;
     padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
@@ -372,6 +376,10 @@
       <div class="fname">
         <span class="label">読み込み中のファイル</span>
         <span id="fileNameLabel">—</span>
+      </div>
+      <div id="sheetPickerWrap" style="display:none;width:100%;margin-top:10px;padding:12px 14px;background:#eef5ff;border-radius:12px;">
+        <label style="font-size:13px;font-weight:700;color:#0055aa;display:block;margin-bottom:6px;">🏬 自店のシートを選択（このお店の分だけ回答します）</label>
+        <select id="sheetPicker" style="width:100%;padding:11px;border-radius:10px;border:1px solid #b8d4f5;font-size:15px;font-weight:600;background:#fff;"></select>
       </div>
       <div class="spacer"></div>
       <input type="file" id="fileInput" accept=".xlsx,.xls" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">
@@ -963,13 +971,31 @@ function arrayBufferToB64(buf){
 
 let rawWorkbookB64 = null;
 
+// The new workbook has one sheet per store. These are the store sheets staff fill in.
+const STORE_SHEETS = ["渋谷","新宿","福岡","名古屋","心斎橋","渋谷SV","原宿SV","南堀江","銀座SV","原宿LAB","LAB","西武新宿","銀座BAG","北堀江","札幌"];
 function parseWorkbookFromB64(b64, filename){
   rawWorkbookB64 = b64;
   const bytes = b64ToArrayBuffer(b64);
   workbook = XLSX.read(bytes, {type:"array", cellDates:false});
-  sheetName = workbook.SheetNames[0];
+  // Prefer a real store sheet over helper sheets like main/在庫.
+  const storeSheets = workbook.SheetNames.filter(n => STORE_SHEETS.includes(n));
+  // Default: remembered store, else 渋谷, else first store sheet, else first sheet.
+  let remembered = null; try{ remembered = localStorage.getItem("tk-store-sheet"); }catch(e){}
+  if(remembered && workbook.SheetNames.includes(remembered)) sheetName = remembered;
+  else if(storeSheets.includes("渋谷")) sheetName = "渋谷";
+  else if(storeSheets.length) sheetName = storeSheets[0];
+  else sheetName = workbook.SheetNames[0];
   document.getElementById("fileNameLabel").textContent = filename;
+  renderSheetPicker(storeSheets.length ? storeSheets : workbook.SheetNames);
   buildItemsFromSheet();
+}
+function renderSheetPicker(sheets){
+  const wrap = document.getElementById("sheetPickerWrap");
+  if(!wrap) return;
+  if(sheets.length <= 1){ wrap.style.display="none"; return; }
+  wrap.style.display="block";
+  const sel = document.getElementById("sheetPicker");
+  sel.innerHTML = sheets.map(s=>`<option value="${escapeHtml(s)}"${s===sheetName?" selected":""}>${escapeHtml(s)}店</option>`).join("");
 }
 
 function buildItemsFromSheet(){
@@ -1163,16 +1189,24 @@ const KAKUNIN_OPTIONS = [
   "",
   "出品NG(理由記載ない場合は再出品)",
   "出品依頼済み",
-  "期間延長 山内確認済",
+  "期間延長 山内確認済(期限の記載ない場合は再出品)",
   "返送済"
 ];
+// 出品NG and 期間延長 REQUIRE a 備考 (担当者/期限). These are checked for the red flag.
+const REQUIRE_BIKO = ["出品NG(理由記載ない場合は再出品)","期間延長 山内確認済(期限の記載ない場合は再出品)"];
+// True when the chosen 確認 requires a 備考 but it's empty → flag red.
+function bikoMissing(ed){
+  if(!ed || !ed.確認) return false;
+  if(!REQUIRE_BIKO.includes(ed.確認)) return false;
+  return !((ed.備考||"").trim());
+}
 
 const BIKO_PRESETS = [
+  "山口キャンセル 石橋取り置き 8/6まで",
+  "T坂口 8/3まで",
   "お客様に確認済み",
   "来店予定あり",
-  "再出品依頼済み",
-  "返送手配済み",
-  "本部に確認中"
+  "返送手配済み"
 ];
 
 function escapeHtml(s){
@@ -1303,8 +1337,9 @@ function render(){
       <td data-label="在庫・返送先">${renderLocationBlock(it)}</td>
       <td data-label="本部指示">${renderInstructionInput(it, ed)}</td>
       <td data-label="確認">${renderKakuninSelect(it, ed)}${!ed.確認 ? `<div class="unfilled-badge">未入力</div>` : ""}</td>
-      <td data-label="備考">
-        <input type="text" class="cell-input ${ed.備考?'touched':''}" data-id="${it.id}" data-field="備考" placeholder="備考を入力" value="${(ed.備考||"").replace(/"/g,'&quot;')}">
+      <td data-label="備考" class="${bikoMissing(ed) ? 'biko-required' : ''}">
+        <input type="text" class="cell-input ${ed.備考?'touched':''} ${bikoMissing(ed)?'biko-error':''}" data-id="${it.id}" data-field="備考" placeholder="${bikoMissing(ed)?'⚠ 担当者/期限を必ず記載':'備考を入力'}" value="${(ed.備考||"").replace(/"/g,'&quot;')}">
+        ${bikoMissing(ed) ? `<div class="biko-warn">⚠ この確認内容には<b>担当者/期限</b>の記載が必須です（例：山口キャンセル 8/6まで）。未記載は再出品対象です。</div>` : ""}
         <div class="biko-row">
           <select class="biko-preset-select" data-id="${it.id}">
             <option value="">よく使う文言を挿入...</option>
@@ -1466,6 +1501,15 @@ document.getElementById("fileInput").addEventListener("change", async (e)=>{
   e.target.value = "";
 });
 
+// When the user picks a different store sheet, re-parse that sheet
+document.getElementById("sheetPicker").addEventListener("change", (e)=>{
+  sheetName = e.target.value;
+  try{ localStorage.setItem("tk-store-sheet", sheetName); }catch(err){}
+  buildItemsFromSheet();
+  populateFilters();
+  render();
+});
+
 function colLetter(idx0){ // 0-indexed column number -> "A","B",...
   let n = idx0 + 1, s = "";
   while(n > 0){
@@ -1616,14 +1660,20 @@ document.getElementById("exportBtn").addEventListener("click", async ()=>{
     alert("読み込まれているファイルがありません。先にファイルを読み込んでください。");
     return;
   }
+  // Pre-submission check: warn about required-but-missing 備考 (would be 再出品対象)
+  const missing = items.filter(it => bikoMissing(edits[it.id] || {}));
+  if(missing.length){
+    const ok = confirm(`⚠ ${missing.length}件、「出品NG」または「期間延長」なのに備考（担当者/期限）が未記載です。\n\nこのまま提出すると再出品対象になります。\n\nそれでも書き出しますか？（キャンセルして記入することを推奨）`);
+    if(!ok) return;
+  }
   const btn = document.getElementById("exportBtn");
   const originalLabel = btn.textContent;
   btn.textContent = "作成中...";
   btn.disabled = true;
   try{
     const blob = await buildSubmissionBlob();
-    const origName = document.getElementById("fileNameLabel").textContent || "取り置き期限表.xlsx";
-    const outName = origName.replace(/\.xlsx?$/i,"") + "_提出用.xlsx";
+    // Per new rule: submission filename = the store name
+    const outName = (sheetName || "取り置き期限表") + ".xlsx";
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
