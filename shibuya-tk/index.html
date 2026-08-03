@@ -1043,14 +1043,16 @@ function buildItemsFromSheet(){
       現担当: cleanText(get("現担当") || get("初回担当")),
       期限: excelDateToYMD(get("取り置き期限")),
       前回回答: cleanText(get("前回回答")),
-      在庫監査コメント: cleanText(get("在庫監査コメント")),
+      在庫監査コメント: cleanText(get("コメント") || get("在庫監査コメント")),
       現在庫区分: cleanText(get("現在庫区分")),
       取り置き店舗: cleanText(get("取り置き店舗")),
     });
+    const hqInstruction = cleanText(get("コメント") || get("在庫監査コメント")) || "";
     if(!edits[id]){
-      edits[id] = {確認: cleanText(get("確認")) || "", 備考: cleanText(get("備考")) || "", 本部指示: cleanText(get("在庫監査コメント")) || "", done:false};
-    } else if(edits[id].本部指示 === undefined){
-      edits[id].本部指示 = cleanText(get("在庫監査コメント")) || "";
+      edits[id] = {確認: cleanText(get("確認")) || "", 備考: cleanText(get("備考")) || "", 本部指示: hqInstruction, done:false};
+    } else {
+      // 本部指示 comes from the Excel (HQ), not staff — always refresh it from the file
+      edits[id].本部指示 = hqInstruction;
     }
   }
 }
@@ -1201,14 +1203,6 @@ function bikoMissing(ed){
   return !((ed.備考||"").trim());
 }
 
-const BIKO_PRESETS = [
-  "山口キャンセル 石橋取り置き 8/6まで",
-  "T坂口 8/3まで",
-  "お客様に確認済み",
-  "来店予定あり",
-  "返送手配済み"
-];
-
 function escapeHtml(s){
   return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -1340,12 +1334,6 @@ function render(){
       <td data-label="備考" class="${bikoMissing(ed) ? 'biko-required' : ''}">
         <input type="text" class="cell-input ${ed.備考?'touched':''} ${bikoMissing(ed)?'biko-error':''}" data-id="${it.id}" data-field="備考" placeholder="${bikoMissing(ed)?'⚠ 担当者/期限を必ず記載':'備考を入力'}" value="${(ed.備考||"").replace(/"/g,'&quot;')}">
         ${bikoMissing(ed) ? `<div class="biko-warn">⚠ この確認内容には<b>担当者/期限</b>の記載が必須です（例：山口キャンセル 8/6まで）。未記載は再出品対象です。</div>` : ""}
-        <div class="biko-row">
-          <select class="biko-preset-select" data-id="${it.id}">
-            <option value="">よく使う文言を挿入...</option>
-            ${BIKO_PRESETS.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("")}
-          </select>
-        </div>
         ${lastUpdatedLabel(ed) ? `<span class="last-updated">${lastUpdatedLabel(ed)}</span>` : ""}
       </td>
       <td data-label="保存">
@@ -1437,29 +1425,48 @@ function render(){
       edits[id][field] = e.target.value;
       el.classList.toggle("touched", !!e.target.value);
       stampEdit(id);
-      render(); // immediately reflect the change visually
+      // Update just this row's 備考 required-flag instead of re-rendering the whole table,
+      // so any text the user is entering elsewhere isn't disturbed.
+      updateRowBikoState(id);
       const ok = await persistEdits();
       if(ok) showSavedTick(el);
     });
   });
-  tbody.querySelectorAll(".biko-preset-select").forEach(el=>{
-    const id = el.getAttribute("data-id");
-    el.addEventListener("change", async (e)=>{
-      const phrase = e.target.value;
-      if(!phrase){ return; }
-      const input = tbody.querySelector(`.cell-input[data-id="${id}"][data-field="備考"]`);
-      if(input){
-        const current = edits[id].備考 || "";
-        edits[id].備考 = current ? (current + " / " + phrase) : phrase;
-        input.value = edits[id].備考;
-        input.classList.add("touched");
-      }
-      stampEdit(id);
-      const ok = await persistEdits();
-      if(ok && input) showSavedTick(input);
-      e.target.value = "";
-    });
-  });
+}
+
+// Surgically refresh one row's 備考 required-flag & 未入力 badge without a full re-render.
+function updateRowBikoState(id){
+  const ed = edits[id] || {};
+  const bikoInput = document.querySelector(`.cell-input[data-id="${id}"][data-field="備考"]`);
+  if(!bikoInput) return;
+  const cell = bikoInput.closest('td');
+  const missing = bikoMissing(ed);
+  if(cell) cell.classList.toggle('biko-required', missing);
+  bikoInput.classList.toggle('biko-error', missing);
+  bikoInput.placeholder = missing ? '⚠ 担当者/期限を必ず記載' : '備考を入力';
+  // warning message
+  let warn = cell ? cell.querySelector('.biko-warn') : null;
+  if(missing && !warn && cell){
+    warn = document.createElement('div');
+    warn.className = 'biko-warn';
+    warn.innerHTML = '⚠ この確認内容には<b>担当者/期限</b>の記載が必須です（例：山口キャンセル 8/6まで）。未記載は再出品対象です。';
+    cell.insertBefore(warn, bikoInput.nextSibling);
+  } else if(!missing && warn){
+    warn.remove();
+  }
+  // 未入力 badge on 確認 cell
+  const sel = document.querySelector(`.cell-select[data-id="${id}"][data-field="確認"]`);
+  if(sel){
+    const kCell = sel.closest('td');
+    let badge = kCell ? kCell.querySelector('.unfilled-badge') : null;
+    if(ed.確認 && badge) badge.remove();
+    else if(!ed.確認 && !badge && kCell){
+      badge = document.createElement('div');
+      badge.className = 'unfilled-badge';
+      badge.textContent = '未入力';
+      kCell.appendChild(badge);
+    }
+  }
 }
 
 function showError(msg){
@@ -1609,7 +1616,7 @@ async function buildSubmissionBlob(){
 
   const colKakunin = colMap["確認"];
   const colBiko = colMap["備考"];
-  const colInstruction = colMap["在庫監査コメント"];
+  const colInstruction = colMap["コメント"] != null ? colMap["コメント"] : colMap["在庫監査コメント"];
   const rowEls = Array.from(doc.getElementsByTagName("row"));
   const rowByNum = {};
   for(const r of rowEls) rowByNum[r.getAttribute("r")] = r;
