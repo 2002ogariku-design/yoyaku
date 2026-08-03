@@ -640,6 +640,12 @@ async function fetchSharedWorkbook(){
 async function saveSharedWorkbook(b64, filename){
   const token = getGhToken();
   if(!token) throw new Error("アクセスキーが未設定です");
+  const version = Date.now();
+  const payload = utf8ToB64(JSON.stringify({b64, filename, version}));
+  // GitHub Contents API rejects files over ~1MB. Guard with a clear message.
+  if(payload.length > 950000){
+    throw new Error(`ファイルが大きすぎて共有できません（約${Math.round(payload.length/1024)}KB）。エクセルの店舗シート数が多すぎる可能性があります。担当者に相談してください。`);
+  }
   try{
     const head = await fetch(`${WB_GH_API}?ts=${Date.now()}`, {
       headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json"}
@@ -647,10 +653,9 @@ async function saveSharedWorkbook(b64, filename){
     if(head.ok){ wbGhSha = (await head.json()).sha; }
     else if(head.status === 404){ wbGhSha = null; }
   }catch(e){}
-  const version = Date.now();
   const body = {
     message: "update workbook " + new Date().toISOString(),
-    content: utf8ToB64(JSON.stringify({b64, filename, version}))
+    content: payload
   };
   if(wbGhSha) body.sha = wbGhSha;
   const res = await fetch(WB_GH_API, {
@@ -658,7 +663,10 @@ async function saveSharedWorkbook(b64, filename){
     headers:{"Authorization":`Bearer ${token}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
     body: JSON.stringify(body)
   });
-  if(!res.ok) throw new Error("ファイルの共有保存に失敗しました（HTTP " + res.status + "）");
+  if(!res.ok){
+    const errText = await res.text().catch(()=> "");
+    throw new Error("ファイルの共有保存に失敗しました（HTTP " + res.status + "）" + errText.slice(0,120));
+  }
   const d = await res.json();
   wbGhSha = d.content.sha;
   sharedWbVersion = version;
@@ -828,6 +836,45 @@ async function loadFromStorage(){
     edits = JSON.parse(raw);
     lastEditsSerialized = raw;
   }catch(e){ console.error(e); edits = {}; }
+}
+
+// The full multi-store workbook can be several MB (too big for the GitHub 1MB API limit),
+// which silently fails and leaves the shared file empty. To fix this, we keep only the
+// store sheet the user is working on, and trim it to the rows that actually have data
+// (the template reserves ~2000 empty rows). This shrinks a 3MB file to ~100KB.
+function buildSlimWorkbookB64(b64, onlySheet){
+  try{
+    const bytes = b64ToArrayBuffer(b64);
+    const wb = XLSX.read(bytes, {type:"array", cellStyles:false});
+    const storeSheets = wb.SheetNames.filter(n => STORE_SHEETS.includes(n));
+    if(!storeSheets.length) return b64;
+    // pick the target sheet: the one requested, else remembered, else 渋谷, else first store
+    let target = onlySheet && storeSheets.includes(onlySheet) ? onlySheet
+      : (storeSheets.includes("渋谷") ? "渋谷" : storeSheets[0]);
+    const ws = wb.Sheets[target];
+    // trim empty trailing rows using the 品番ハイフン有 column
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    // locate 品番 column by scanning the header rows
+    let codeCol = 6; // default G
+    for(let r=range.s.r; r<=Math.min(range.e.r, range.s.r+30); r++){
+      for(let c=range.s.c; c<=range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        if(cell && String(cell.v).trim()==="品番ハイフン有"){ codeCol=c; r=999; break; }
+      }
+    }
+    let lastRow = range.s.r;
+    for(let r=range.s.r; r<=range.e.r; r++){
+      const cell = ws[XLSX.utils.encode_cell({r,c:codeCol})];
+      if(cell && cell.v) lastRow = r;
+    }
+    ws["!ref"] = XLSX.utils.encode_range({s:{r:range.s.r,c:range.s.c}, e:{r:lastRow,c:range.e.c}});
+    const slim = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(slim, ws, target);
+    return XLSX.write(slim, {type:"base64", bookType:"xlsx"});
+  }catch(e){
+    console.error("slim workbook build failed, using original", e);
+    return b64;
+  }
 }
 
 async function persistWorkbook(b64, filename){
@@ -1484,7 +1531,11 @@ document.getElementById("fileInput").addEventListener("change", async (e)=>{
   clearError();
   try{
     const buf = await file.arrayBuffer();
-    const b64 = arrayBufferToB64(buf);
+    const rawB64 = arrayBufferToB64(buf);
+    // Slim to just the working store sheet (full file is 3MB+ and breaks GitHub's 1MB
+    // sharing limit). Everything downstream uses this small version.
+    let wantSheet = null; try{ wantSheet = localStorage.getItem("tk-store-sheet"); }catch(e){}
+    const b64 = buildSlimWorkbookB64(rawB64, wantSheet);
     // refresh shared edits first so we don't clobber what other staff already entered
     try{
       const editRes = await sharedStore.get(STORAGE_EDITS);
