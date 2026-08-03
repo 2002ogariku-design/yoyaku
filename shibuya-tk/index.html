@@ -741,45 +741,6 @@ async function loadFromStorage(){
   }catch(e){ console.error(e); edits = {}; }
 }
 
-// The full multi-store workbook can be several MB (too big for the GitHub 1MB API limit),
-// which silently fails and leaves the shared file empty. To fix this, we keep only the
-// store sheet the user is working on, and trim it to the rows that actually have data
-// (the template reserves ~2000 empty rows). This shrinks a 3MB file to ~100KB.
-function buildSlimWorkbookB64(b64, onlySheet){
-  try{
-    const bytes = b64ToArrayBuffer(b64);
-    const wb = XLSX.read(bytes, {type:"array", cellStyles:false});
-    const storeSheets = wb.SheetNames.filter(n => STORE_SHEETS.includes(n));
-    if(!storeSheets.length) return b64;
-    // pick the target sheet: the one requested, else remembered, else 渋谷, else first store
-    let target = onlySheet && storeSheets.includes(onlySheet) ? onlySheet
-      : (storeSheets.includes("渋谷") ? "渋谷" : storeSheets[0]);
-    const ws = wb.Sheets[target];
-    // trim empty trailing rows using the 品番ハイフン有 column
-    const range = XLSX.utils.decode_range(ws["!ref"]);
-    // locate 品番 column by scanning the header rows
-    let codeCol = 6; // default G
-    for(let r=range.s.r; r<=Math.min(range.e.r, range.s.r+30); r++){
-      for(let c=range.s.c; c<=range.e.c; c++){
-        const cell = ws[XLSX.utils.encode_cell({r,c})];
-        if(cell && String(cell.v).trim()==="品番ハイフン有"){ codeCol=c; r=999; break; }
-      }
-    }
-    let lastRow = range.s.r;
-    for(let r=range.s.r; r<=range.e.r; r++){
-      const cell = ws[XLSX.utils.encode_cell({r,c:codeCol})];
-      if(cell && cell.v) lastRow = r;
-    }
-    ws["!ref"] = XLSX.utils.encode_range({s:{r:range.s.r,c:range.s.c}, e:{r:lastRow,c:range.e.c}});
-    const slim = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(slim, ws, target);
-    return XLSX.write(slim, {type:"base64", bookType:"xlsx"});
-  }catch(e){
-    console.error("slim workbook build failed, using original", e);
-    return b64;
-  }
-}
-
 async function persistWorkbook(b64, filename){
   localStore.set(STORAGE_WORKBOOK, b64);
   localStore.set(STORAGE_FILENAME, filename);
@@ -1421,11 +1382,11 @@ document.getElementById("fileInput").addEventListener("change", async (e)=>{
   clearError();
   try{
     const buf = await file.arrayBuffer();
-    const rawB64 = arrayBufferToB64(buf);
-    // Slim to just the working store sheet (full file is 3MB+ and breaks GitHub's 1MB
-    // sharing limit). Everything downstream uses this small version.
-    let wantSheet = null; try{ wantSheet = localStorage.getItem("tk-store-sheet"); }catch(e){}
-    const b64 = buildSlimWorkbookB64(rawB64, wantSheet);
+    // Use the ORIGINAL file byte-for-byte. Supabase has no 1MB limit, so we no longer
+    // slim/rewrite the workbook — that would destroy the original formatting, dropdowns,
+    // and column widths. Keeping the raw file means the export is a faithful copy of the
+    // sent format with only 確認/備考 filled in.
+    const b64 = arrayBufferToB64(buf);
     // refresh shared edits first so we don't clobber what other staff already entered
     try{
       const editRes = await sharedStore.get(STORAGE_EDITS);
@@ -1863,6 +1824,9 @@ document.getElementById("nameModalSaveBtn").addEventListener("click", ()=>{
     await ensureStaffNameModal(true);
     const bulkSel = document.getElementById("bulkKakuninSelect");
     bulkSel.innerHTML = KAKUNIN_OPTIONS.map(o=>`<option value="${escapeHtml(o)}">${o===""?"選択してください":escapeHtml(o)}</option>`).join("");
+    // Verify the shared database connection & password up front, so sharing problems
+    // surface immediately instead of silently failing.
+    await checkSharedConnection();
     await loadFromStorage();
     populateFilters();
     render();
@@ -1872,6 +1836,27 @@ document.getElementById("nameModalSaveBtn").addEventListener("click", ()=>{
     showError("初期化中にエラーが発生しました：" + (err && err.message ? err.message : err));
   }
 })();
+
+// Confirms we can reach Supabase and that the password is accepted. Shows a clear,
+// actionable message for the two common failure modes.
+async function checkSharedConnection(){
+  try{
+    const res = await fetch(SB_URL+"/rest/v1/app_data?select=tool&limit=1", {headers:sbHeaders()});
+    if(res.status === 401 || res.status === 403){
+      clearAppPw();
+      showError("⚠️ 共有パスワードが正しくないか、共有データベースの設定が未完了です。正しいパスワードを入れても弾かれる場合は、担当者にSupabaseのパスワードRLS設定を確認してもらってください。");
+      return false;
+    }
+    if(!res.ok){
+      showError("⚠️ 共有データベースに接続できませんでした（HTTP "+res.status+"）。ネットワークを確認してください。");
+      return false;
+    }
+    return true;
+  }catch(e){
+    showError("⚠️ 共有データベースに接続できませんでした：" + (e && e.message ? e.message : e) + "。ネットワーク接続を確認してください。");
+    return false;
+  }
+}
 </script>
 </body>
 </html>
