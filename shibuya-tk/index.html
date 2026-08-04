@@ -1209,7 +1209,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04f";
+const CODE_VERSION = "v2026.08.04g";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1601,7 +1601,7 @@ function harvestEditsFromDOM(){
 async function buildSubmissionBlob(){
   if(!rawWorkbookB64) throw new Error("元ファイルが読み込まれていません。");
   const bytes = b64ToArrayBuffer(rawWorkbookB64);
-  const zip = await JSZip.loadAsync(bytes);
+  const zip = await JSZip.loadAsync(bytes, {createFolders:false});
   const sheetPath = await resolveSheetXmlPath(zip);
   const sheetXmlText = await zip.file(sheetPath).async("string");
   const doc = new DOMParser().parseFromString(sheetXmlText, "application/xml");
