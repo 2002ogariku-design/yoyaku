@@ -187,23 +187,6 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
   <div class="c">
     <div class="c-title">📸 ストーリー画像を作成</div>
     <div style="margin-bottom:16px;">
-      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">モード</div>
-      <div class="seg" id="modeSeg">
-        <button type="button" data-m="single" class="on">単品</button>
-        <button type="button" data-m="collage">コラージュ（複数）</button>
-      </div>
-    </div>
-    <div id="collageBar" style="display:none;margin-bottom:16px;background:var(--card2);border-radius:14px;padding:12px 14px;">
-      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">コラージュ点数</div>
-      <div class="seg" id="collageCountSeg" style="margin-bottom:12px;">
-        <button type="button" data-n="2">2点</button>
-        <button type="button" data-n="3">3点</button>
-        <button type="button" data-n="4" class="on">4点</button>
-      </div>
-      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">編集する枠（タップで切替）</div>
-      <div class="seg" id="slotSeg"></div>
-    </div>
-    <div style="margin-bottom:16px;">
       <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">テンプレート（配置・色）</div>
       <div class="seg" id="tplSeg" style="flex-wrap:wrap;">
         <button type="button" data-t="classic" class="on">クラシック</button>
@@ -337,15 +320,9 @@ let photoOffX=0, photoOffY=0, photoZoom=1;
 try{storyArchive=JSON.parse(localStorage.getItem("story-archive-v2")||"[]");}catch(e){}
 const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 
-// ===== NEW: mode / template / text-scale / collage slots =====
-let MODE="single";           // "single" | "collage"
+// ===== template / text-scale =====
 let TEMPLATE="classic";      // classic | bottom | minimal | bold
 let textScale=1;             // 0.7 .. 1.4 fine-tune
-let collageCount=4;          // 2 | 3 | 4
-let activeSlot=0;            // which collage slot is being edited
-// Each collage slot holds its own photo + fields + pan/zoom.
-function blankSlot(){return {img:null,offX:0,offY:0,zoom:1,brand:"",size:"",rank:"",price:"",tag:"📩DMにて割引可能",tagColor:"#ffffff"};}
-let slots=[blankSlot(),blankSlot(),blankSlot(),blankSlot()];
 
 // Template definitions: where/how text is drawn. Each returns positions & colors.
 const TEMPLATES={
@@ -388,25 +365,6 @@ document.getElementById("textScaleSlider").addEventListener("input",e=>{
   textScale=Number(e.target.value)/100; drawStory();
 });
 
-// ===== mode switch =====
-document.querySelectorAll("#modeSeg button").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll("#modeSeg button").forEach(x=>x.classList.toggle("on",x===b));
-    MODE=b.dataset.m;
-    document.getElementById("collageBar").style.display = MODE==="collage"?"block":"none";
-    if(MODE==="collage"){ syncFieldsToSlot(); renderSlotSeg(); }
-    drawStory();
-  });
-});
-// collage count
-document.querySelectorAll("#collageCountSeg button").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll("#collageCountSeg button").forEach(x=>x.classList.toggle("on",x===b));
-    collageCount=Number(b.dataset.n);
-    if(activeSlot>=collageCount)activeSlot=0;
-    renderSlotSeg(); loadSlotToFields(); drawStory();
-  });
-});
 // template switch
 document.querySelectorAll("#tplSeg button").forEach(b=>{
   b.addEventListener("click",()=>{
@@ -414,54 +372,6 @@ document.querySelectorAll("#tplSeg button").forEach(b=>{
     TEMPLATE=b.dataset.t; drawStory();
   });
 });
-// slot selector (rendered dynamically)
-function renderSlotSeg(){
-  const seg=document.getElementById("slotSeg");
-  let html="";
-  for(let i=0;i<collageCount;i++){
-    const filled=slots[i].img?"●":"○";
-    html+=`<button type="button" data-s="${i}" class="${i===activeSlot?'on':''}">${filled} ${i+1}</button>`;
-  }
-  seg.innerHTML=html;
-  seg.querySelectorAll("button").forEach(b=>{
-    b.addEventListener("click",()=>{
-      saveFieldsToSlot();       // persist current edits
-      activeSlot=Number(b.dataset.s);
-      renderSlotSeg(); loadSlotToFields(); drawStory();
-    });
-  });
-}
-// move current form field values into the active slot
-function saveFieldsToSlot(){
-  if(MODE!=="collage")return;
-  const s=slots[activeSlot];
-  s.brand=document.getElementById("sBrand").value;
-  s.size=document.getElementById("sSize").value;
-  s.rank=document.getElementById("sRank").value;
-  s.price=document.getElementById("sPrice").value;
-  s.tag=document.getElementById("sTag").value;
-  s.tagColor=tagColor;
-  s.img=photoImg; s.offX=photoOffX; s.offY=photoOffY; s.zoom=photoZoom;
-}
-// load the active slot's values into the form + photo state
-function loadSlotToFields(){
-  if(MODE!=="collage")return;
-  const s=slots[activeSlot];
-  document.getElementById("sBrand").value=s.brand;
-  document.getElementById("sSize").value=s.size;
-  document.getElementById("sPrice").value=s.price;
-  document.getElementById("sTag").value=s.tag;
-  setRankSilent(s.rank);
-  tagColor=s.tagColor||"#ffffff";
-  photoImg=s.img; photoOffX=s.offX; photoOffY=s.offY; photoZoom=s.zoom;
-  document.getElementById("photoControls").style.display=photoImg?"block":"none";
-  document.getElementById("zoomSlider").value=Math.round(photoZoom*100);
-}
-function syncFieldsToSlot(){ saveFieldsToSlot(); }
-function setRankSilent(r){
-  document.getElementById("sRank").value=r||"";
-  document.querySelectorAll("#rankSeg button").forEach(b=>b.classList.toggle("on",b.dataset.r===r));
-}
 
 
 // phrase chips
@@ -495,7 +405,7 @@ pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0
 pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
 function loadPhoto(file){
   const fr=new FileReader();
-  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;if(MODE==="collage"){saveFieldsToSlot();renderSlotSeg();}drawStory();};img.src=e.target.result;};
+  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
   fr.readAsDataURL(file);
 }
 
@@ -881,7 +791,6 @@ async function fetchRakuten(url){
 function drawStory(){
   const W=1080,H=1920;
   cx.clearRect(0,0,W,H);
-  if(MODE==="collage"){ drawCollage(W,H); return; }
   drawSinglePanel(cx,W,H,{
     img:photoImg,offX:photoOffX,offY:photoOffY,zoom:photoZoom,
     brand:document.getElementById("sBrand").value.trim(),
@@ -957,41 +866,6 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   ctx.shadowBlur=0;ctx.textAlign="left";
 }
 
-// Collage: 2/3/4 items in a grid, each a mini story cell.
-function drawCollage(W,H){
-  saveFieldsToSlot(); // make sure current edits are in the active slot
-  cx.fillStyle="#000";cx.fillRect(0,0,W,H);
-  const gap=10;
-  let cells=[];
-  if(collageCount===2){
-    cells=[{x:0,y:0,w:W,h:(H-gap)/2},{x:0,y:(H+gap)/2,w:W,h:(H-gap)/2}];
-  }else if(collageCount===3){
-    const topH=Math.round(H*0.52);
-    cells=[{x:0,y:0,w:W,h:topH},
-           {x:0,y:topH+gap,w:(W-gap)/2,h:H-topH-gap},
-           {x:(W+gap)/2,y:topH+gap,w:(W-gap)/2,h:H-topH-gap}];
-  }else{ // 4
-    const cw=(W-gap)/2,ch=(H-gap)/2;
-    cells=[{x:0,y:0,w:cw,h:ch},{x:cw+gap,y:0,w:cw,h:ch},
-           {x:0,y:ch+gap,w:cw,h:ch},{x:cw+gap,y:ch+gap,w:cw,h:ch}];
-  }
-  for(let i=0;i<collageCount;i++){
-    const c=cells[i], s=slots[i];
-    const off=document.createElement("canvas");off.width=c.w;off.height=c.h;
-    const octx=off.getContext("2d");
-    // scale text down for smaller cells
-    const cellScale=Math.min(1,(c.w/W)*1.7)*textScale;
-    drawSinglePanel(octx,c.w,c.h,{
-      img:s.img,offX:s.offX,offY:s.offY,zoom:s.zoom,
-      brand:s.brand,size:s.size,rank:s.rank,price:s.price,tag:s.tag,tagColor:s.tagColor
-    },TEMPLATE,cellScale,false);
-    cx.drawImage(off,c.x,c.y);
-    // highlight the active slot being edited
-    if(i===activeSlot){
-      cx.strokeStyle="#0071e3";cx.lineWidth=8;cx.strokeRect(c.x+4,c.y+4,c.w-8,c.h-8);
-    }
-  }
-}
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
 function setRank(r){
   document.getElementById("sRank").value=r||"";
