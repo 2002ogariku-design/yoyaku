@@ -735,10 +735,42 @@ async function loadFromStorage(){
   }
   try{
     const editRes = await sharedStore.get(STORAGE_EDITS);
-    const raw = (editRes && editRes.value) ? editRes.value : "{}";
-    edits = JSON.parse(raw);
-    lastEditsSerialized = raw;
-  }catch(e){ console.error(e); edits = {}; }
+    const sharedRaw = (editRes && editRes.value) ? editRes.value : null;
+    // Local backup of this device's edits (survives Supabase being empty/unavailable).
+    const localBackup = localStore.get(STORAGE_EDITS + "-local");
+    const localRaw = localBackup && localBackup.value ? localBackup.value : null;
+
+    let merged = {};
+    // Start from whatever the parser already put in `edits` (has 本部指示 from the file).
+    merged = {...edits};
+    // Layer in shared edits.
+    if(sharedRaw){
+      try{ const s = JSON.parse(sharedRaw); mergeEditsInto(merged, s); }catch(e){}
+    }
+    // Layer in this device's local backup — local wins for non-empty values so the user's
+    // own recent input is never dropped when the shared store is empty or lagging.
+    if(localRaw){
+      try{ const l = JSON.parse(localRaw); mergeEditsInto(merged, l, true); }catch(e){}
+    }
+    edits = merged;
+    lastEditsSerialized = sharedRaw || "{}";
+  }catch(e){ console.error(e); /* keep whatever edits the parser built */ }
+}
+
+// Merge src edits into dst. When preferSrc is true, non-empty src values overwrite dst.
+function mergeEditsInto(dst, src, preferSrc){
+  for(const id of Object.keys(src)){
+    if(id.startsWith("_")) continue;
+    if(!dst[id]){ dst[id] = src[id]; continue; }
+    for(const field of Object.keys(src[id])){
+      const sv = src[id][field];
+      const dv = dst[id][field];
+      const svEmpty = sv === "" || sv === false || sv === 0 || sv == null;
+      const dvEmpty = dv === "" || dv === false || dv === 0 || dv == null;
+      if(preferSrc){ if(!svEmpty) dst[id][field] = sv; }
+      else { if(dvEmpty) dst[id][field] = sv; }
+    }
+  }
 }
 
 async function persistWorkbook(b64, filename){
@@ -756,10 +788,12 @@ async function persistWorkbook(b64, filename){
 async function persistEdits(){
   try{
     const raw = JSON.stringify({...edits, _wbVersion: sharedWbVersion || 0});
+    // Always keep a local backup FIRST, so input is never lost even if the shared save fails.
+    localStore.set(STORAGE_EDITS + "-local", raw);
     await sharedStore.set(STORAGE_EDITS, raw);
     lastEditsSerialized = raw;
     return true;
-  }catch(e){ console.error(e); showError("保存に失敗しました：" + (e && e.message ? e.message : e)); return false; }
+  }catch(e){ console.error(e); showError("共有保存に失敗しました（入力はこの端末に保存されています）：" + (e && e.message ? e.message : e)); return false; }
 }
 
 function stampEdit(id){
@@ -1580,7 +1614,7 @@ async function buildSubmissionBlob(){
     }
   }
 
-  return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  return { blob: await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), writeCount };
 }
 
 document.getElementById("exportBtn").addEventListener("click", async ()=>{
@@ -1599,7 +1633,12 @@ document.getElementById("exportBtn").addEventListener("click", async ()=>{
   btn.textContent = "作成中...";
   btn.disabled = true;
   try{
-    const blob = await buildSubmissionBlob();
+    const result = await buildSubmissionBlob();
+    const blob = result.blob;
+    if(result.writeCount === 0){
+      const proceed = confirm("⚠ 入力された「確認」が0件でした。\n\n確認欄を選択したデータが見つかりません。空のまま書き出しますか？\n\n（入力したのにこの表示が出る場合はキャンセルして、担当に連絡してください）");
+      if(!proceed){ btn.textContent = originalLabel; btn.disabled = false; return; }
+    }
     // Per new rule: submission filename = the store name
     const outName = (sheetName || "取り置き期限表") + ".xlsx";
     const url = URL.createObjectURL(blob);
@@ -1610,6 +1649,9 @@ document.getElementById("exportBtn").addEventListener("click", async ()=>{
     a.click();
     document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    if(result.writeCount > 0){
+      flashSyncIndicator(`✅ ${result.writeCount}件の入力を書き出しました`);
+    }
   }catch(err){
     console.error(err);
     showError("提出用ファイルの作成中にエラーが発生しました：" + (err && err.message ? err.message : err));
