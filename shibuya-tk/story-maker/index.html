@@ -186,6 +186,32 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 
   <div class="c">
     <div class="c-title">📸 ストーリー画像を作成</div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">モード</div>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-m="single" class="on">単品</button>
+        <button type="button" data-m="collage">コラージュ（複数）</button>
+      </div>
+    </div>
+    <div id="collageBar" style="display:none;margin-bottom:16px;background:var(--card2);border-radius:14px;padding:12px 14px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">コラージュ点数</div>
+      <div class="seg" id="collageCountSeg" style="margin-bottom:12px;">
+        <button type="button" data-n="2">2点</button>
+        <button type="button" data-n="3">3点</button>
+        <button type="button" data-n="4" class="on">4点</button>
+      </div>
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">編集する枠（タップで切替）</div>
+      <div class="seg" id="slotSeg"></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">テンプレート（配置・色）</div>
+      <div class="seg" id="tplSeg" style="flex-wrap:wrap;">
+        <button type="button" data-t="classic" class="on">クラシック</button>
+        <button type="button" data-t="bottom">下寄せ</button>
+        <button type="button" data-t="minimal">ミニマル</button>
+        <button type="button" data-t="bold">ボールド</button>
+      </div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
       <div>
         <div class="f"><label>商品写真</label></div>
@@ -239,6 +265,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <span style="font-size:13px;">🔍</span>
         <input type="range" id="zoomSlider" min="100" max="250" value="100" style="flex:1;max-width:240px;">
         <button class="pill" id="resetPhotoBtn" style="padding:8px 14px;font-size:13px;">リセット</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px;">
+        <span style="font-size:13px;">🔤</span>
+        <input type="range" id="textScaleSlider" min="70" max="140" value="100" style="flex:1;max-width:240px;">
+        <span style="font-size:11px;color:var(--t3);">文字サイズ</span>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;">
@@ -306,6 +337,25 @@ let photoOffX=0, photoOffY=0, photoZoom=1;
 try{storyArchive=JSON.parse(localStorage.getItem("story-archive-v2")||"[]");}catch(e){}
 const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 
+// ===== NEW: mode / template / text-scale / collage slots =====
+let MODE="single";           // "single" | "collage"
+let TEMPLATE="classic";      // classic | bottom | minimal | bold
+let textScale=1;             // 0.7 .. 1.4 fine-tune
+let collageCount=4;          // 2 | 3 | 4
+let activeSlot=0;            // which collage slot is being edited
+// Each collage slot holds its own photo + fields + pan/zoom.
+function blankSlot(){return {img:null,offX:0,offY:0,zoom:1,brand:"",size:"",rank:"",price:"",tag:"📩DMにて割引可能",tagColor:"#ffffff"};}
+let slots=[blankSlot(),blankSlot(),blankSlot(),blankSlot()];
+
+// Template definitions: where/how text is drawn. Each returns positions & colors.
+const TEMPLATES={
+  classic:{ name:"クラシック", topY:220, align:"left", brandBase:72, infoSize:58, priceSize:74, priceY:H=>H-280, tagY:H=>H-190, gradTop:true, gradBottom:true },
+  bottom:{  name:"下寄せ", topY:H=>H-620, align:"left", brandBase:70, infoSize:54, priceSize:72, priceY:H=>H-230, tagY:H=>H-150, gradTop:false, gradBottom:true, strongBottom:true },
+  minimal:{ name:"ミニマル", topY:200, align:"left", brandBase:64, infoSize:50, priceSize:66, priceY:H=>H-260, tagY:H=>H-180, gradTop:false, gradBottom:false, plate:true },
+  bold:{    name:"ボールド", topY:230, align:"center", brandBase:84, infoSize:62, priceSize:88, priceY:H=>H-300, tagY:H=>H-190, gradTop:true, gradBottom:true, weight:700 }
+};
+
+
 // Photo drag-to-pan
 let dragging=false,dragStartX=0,dragStartY=0,offStartX=0,offStartY=0;
 cv.addEventListener("pointerdown",e=>{
@@ -332,6 +382,87 @@ document.getElementById("zoomSlider").addEventListener("input",e=>{
 document.getElementById("resetPhotoBtn").addEventListener("click",()=>{
   photoOffX=0;photoOffY=0;photoZoom=1;document.getElementById("zoomSlider").value=100;drawStory();
 });
+
+// text-size fine tune
+document.getElementById("textScaleSlider").addEventListener("input",e=>{
+  textScale=Number(e.target.value)/100; drawStory();
+});
+
+// ===== mode switch =====
+document.querySelectorAll("#modeSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#modeSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    MODE=b.dataset.m;
+    document.getElementById("collageBar").style.display = MODE==="collage"?"block":"none";
+    if(MODE==="collage"){ syncFieldsToSlot(); renderSlotSeg(); }
+    drawStory();
+  });
+});
+// collage count
+document.querySelectorAll("#collageCountSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#collageCountSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    collageCount=Number(b.dataset.n);
+    if(activeSlot>=collageCount)activeSlot=0;
+    renderSlotSeg(); loadSlotToFields(); drawStory();
+  });
+});
+// template switch
+document.querySelectorAll("#tplSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#tplSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    TEMPLATE=b.dataset.t; drawStory();
+  });
+});
+// slot selector (rendered dynamically)
+function renderSlotSeg(){
+  const seg=document.getElementById("slotSeg");
+  let html="";
+  for(let i=0;i<collageCount;i++){
+    const filled=slots[i].img?"●":"○";
+    html+=`<button type="button" data-s="${i}" class="${i===activeSlot?'on':''}">${filled} ${i+1}</button>`;
+  }
+  seg.innerHTML=html;
+  seg.querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click",()=>{
+      saveFieldsToSlot();       // persist current edits
+      activeSlot=Number(b.dataset.s);
+      renderSlotSeg(); loadSlotToFields(); drawStory();
+    });
+  });
+}
+// move current form field values into the active slot
+function saveFieldsToSlot(){
+  if(MODE!=="collage")return;
+  const s=slots[activeSlot];
+  s.brand=document.getElementById("sBrand").value;
+  s.size=document.getElementById("sSize").value;
+  s.rank=document.getElementById("sRank").value;
+  s.price=document.getElementById("sPrice").value;
+  s.tag=document.getElementById("sTag").value;
+  s.tagColor=tagColor;
+  s.img=photoImg; s.offX=photoOffX; s.offY=photoOffY; s.zoom=photoZoom;
+}
+// load the active slot's values into the form + photo state
+function loadSlotToFields(){
+  if(MODE!=="collage")return;
+  const s=slots[activeSlot];
+  document.getElementById("sBrand").value=s.brand;
+  document.getElementById("sSize").value=s.size;
+  document.getElementById("sPrice").value=s.price;
+  document.getElementById("sTag").value=s.tag;
+  setRankSilent(s.rank);
+  tagColor=s.tagColor||"#ffffff";
+  photoImg=s.img; photoOffX=s.offX; photoOffY=s.offY; photoZoom=s.zoom;
+  document.getElementById("photoControls").style.display=photoImg?"block":"none";
+  document.getElementById("zoomSlider").value=Math.round(photoZoom*100);
+}
+function syncFieldsToSlot(){ saveFieldsToSlot(); }
+function setRankSilent(r){
+  document.getElementById("sRank").value=r||"";
+  document.querySelectorAll("#rankSeg button").forEach(b=>b.classList.toggle("on",b.dataset.r===r));
+}
+
 
 // phrase chips
 const pc=document.getElementById("phraseChips");
@@ -364,7 +495,7 @@ pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0
 pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
 function loadPhoto(file){
   const fr=new FileReader();
-  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
+  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;if(MODE==="collage"){saveFieldsToSlot();renderSlotSeg();}drawStory();};img.src=e.target.result;};
   fr.readAsDataURL(file);
 }
 
@@ -750,84 +881,116 @@ async function fetchRakuten(url){
 function drawStory(){
   const W=1080,H=1920;
   cx.clearRect(0,0,W,H);
-  if(photoImg){
-    const s=Math.max(W/photoImg.width,H/photoImg.height)*photoZoom;
-    const w=photoImg.width*s,h=photoImg.height*s;
-    // offsetX/Y are -1..1 fractions of the overflow (pan within the frame)
-    const maxDX=Math.max(0,(w-W)/2), maxDY=Math.max(0,(h-H)/2);
-    const dx=(W-w)/2 + photoOffX*maxDX;
-    const dy=(H-h)/2 + photoOffY*maxDY;
-    cx.drawImage(photoImg,dx,dy,w,h);
-  }else{
-    cx.fillStyle="#1d1d1f";cx.fillRect(0,0,W,H);
-    cx.fillStyle="#aeaeb2";cx.font="500 36px sans-serif";cx.textAlign="center";
-    cx.fillText("写真を選択してください",W/2,H/2);cx.textAlign="left";
-  }
-  const g1=cx.createLinearGradient(0,0,0,500);
-  g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");
-  cx.fillStyle=g1;cx.fillRect(0,0,W,500);
-  const g2=cx.createLinearGradient(0,H-560,0,H);
-  g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,"rgba(0,0,0,.5)");
-  cx.fillStyle=g2;cx.fillRect(0,H-560,W,560);
-  cx.fillStyle="#fff";cx.shadowColor="rgba(0,0,0,.5)";cx.shadowBlur=16;
+  if(MODE==="collage"){ drawCollage(W,H); return; }
+  drawSinglePanel(cx,W,H,{
+    img:photoImg,offX:photoOffX,offY:photoOffY,zoom:photoZoom,
+    brand:document.getElementById("sBrand").value.trim(),
+    size:document.getElementById("sSize").value.trim(),
+    rank:document.getElementById("sRank").value.trim(),
+    price:document.getElementById("sPrice").value.replace(/[^\d]/g,""),
+    tag:document.getElementById("sTag").value.trim(),
+    tagColor:tagColor
+  },TEMPLATE,textScale,true);
+}
+
+// Draw one full-frame story panel (used for single mode and as base for collage cells).
+function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
+  const T=TEMPLATES[tpl]||TEMPLATES.classic;
   const serif="'Hiragino Mincho ProN','Yu Mincho',serif";
-  const brand=document.getElementById("sBrand").value.trim();
-  const size=document.getElementById("sSize").value.trim();
-  const rank=document.getElementById("sRank").value.trim();
-  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
-  const tag=document.getElementById("sTag").value.trim();
-  const MARGIN=70, MAXW=W-MARGIN*2; // usable text width
+  const wt=T.weight||500;
+  // photo
+  if(data.img){
+    const s=Math.max(W/data.img.width,H/data.img.height)*(data.zoom||1);
+    const w=data.img.width*s,h=data.img.height*s;
+    const maxDX=Math.max(0,(w-W)/2), maxDY=Math.max(0,(h-H)/2);
+    const dx=(W-w)/2 + (data.offX||0)*maxDX;
+    const dy=(H-h)/2 + (data.offY||0)*maxDY;
+    ctx.drawImage(data.img,dx,dy,w,h);
+  }else{
+    ctx.fillStyle="#1d1d1f";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#aeaeb2";ctx.font=`500 ${Math.round(36*(W/1080))}px sans-serif`;ctx.textAlign="center";
+    ctx.fillText("写真を選択",W/2,H/2);ctx.textAlign="left";
+  }
+  // gradients
+  if(T.gradTop){const g1=ctx.createLinearGradient(0,0,0,500);g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");ctx.fillStyle=g1;ctx.fillRect(0,0,W,500);}
+  if(T.gradBottom){const gh=T.strongBottom?720:560;const g2=ctx.createLinearGradient(0,H-gh,0,H);g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,T.strongBottom?"rgba(0,0,0,.72)":"rgba(0,0,0,.5)");ctx.fillStyle=g2;ctx.fillRect(0,H-gh,W,gh);}
 
-  // Fit a font size so text fits MAXW (down to a minimum), returns px size
-  function fitSize(text,base,min,weight){
-    let s=base;
-    while(s>min){cx.font=`${weight} ${s}px ${serif}`;if(cx.measureText(text).width<=MAXW)break;s-=2;}
-    return s;
-  }
-  // Split long text into <=2 lines that each fit at the given size
-  function wrapWords(text,size,weight){
-    cx.font=`${weight} ${size}px ${serif}`;
-    if(cx.measureText(text).width<=MAXW)return [text];
-    const words=text.split(" ");
-    if(words.length<2)return [text];
-    let best=null;
-    for(let i=1;i<words.length;i++){
-      const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");
-      const w=Math.max(cx.measureText(a).width,cx.measureText(b).width);
-      if(!best||w<best.w)best={a,b,w};
-    }
-    return [best.a,best.b];
-  }
+  const MARGIN=70, MAXW=W-MARGIN*2;
+  const sc=scale||1;
+  const alignC=(T.align==="center");
+  ctx.textAlign=alignC?"center":"left";
+  const ax=alignC?W/2:MARGIN;
+  ctx.fillStyle="#fff";ctx.shadowColor="rgba(0,0,0,.5)";ctx.shadowBlur=16;
 
-  let y=220;
-  if(brand){
-    // Try to fit on one line down to 52px; if still too wide, wrap to 2 lines and fit those
-    let bs=fitSize(brand,72,52,500);
-    cx.font=`500 ${bs}px ${serif}`;
-    if(cx.measureText(brand).width>MAXW){
-      const lines=wrapWords(brand,bs,500);
-      // shrink so the widest wrapped line fits
-      bs=Math.min(bs,fitSize(lines.reduce((a,b)=>a.length>=b.length?a:b),72,40,500));
-      cx.font=`500 ${bs}px ${serif}`;
-      for(const ln of lines){cx.fillText(ln,MARGIN,y);y+=bs+12;}
-    }else{
-      cx.fillText(brand,MARGIN,y);y+=bs+14;
+  function fit(text,base,min){let s=base*sc;const mn=min*sc;while(s>mn){ctx.font=`${wt} ${s}px ${serif}`;if(ctx.measureText(text).width<=MAXW)break;s-=2;}return s;}
+  function wrap(text,size){ctx.font=`${wt} ${size}px ${serif}`;if(ctx.measureText(text).width<=MAXW)return[text];const words=text.split(" ");if(words.length<2)return[text];let best=null;for(let i=1;i<words.length;i++){const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");const w=Math.max(ctx.measureText(a).width,ctx.measureText(b).width);if(!best||w<best.w)best={a,b,w};}return[best.a,best.b];}
+
+  let y=typeof T.topY==="function"?T.topY(H):T.topY;
+  if(T.plate && (data.brand||data.price)){ // minimal: subtle plate behind text
+    ctx.save();ctx.shadowBlur=0;ctx.fillStyle="rgba(0,0,0,.28)";
+    ctx.fillRect(0,y-90,W,300);ctx.restore();ctx.fillStyle="#fff";ctx.shadowColor="rgba(0,0,0,.5)";ctx.shadowBlur=16;
+  }
+  if(data.brand){
+    let bs=fit(data.brand,T.brandBase,52);
+    ctx.font=`${wt} ${bs}px ${serif}`;
+    if(ctx.measureText(data.brand).width>MAXW){
+      const lines=wrap(data.brand,bs);
+      bs=Math.min(bs,fit(lines.reduce((a,b)=>a.length>=b.length?a:b),T.brandBase,40));
+      ctx.font=`${wt} ${bs}px ${serif}`;
+      for(const ln of lines){ctx.fillText(ln,ax,y);y+=bs+12;}
+    }else{ctx.fillText(data.brand,ax,y);y+=bs+14;}
+  }
+  if(data.size){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("size:"+data.size,ax,y);y+=74*sc;}
+  if(data.rank){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("RANK:"+data.rank,ax,y);}
+  if(data.price){
+    const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
+    const ps=fit(ptxt,T.priceSize,44);
+    ctx.font=`${wt} ${ps}px ${serif}`;ctx.fillText(ptxt,ax,T.priceY(H));
+  }
+  if(data.tag){
+    ctx.fillStyle=data.tagColor||"#fff";
+    const ts=fit(data.tag,70,40);
+    ctx.font=`600 ${ts}px ${serif}`;
+    if(alignC){ctx.fillText(data.tag,W/2,T.tagY(H));}
+    else{const tw=ctx.measureText(data.tag).width;ctx.fillText(data.tag,W-tw-MARGIN,T.tagY(H));}
+  }
+  ctx.shadowBlur=0;ctx.textAlign="left";
+}
+
+// Collage: 2/3/4 items in a grid, each a mini story cell.
+function drawCollage(W,H){
+  saveFieldsToSlot(); // make sure current edits are in the active slot
+  cx.fillStyle="#000";cx.fillRect(0,0,W,H);
+  const gap=10;
+  let cells=[];
+  if(collageCount===2){
+    cells=[{x:0,y:0,w:W,h:(H-gap)/2},{x:0,y:(H+gap)/2,w:W,h:(H-gap)/2}];
+  }else if(collageCount===3){
+    const topH=Math.round(H*0.52);
+    cells=[{x:0,y:0,w:W,h:topH},
+           {x:0,y:topH+gap,w:(W-gap)/2,h:H-topH-gap},
+           {x:(W+gap)/2,y:topH+gap,w:(W-gap)/2,h:H-topH-gap}];
+  }else{ // 4
+    const cw=(W-gap)/2,ch=(H-gap)/2;
+    cells=[{x:0,y:0,w:cw,h:ch},{x:cw+gap,y:0,w:cw,h:ch},
+           {x:0,y:ch+gap,w:cw,h:ch},{x:cw+gap,y:ch+gap,w:cw,h:ch}];
+  }
+  for(let i=0;i<collageCount;i++){
+    const c=cells[i], s=slots[i];
+    const off=document.createElement("canvas");off.width=c.w;off.height=c.h;
+    const octx=off.getContext("2d");
+    // scale text down for smaller cells
+    const cellScale=Math.min(1,(c.w/W)*1.7)*textScale;
+    drawSinglePanel(octx,c.w,c.h,{
+      img:s.img,offX:s.offX,offY:s.offY,zoom:s.zoom,
+      brand:s.brand,size:s.size,rank:s.rank,price:s.price,tag:s.tag,tagColor:s.tagColor
+    },TEMPLATE,cellScale,false);
+    cx.drawImage(off,c.x,c.y);
+    // highlight the active slot being edited
+    if(i===activeSlot){
+      cx.strokeStyle="#0071e3";cx.lineWidth=8;cx.strokeRect(c.x+4,c.y+4,c.w-8,c.h-8);
     }
   }
-  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,MARGIN,y);y+=74;}
-  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,MARGIN,y);}
-  if(price){
-    const ptxt="¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)";
-    const ps=fitSize(ptxt,74,44,500);
-    cx.font=`500 ${ps}px ${serif}`;cx.fillText(ptxt,MARGIN,H-280);
-  }
-  if(tag){
-    cx.fillStyle=tagColor;
-    const ts=fitSize(tag,70,40,600);
-    cx.font=`600 ${ts}px ${serif}`;
-    const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-MARGIN,H-190);
-  }
-  cx.shadowBlur=0;
 }
 ["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
 function setRank(r){
