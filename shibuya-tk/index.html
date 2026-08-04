@@ -1209,7 +1209,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04e";
+const CODE_VERSION = "v2026.08.04f";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1713,7 +1713,7 @@ async function buildSubmissionBlob(){
     }
   }
 
-  return { blob: await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), writeCount };
+  return { blob: await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", compression:"DEFLATE", compressionOptions:{level:6}}), writeCount };
 }
 
 document.getElementById("exportBtn").addEventListener("click", async ()=>{
