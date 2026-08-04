@@ -578,19 +578,24 @@ function renderMonth(){
   // dynamic header (always matches fields)
   document.getElementById("monthHead").innerHTML=`<th>名前</th>`+
     STORE_FIELDS.map(f=>`<th>${f.label}</th>`).join("")+
-    INSTA_FIELDS.map(f=>`<th style="color:var(--pink);">${f.label}</th>`).join("");
+    INSTA_FIELDS.map(f=>`<th style="color:var(--pink);">${f.label}</th>`).join("")+
+    INSIGHT_FIELDS.map(f=>`<th style="color:var(--teal);">${f.label}</th>`).join("");
   const mr=monthRecords();
   const staffMap={};
-  mr.forEach(r=>{
+  const staffLatestFollowers={}; // 現在フォロワー is a snapshot, not a sum — keep the latest
+  mr.slice().sort((a,b)=>(a.date<b.date?-1:1)).forEach(r=>{
     if(!staffMap[r.staff])staffMap[r.staff]={};
     ALL_FIELDS.forEach(f=>{staffMap[r.staff][f.key]=(staffMap[r.staff][f.key]||0)+(r[f.key]||0);});
+    if(r.instaFollowers)staffLatestFollowers[r.staff]=r.instaFollowers; // last non-zero wins (sorted by date)
   });
+  // overwrite 現在フォロワー with the latest snapshot instead of the sum
+  Object.keys(staffMap).forEach(name=>{ if(staffLatestFollowers[name]!=null) staffMap[name].instaFollowers=staffLatestFollowers[name]; });
   const entries=Object.entries(staffMap).sort((a,b)=>{
     const sa=STORE_FIELDS.reduce((s,f)=>s+(a[1][f.key]||0),0);
     const sb=STORE_FIELDS.reduce((s,f)=>s+(b[1][f.key]||0),0);
     return sb-sa;
   });
-  const colCount=1+STORE_FIELDS.length+INSTA_FIELDS.length;
+  const colCount=1+STORE_FIELDS.length+INSTA_FIELDS.length+INSIGHT_FIELDS.length;
   const tb=document.getElementById("monthBody");
   if(!entries.length){
     tb.innerHTML=`<tr><td colspan="${colCount}" style="text-align:center;color:var(--t3);padding:20px;">この月のデータはありません</td></tr>`;
@@ -603,6 +608,7 @@ function renderMonth(){
     <td class="name">${name}</td>
     ${STORE_FIELDS.map(f=>`<td>${nf(v[f.key]||0)}</td>`).join("")}
     ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(v[f.key]||0):nf(v[f.key]||0)}</td>`).join("")}
+    ${INSIGHT_FIELDS.map(f=>`<td style="color:var(--teal);">${nf(v[f.key]||0)}</td>`).join("")}
   </tr>`).join("");
   // totals row
   const tot={};ALL_FIELDS.forEach(f=>{tot[f.key]=entries.reduce((s,[,v])=>s+(v[f.key]||0),0);});
@@ -610,11 +616,13 @@ function renderMonth(){
     <td>合計</td>
     ${STORE_FIELDS.map(f=>`<td>${nf(tot[f.key])}</td>`).join("")}
     ${INSTA_FIELDS.map(f=>`<td>${f.isAmt?"¥"+nf(tot[f.key]):nf(tot[f.key])}</td>`).join("")}
+    ${INSIGHT_FIELDS.map(f=>`<td style="color:var(--teal);">${f.key==="instaFollowers"?"—":nf(tot[f.key])}</td>`).join("")}
   </tr>`;
   document.getElementById("monthChips").innerHTML=`<span class="kchip">入力日数 <b>${new Set(mr.map(r=>r.date)).size}</b>日</span>`+
     `<span class="kchip">入力人数 <b>${entries.length}</b>名</span>`+
     STORE_FIELDS.map(f=>`<span class="kchip">${f.label} <b>${tot[f.key]}</b></span>`).join("")+
-    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("");
+    INSTA_FIELDS.filter(f=>tot[f.key]).map(f=>`<span class="kchip pk">${f.label} <b>${f.isAmt?"¥"+nf(tot[f.key]):tot[f.key]}</b></span>`).join("")+
+    INSIGHT_FIELDS.filter(f=>f.key!=="instaFollowers"&&tot[f.key]).map(f=>`<span class="kchip" style="background:rgba(90,200,250,.15);color:#0a84c4;">${f.label} <b>${nf(tot[f.key])}</b></span>`).join("");
 
   // daily chart for the month
   kill("chMonth");
