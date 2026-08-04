@@ -314,7 +314,7 @@ const INSTA_FIELDS=[
 const INSIGHT_FIELDS=[
   {key:"instaViews",label:"閲覧数(全体)",color:"teal",isNum:true},
   {key:"instaProfileAccess",label:"プロフアクセス",color:"teal",isNum:true},
-  {key:"instaFollowDay",label:"フォロー数",color:"teal",isNum:true},
+  {key:"instaFollowDay",label:"当日フォロワー増加数",color:"teal",isNum:true},
   {key:"instaFollowers",label:"現在のフォロワー",color:"teal",isNum:true},
 ];
 const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...INSIGHT_FIELDS];
@@ -738,7 +738,7 @@ document.getElementById("csvToday").addEventListener("click",()=>{
   // Excel order: アプローチ, 接客人数, 購入客数(空欄), 販売営業=ありあり取置+なしなし取置, 連絡先, クーポン(古物)
   const head=["名前","アプローチ","接客人数","購入客数","ありあり取置","なしなし取置","連絡先","クーポン(古物)","買取概算",
     "DM","販売問合","買取問合","販売客数","販売点数","販売金額","買取客数","買取点数",
-    "閲覧数","プロフアクセス","フォロー数","現在フォロワー","インサイト期間"];
+    "閲覧数","プロフアクセス","当日フォロワー増加数","現在フォロワー","インサイト期間"];
   const lines=[head.join(",")];
   td.forEach(r=>{
     lines.push([
