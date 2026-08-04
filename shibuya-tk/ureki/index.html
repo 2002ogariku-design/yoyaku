@@ -95,10 +95,12 @@ tbody tr:active{background:#eaeaef;}
   <div class="view" id="v-dash">
     <div class="card" style="padding:14px 16px;">
       <div style="font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.05em;margin-bottom:10px;">絞り込み</div>
+      <div style="margin-bottom:10px;"><input type="text" id="dashSearch" placeholder="🔍 ブランド・アイテム名で絞り込み..." style="width:100%;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <select id="dashBrandSel" style="width:auto;flex:1;min-width:150px;"></select>
         <select id="dashCatSel" style="width:auto;flex:1;min-width:150px;"></select>
       </div>
+      <div id="dashFilterInfo" style="font-size:11.5px;color:var(--t3);margin-top:8px;"></div>
     </div>
     <div class="kpis" id="dashKpis"></div>
     <div class="card" id="dashCompare"></div>
@@ -188,6 +190,10 @@ tbody tr:active{background:#eaeaef;}
 
   <!-- 客層 -->
   <div class="view" id="v-cust">
+    <div class="card" style="padding:14px 16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.05em;margin-bottom:10px;">店舗で絞り込み</div>
+      <select id="custStoreSel" style="width:100%;"></select>
+    </div>
     <div class="card" id="custOverview"></div>
     <div class="grid2">
       <div class="card"><div class="card-t">🇯🇵 日本人に人気（ブランド）</div><div id="jpBrands"></div></div>
@@ -415,15 +421,27 @@ function renderAll(){renderDash();renderItems();renderPriceSel();renderStore();r
 
 // ===== 客層（日本人 vs 外国人） =====
 function isForeign(r){return /外国人|免税|UK|海外|inbound|INBOUND/i.test(r.cust||"");}
+let custStore=""; // "" = all stores
 function renderCust(){
-  const valid=segData().filter(r=>r.price>0);
+  let valid=segData().filter(r=>r.price>0);
+  // Populate the store selector (once, or when store set changes)
+  const allStores=[...new Set(segData().filter(r=>r.price>0).map(r=>r.store||"不明"))].sort();
+  const ssel=document.getElementById("custStoreSel");
+  if(ssel && (ssel.options.length<=1 || ssel.dataset.n!=String(allStores.length))){
+    ssel.innerHTML='<option value="">全店舗</option>'+allStores.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    ssel.dataset.n=allStores.length;
+  }
+  if(ssel) ssel.value=custStore;
+  // Apply store filter to the whole 客層 analysis
+  if(custStore) valid=valid.filter(r=>(r.store||"不明")===custStore);
+  const storeLabel=custStore?`（${custStore}）`:"（全店舗）";
   const jp=valid.filter(r=>!isForeign(r));
   const fn=valid.filter(r=>isForeign(r));
   const jpTotal=jp.reduce((a,r)=>a+r.price,0),fnTotal=fn.reduce((a,r)=>a+r.price,0);
   const grand=jpTotal+fnTotal||1;
   // overview
   document.getElementById("custOverview").innerHTML=`
-    <div class="card-t">🌏 日本人 vs 外国人</div>
+    <div class="card-t">🌏 日本人 vs 外国人 ${storeLabel}</div>
     <div class="kpis" style="margin-bottom:14px;">
       <div class="kpi"><div class="lbl">🇯🇵 日本人 売上</div><div class="val">${YENk(jpTotal)}</div><div class="sub">${jp.length}点・${Math.round(jpTotal/grand*100)}%</div></div>
       <div class="kpi"><div class="lbl">🌏 外国人 売上</div><div class="val">${YENk(fnTotal)}</div><div class="sub">${fn.length}点・${Math.round(fnTotal/grand*100)}%</div></div>
@@ -463,12 +481,13 @@ document.querySelectorAll("#segBar .segbtn").forEach(b=>{
     b.classList.add("on");
     SEGMENT=b.dataset.seg;
     // reset dashboard brand/cat filters when segment changes
-    dashFilters.brand="";dashFilters.cat="";
+    dashFilters.brand="";dashFilters.cat="";dashFilters.q="";custStore="";
+    const ds=document.getElementById("dashSearch");if(ds)ds.value="";
     renderAll();
   });
 });
 
-let dashFilters={brand:"",cat:""};
+let dashFilters={brand:"",cat:"",q:""};
 function renderDash(){
   let valid=segData().filter(r=>r.price>0);
   // Restore cards / hide empty banner if data now exists
@@ -495,6 +514,15 @@ function renderDash(){
   // Apply filters
   if(dashFilters.brand)valid=valid.filter(r=>r.brand===dashFilters.brand);
   if(dashFilters.cat)valid=valid.filter(r=>(r.cat2||r.cat||"その他")===dashFilters.cat);
+  if(dashFilters.q){
+    const q=dashFilters.q.toLowerCase();
+    valid=valid.filter(r=>((r.brand||"")+" "+(r.item||r.name||"")).toLowerCase().includes(q));
+  }
+  const infoEl=document.getElementById("dashFilterInfo");
+  if(infoEl){
+    const active=(dashFilters.q||dashFilters.brand||dashFilters.cat);
+    infoEl.textContent=active?`絞り込み結果：${valid.length.toLocaleString()}点`:"";
+  }
 
   const total=valid.reduce((a,r)=>a+r.price,0);
   const cost=valid.reduce((a,r)=>a+(r.cost||0),0);
@@ -570,6 +598,13 @@ function renderDash(){
 // Filter event wiring
 document.getElementById("dashBrandSel").addEventListener("change",e=>{dashFilters.brand=e.target.value;renderDash();});
 document.getElementById("dashCatSel").addEventListener("change",e=>{dashFilters.cat=e.target.value;renderDash();});
+let dashSearchTimer=null;
+document.getElementById("dashSearch").addEventListener("input",e=>{
+  clearTimeout(dashSearchTimer);
+  const v=e.target.value;
+  dashSearchTimer=setTimeout(()=>{dashFilters.q=v.trim();renderDash();},250);
+});
+document.getElementById("custStoreSel").addEventListener("change",e=>{custStore=e.target.value;renderCust();});
 function fmtD(d){if(!d)return "-";d=String(d);return d.slice(0,4)+"/"+d.slice(4,6)+"/"+d.slice(6,8);}
 
 let itemSort={key:"count",dir:-1}, itemBrandFilter="";
