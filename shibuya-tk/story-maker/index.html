@@ -195,6 +195,13 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <button type="button" data-t="bold">ボールド</button>
       </div>
     </div>
+    <div style="margin-bottom:16px;background:var(--card2);border-radius:14px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:11.5px;font-weight:700;color:var(--t3);">⭐️ プリセット（設定を保存して再利用）</span>
+        <button type="button" id="savePresetBtn" class="pill" style="padding:6px 12px;font-size:12px;">＋ 今の設定を保存</button>
+      </div>
+      <div id="presetChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
       <div>
         <div class="f"><label>商品写真</label></div>
@@ -260,6 +267,18 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       <button class="pill" id="dlBtn" style="padding:12px 18px;">💾 DL</button>
     </div>
     <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">✍️ キャプション自動生成</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px;line-height:1.6;">入力した商品情報から、ハッシュタグ付きの投稿文を作ります。コピーしてそのまま貼り付けできます。</div>
+    <textarea id="captionBox" style="width:100%;min-height:150px;padding:14px 16px;border-radius:15px;border:1.5px solid transparent;background:var(--card2);font-size:15px;font-family:var(--font);color:var(--t1);line-height:1.7;resize:vertical;" readonly></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="pill" id="genCaptionBtn" style="padding:11px 18px;font-size:14px;">🔄 生成</button>
+      <button class="pill" id="copyCaptionBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:11px 22px;font-size:14px;">📋 コピー</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);margin-left:auto;"><input type="checkbox" id="capEn" style="width:auto;"> 英語も追加</label>
+    </div>
+    <div id="capTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
   </div>
 
   <div class="c">
@@ -883,6 +902,100 @@ function updateBrandDl(){
   const brands=[...new Set(storyArchive.map(a=>a.brand).filter(Boolean))].sort();
   document.getElementById("sBrandDl").innerHTML=brands.map(b=>`<option value="${esc(b)}">`).join("");
 }
+
+// ===== プリセット（設定の保存・再利用） =====
+let presets=[];
+try{presets=JSON.parse(localStorage.getItem("story-presets-v1")||"[]");}catch(e){}
+function savePresets(){try{localStorage.setItem("story-presets-v1",JSON.stringify(presets));}catch(e){}}
+function currentSettings(){
+  return {
+    brand:document.getElementById("sBrand").value.trim(),
+    tag:document.getElementById("sTag").value.trim(),
+    tagColor:tagColor, template:TEMPLATE, textScale:textScale
+  };
+}
+function renderPresets(){
+  const el=document.getElementById("presetChips");
+  if(!presets.length){el.innerHTML='<span style="font-size:11.5px;color:var(--t3);">まだありません。設定を決めて「＋ 今の設定を保存」を押すと、次から一発で呼び出せます。</span>';return;}
+  el.innerHTML=presets.map((p,i)=>`<span class="chip" onclick="applyPreset(${i})" style="display:inline-flex;align-items:center;gap:6px;">
+    <span style="width:12px;height:12px;border-radius:50%;background:${p.tagColor};border:1px solid #ccc;display:inline-block;"></span>${esc(p.name)}
+    <span onclick="event.stopPropagation();delPreset(${i})" style="color:var(--t3);font-weight:700;margin-left:2px;">×</span></span>`).join("");
+}
+window.applyPreset=function(i){
+  const p=presets[i];if(!p)return;
+  if(p.brand)document.getElementById("sBrand").value=p.brand;
+  if(p.tag)document.getElementById("sTag").value=p.tag;
+  tagColor=p.tagColor||"#ffffff";
+  document.querySelectorAll("#colorChips .chip").forEach(c=>c.classList.remove("on"));
+  TEMPLATE=p.template||"classic";
+  document.querySelectorAll("#tplSeg button").forEach(b=>b.classList.toggle("on",b.dataset.t===TEMPLATE));
+  textScale=p.textScale||1;
+  const ts=document.getElementById("textScaleSlider");if(ts)ts.value=Math.round(textScale*100);
+  drawStory();
+};
+window.delPreset=function(i){presets.splice(i,1);savePresets();renderPresets();};
+document.getElementById("savePresetBtn").addEventListener("click",()=>{
+  const s=currentSettings();
+  const name=prompt("プリセット名を入力（例：シュプリーム赤）", s.brand||"プリセット");
+  if(!name)return;
+  presets.unshift({name:name.trim(),...s});
+  if(presets.length>12)presets=presets.slice(0,12);
+  savePresets();renderPresets();
+});
+renderPresets();
+
+// ===== キャプション自動生成 =====
+function buildCaption(){
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  const en=document.getElementById("capEn").checked;
+  const lines=[];
+  if(brand)lines.push(`【${brand}】`);
+  const spec=[];
+  if(size)spec.push(`size ${size}`);
+  if(rank)spec.push(`ランク ${rank}`);
+  if(spec.length)lines.push(spec.join(" / "));
+  if(price)lines.push(`¥${Number(price).toLocaleString("ja-JP")}-(税込)`);
+  if(tag)lines.push(tag);
+  lines.push("");
+  lines.push("RINKAN渋谷店にて販売中📍");
+  lines.push("気になる商品はお気軽にDM・コメントください📩");
+  if(en){
+    lines.push("");
+    lines.push(`Available now at RINKAN Shibuya. DM for details 📩`);
+  }
+  lines.push("");
+  // hashtags
+  const tags=["#RINKAN","#リンカン","#渋谷","#古着","#ブランド古着","#メンズファッション","#used","#vintage"];
+  if(brand){
+    const b=brand.replace(/\s+/g,"");
+    tags.unshift("#"+b);
+    // brand-specific romaji/japanese common tags
+  }
+  lines.push(tags.join(" "));
+  return lines.join("\n");
+}
+function regenCaption(){document.getElementById("captionBox").value=buildCaption();}
+document.getElementById("genCaptionBtn").addEventListener("click",regenCaption);
+document.getElementById("capEn").addEventListener("change",regenCaption);
+document.getElementById("copyCaptionBtn").addEventListener("click",async()=>{
+  const box=document.getElementById("captionBox");
+  if(!box.value)regenCaption();
+  try{
+    await navigator.clipboard.writeText(box.value);
+  }catch(e){
+    box.removeAttribute("readonly");box.select();document.execCommand("copy");box.setAttribute("readonly","");
+  }
+  const t=document.getElementById("capTick");t.textContent="✓ コピーしました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+});
+// auto-refresh caption when key fields change
+["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
+  if(document.getElementById("captionBox").value)regenCaption();
+}));
+
 
 // share (1-tap save on iOS) - now saves FULL image in archive
 document.getElementById("shareBtn").addEventListener("click",async()=>{
