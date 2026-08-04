@@ -1518,7 +1518,6 @@ async function buildSubmissionBlob(){
 
   const colKakunin = colMap["確認"];
   const colBiko = colMap["備考"];
-  const colInstruction = colMap["コメント"] != null ? colMap["コメント"] : colMap["在庫監査コメント"];
   const rowEls = Array.from(doc.getElementsByTagName("row"));
   const rowByNum = {};
   for(const r of rowEls) rowByNum[r.getAttribute("r")] = r;
@@ -1542,13 +1541,33 @@ async function buildSubmissionBlob(){
     } else if(colBiko != null){
       setCellInlineString(rowEl, doc, colBiko, "");
     }
-    if(colInstruction != null && ed.本部指示 !== undefined){
-      setCellInlineString(rowEl, doc, colInstruction, ed.本部指示 || "");
-    }
+    // NOTE: 本部指示 lives in the コメント column, which is an array FORMULA pulling from
+    // the main sheet. We must NOT overwrite it — doing so breaks the formula and corrupts
+    // the file. Staff only edit 確認 (B) and 備考 (C).
   }
 
   const newXml = new XMLSerializer().serializeToString(doc);
   zip.file(sheetPath, newXml);
+
+  // The workbook contains array formulas (FILTER etc.) with a calcChain.xml that records
+  // formula calculation order. Editing cells leaves calcChain out of sync, which makes Excel
+  // show a "問題が見つかりました / 内容を回復しますか" warning on open. Removing calcChain.xml
+  // is safe — Excel rebuilds it automatically — and eliminates the warning.
+  if(zip.file("xl/calcChain.xml")){
+    zip.remove("xl/calcChain.xml");
+    // also drop its relationship reference from the workbook rels so it's fully clean
+    try{
+      const relsPath = "xl/_rels/workbook.xml.rels";
+      const relsText = await zip.file(relsPath).async("string");
+      const cleaned = relsText.replace(/<Relationship[^>]*calcChain\.xml[^>]*\/>/g, "");
+      zip.file(relsPath, cleaned);
+      // and from [Content_Types].xml
+      const ctPath = "[Content_Types].xml";
+      const ctText = await zip.file(ctPath).async("string");
+      const ctClean = ctText.replace(/<Override[^>]*calcChain\.xml[^>]*\/>/g, "");
+      zip.file(ctPath, ctClean);
+    }catch(e){ console.warn("calcChain rel cleanup skipped", e); }
+  }
 
   // verify: re-parse the serialized XML and confirm the sample value is present as inline text
   if(sampleRef){
