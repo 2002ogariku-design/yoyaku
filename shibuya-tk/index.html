@@ -393,6 +393,8 @@
 
   <div id="errorBanner" style="display:none;background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.6;"></div>
 
+  <div id="statusBanner" style="background:#eef5ff;border:1px solid #b8d4f5;color:#0055aa;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.6;"></div>
+
   <div class="section-toggle" id="pendingToggle">
     <span>👥 担当者別の未入力件数</span>
     <span class="chev"><span class="chev-label">開く</span><span class="arrow-ico">▾</span></span>
@@ -774,15 +776,30 @@ function mergeEditsInto(dst, src, preferSrc){
 }
 
 async function persistWorkbook(b64, filename){
-  localStore.set(STORAGE_WORKBOOK, b64);
-  localStore.set(STORAGE_FILENAME, filename);
-  // Also push to shared store so everyone else gets it automatically
+  // The full workbook is several MB — too big for localStorage (≈5MB cap) and pointless to
+  // push to the shared DB every time. We keep it in memory (rawWorkbookB64) for this session
+  // and only try a lightweight local cache. The SHARED thing that matters is the edits blob
+  // (確認/備考), which is tiny and handled by persistEdits().
   try{
-    const version = await saveSharedWorkbook(b64, filename);
-    flashSyncIndicator("📂 ファイルを全員に共有しました");
+    localStore.set(STORAGE_WORKBOOK, b64);
+    localStore.set(STORAGE_FILENAME, filename);
+  }catch(e){
+    // localStorage quota exceeded on big files — fine, we still have it in memory this session.
+    console.warn("workbook local cache skipped (too big)", e);
+    try{ localStore.delete(STORAGE_WORKBOOK); }catch(_){}
+  }
+  // Try to share the workbook too, but never let its size break the flow.
+  try{
+    const approxBytes = b64.length * 0.75;
+    if(approxBytes <= 3_000_000){
+      const version = await saveSharedWorkbook(b64, filename);
+      flashSyncIndicator("📂 ファイルを全員に共有しました");
+    }else{
+      flashSyncIndicator("📂 ファイルを読み込みました（大きいため各自でアップロードしてください）");
+    }
   }catch(e){
     console.error(e);
-    showError("⚠️ ファイルの共有保存に失敗しました（自分の画面では読み込まれています）：" + (e && e.message ? e.message : e));
+    flashSyncIndicator("📂 ファイルを読み込みました");
   }
 }
 async function persistEdits(){
@@ -1186,10 +1203,26 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
+const CODE_VERSION = "v2026.08.04b";
+// Always-visible status so the user can see exactly what state the tool is in.
+function updateStatusBanner(){
+  const el = document.getElementById("statusBanner");
+  if(!el) return;
+  const fileLoaded = items.length > 0;
+  let filledCount = 0;
+  for(const it of items){ if((edits[it.id]||{}).確認) filledCount++; }
+  if(!fileLoaded){
+    el.innerHTML = `📋 <b>ファイル未読み込み</b>。「今週のファイルを読み込む」からエクセルを選んでください。 <span style="color:#88a;">${CODE_VERSION}</span>`;
+  }else{
+    el.innerHTML = `📋 <b>${sheetName||"—"}店</b>：${items.length}件読み込み済み ／ <b>確認入力：${filledCount}件</b>　書き出すとこの ${filledCount} 件が反映されます。 <span style="color:#88a;">${CODE_VERSION}</span>`;
+  }
+}
+
 function render(){
   document.getElementById("todayLabel").textContent = "本日：" + todayJST().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
   const fnFull = document.getElementById("fileNameLabel").textContent || "未読み込み";
   document.getElementById("fileNameLabelShort").textContent = fnFull.length > 18 ? fnFull.slice(0,17) + "…" : fnFull;
+  updateStatusBanner();
   renderStats();
   renderArrows();
   renderPendingPanel();
@@ -1360,6 +1393,7 @@ function render(){
       // Update just this row's 備考 required-flag instead of re-rendering the whole table,
       // so any text the user is entering elsewhere isn't disturbed.
       updateRowBikoState(id);
+      updateStatusBanner();
       const ok = await persistEdits();
       if(ok) showSavedTick(el);
     });
