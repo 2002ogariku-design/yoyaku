@@ -844,27 +844,31 @@ function lastUpdatedLabel(ed){
 // Poll the shared database periodically so everyone's 確認・備考 converge, like a slow-motion shared sheet.
 async function pollSharedUpdates(){
   // Check if someone uploaded a new file — compare version from Supabase.
+  // BUT: if the user has already loaded a workbook in THIS session, do NOT swap it out from
+  // under them — that would rebuild items/rows and desync their edits from the file they're
+  // exporting. Only auto-load a shared file when the user has nothing loaded yet.
   try{
-    const shared = await fetchSharedWorkbook();
-    if(shared && shared.b64 && shared.version && shared.version !== sharedWbVersion){
-      sharedWbVersion = shared.version;
-      const fname = shared.filename || "共有ファイル";
-      parseWorkbookFromB64(shared.b64, fname);
-      localStore.set(STORAGE_WORKBOOK, shared.b64);
-      localStore.set(STORAGE_FILENAME, fname);
-      // Also refresh edits for the new file — MERGE, never replace, so local input survives.
-      try{
-        const editRes = await sharedStore.get(STORAGE_EDITS);
-        if(editRes && editRes.value){
-          const remote = JSON.parse(editRes.value);
-          mergeEditsInto(edits, remote); // remote fills only empty local fields
-          lastEditsSerialized = editRes.value;
-        }
-      }catch(e){}
-      populateFilters();
-      render();
-      flashSyncIndicator(`📂 ${fname} を自動で読み込みました`);
-      return; // skip further polling this cycle
+    if(!items.length && !userLoadedThisSession){
+      const shared = await fetchSharedWorkbook();
+      if(shared && shared.b64 && shared.version && shared.version !== sharedWbVersion){
+        sharedWbVersion = shared.version;
+        const fname = shared.filename || "共有ファイル";
+        parseWorkbookFromB64(shared.b64, fname);
+        localStore.set(STORAGE_WORKBOOK, shared.b64);
+        localStore.set(STORAGE_FILENAME, fname);
+        try{
+          const editRes = await sharedStore.get(STORAGE_EDITS);
+          if(editRes && editRes.value){
+            const remote = JSON.parse(editRes.value);
+            mergeEditsInto(edits, remote);
+            lastEditsSerialized = editRes.value;
+          }
+        }catch(e){}
+        populateFilters();
+        render();
+        flashSyncIndicator(`📂 ${fname} を自動で読み込みました`);
+        return; // skip further polling this cycle
+      }
     }
   }catch(e){ console.error("wb poll error", e); }
 
@@ -920,6 +924,7 @@ function arrayBufferToB64(buf){
 }
 
 let rawWorkbookB64 = null;
+let userLoadedThisSession = false; // true once the user uploads their own file this session
 
 // The new workbook has one sheet per store. These are the store sheets staff fill in.
 const STORE_SHEETS = ["渋谷","新宿","福岡","名古屋","心斎橋","渋谷SV","原宿SV","南堀江","銀座SV","原宿LAB","LAB","西武新宿","銀座BAG","北堀江","札幌"];
@@ -1204,7 +1209,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04d";
+const CODE_VERSION = "v2026.08.04e";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1449,6 +1454,7 @@ document.getElementById("fileInput").addEventListener("change", async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
   clearError();
+  userLoadedThisSession = true; // the user is loading their own file — poll must not swap it out
   try{
     const buf = await file.arrayBuffer();
     // Use the ORIGINAL file byte-for-byte. Supabase has no 1MB limit, so we no longer
@@ -1613,15 +1619,20 @@ async function buildSubmissionBlob(){
   // reflects exactly what the user sees on screen — independent of any sync/poll interference.
   harvestEditsFromDOM();
 
+  // Diagnostic counters to pinpoint any mismatch between edits and the file rows.
+  let editedIds = 0, matchedRows = 0, wroteToRow = 0;
+  for(const it of items){ if((edits[it.id]||{}).確認) editedIds++; }
+
   let writeCount = 0, sampleRef = null, sampleText = null;
   for(const it of items){
     const ed = edits[it.id] || {};
     const rowNum = String(it.row + 1); // it.row is 0-indexed
     const rowEl = rowByNum[rowNum];
-    if(!rowEl) continue;
+    if(ed.確認) matchedRows++; // this item has input
+    if(!rowEl){ continue; }
     if(colKakunin != null && ed.確認){
       setCellInlineString(rowEl, doc, colKakunin, ed.確認);
-      writeCount++;
+      writeCount++; wroteToRow++;
       if(!sampleRef){ sampleRef = colLetter(colKakunin) + rowNum; sampleText = ed.確認; }
     } else if(colKakunin != null){
       setCellInlineString(rowEl, doc, colKakunin, "");
@@ -1636,6 +1647,8 @@ async function buildSubmissionBlob(){
     // the main sheet. We must NOT overwrite it — doing so breaks the formula and corrupts
     // the file. Staff only edit 確認 (B) and 備考 (C).
   }
+  // Expose diagnostics for the caller.
+  window.__exportDebug = { editedIds, matchedRows, wroteToRow, sheetName, colKakunin, colBiko, itemsLen: items.length, sheetPath };
 
   const newXml = new XMLSerializer().serializeToString(doc);
   zip.file(sheetPath, newXml);
@@ -1724,7 +1737,8 @@ document.getElementById("exportBtn").addEventListener("click", async ()=>{
     const result = await buildSubmissionBlob();
     const blob = result.blob;
     if(result.writeCount === 0){
-      const proceed = confirm("⚠ 入力された「確認」が0件でした。\n\n確認欄を選択したデータが見つかりません。空のまま書き出しますか？\n\n（入力したのにこの表示が出る場合はキャンセルして、担当に連絡してください）");
+      const d = window.__exportDebug || {};
+      const proceed = confirm(`⚠ 入力された「確認」が0件でした。\n\n【診断情報】\n入力済み: ${d.editedIds}件 / 書込対象行: ${d.wroteToRow}件\nシート: ${d.sheetName} / 確認列: ${d.colKakunin} / 品目数: ${d.itemsLen}\n\n空のまま書き出しますか？`);
       if(!proceed){ btn.textContent = originalLabel; btn.disabled = false; return; }
     }
     // Per new rule: submission filename = the store name
