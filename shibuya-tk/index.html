@@ -852,11 +852,12 @@ async function pollSharedUpdates(){
       parseWorkbookFromB64(shared.b64, fname);
       localStore.set(STORAGE_WORKBOOK, shared.b64);
       localStore.set(STORAGE_FILENAME, fname);
-      // Also refresh edits for the new file
+      // Also refresh edits for the new file — MERGE, never replace, so local input survives.
       try{
         const editRes = await sharedStore.get(STORAGE_EDITS);
         if(editRes && editRes.value){
-          edits = JSON.parse(editRes.value);
+          const remote = JSON.parse(editRes.value);
+          mergeEditsInto(edits, remote); // remote fills only empty local fields
           lastEditsSerialized = editRes.value;
         }
       }catch(e){}
@@ -1203,7 +1204,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04b";
+const CODE_VERSION = "v2026.08.04c";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1573,6 +1574,24 @@ function setCellInlineString(rowEl, doc, colIdx0, text){
   }
 }
 
+// Read the current on-screen 確認/備考 controls and merge them into `edits`. Only rows
+// currently rendered are touched; filtered-out rows keep whatever is already in `edits`.
+// This guarantees the export uses exactly what the user last entered on screen.
+function harvestEditsFromDOM(){
+  document.querySelectorAll('.cell-select[data-field="確認"]').forEach(el=>{
+    const id = el.getAttribute("data-id");
+    if(!id) return;
+    if(!edits[id]) edits[id] = {確認:"", 備考:"", 本部指示:"", done:false};
+    edits[id].確認 = el.value;
+  });
+  document.querySelectorAll('.cell-input[data-field="備考"]').forEach(el=>{
+    const id = el.getAttribute("data-id");
+    if(!id) return;
+    if(!edits[id]) edits[id] = {確認:"", 備考:"", 本部指示:"", done:false};
+    edits[id].備考 = el.value;
+  });
+}
+
 async function buildSubmissionBlob(){
   if(!rawWorkbookB64) throw new Error("元ファイルが読み込まれていません。");
   const bytes = b64ToArrayBuffer(rawWorkbookB64);
@@ -1589,6 +1608,10 @@ async function buildSubmissionBlob(){
   const rowEls = Array.from(doc.getElementsByTagName("row"));
   const rowByNum = {};
   for(const r of rowEls) rowByNum[r.getAttribute("r")] = r;
+
+  // SOURCE OF TRUTH: harvest whatever is currently shown in the form controls, so the export
+  // reflects exactly what the user sees on screen — independent of any sync/poll interference.
+  harvestEditsFromDOM();
 
   let writeCount = 0, sampleRef = null, sampleText = null;
   for(const it of items){
@@ -1656,6 +1679,8 @@ document.getElementById("exportBtn").addEventListener("click", async ()=>{
     alert("読み込まれているファイルがありません。先にファイルを読み込んでください。");
     return;
   }
+  // Pull the latest on-screen values into edits before any checks or writing.
+  harvestEditsFromDOM();
   // Pre-submission check: warn about required-but-missing 備考 (would be 再出品対象)
   const missing = items.filter(it => bikoMissing(edits[it.id] || {}));
   if(missing.length){
