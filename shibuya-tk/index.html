@@ -784,20 +784,24 @@ async function persistWorkbook(b64, filename){
     console.warn("workbook local cache skipped (too big)", e);
     try{ localStore.delete(STORAGE_WORKBOOK); }catch(_){}
   }
-  // Share the workbook so other devices auto-load it. Supabase (Postgres jsonb) handles a few
-  // MB per row fine, so allow up to ~8MB of base64 — the all-stores file (~4MB b64) fits.
+  // Share the workbook so other devices auto-load it.
   try{
-    const approxBytes = b64.length * 0.75; // decoded size
-    if(approxBytes <= 8_000_000){
-      await saveSharedWorkbook(b64, filename);
+    await saveSharedWorkbook(b64, filename);
+    // Verify the save actually landed by reading the version back from Supabase.
+    const check = await fetchSharedWorkbook();
+    if(check && check.b64 && check.version){
+      sharedWbVersion = check.version;
       flashSyncIndicator("📂 ファイルを全員に共有しました");
     }else{
-      flashSyncIndicator("📂 ファイルを読み込みました（サイズが大きいため共有はスキップ）");
+      sharedWbVersion = 0;
+      showError("⚠️ ファイルの共有に失敗しました。保存はできたように見えますが、読み戻せませんでした。サイズが大きすぎる可能性があります（担当に連絡してください）。");
     }
   }catch(e){
     console.error(e);
-    showError("⚠️ ファイルの共有保存に失敗しました（自分の画面では使えています）：" + (e && e.message ? e.message : e));
+    sharedWbVersion = 0;
+    showError("⚠️ ファイルの共有保存に失敗しました：" + (e && e.message ? e.message : e));
   }
+  updateStatusBanner();
 }
 async function persistEdits(){
   try{
@@ -1206,7 +1210,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04h";
+const CODE_VERSION = "v2026.08.04i";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
