@@ -776,30 +776,27 @@ function mergeEditsInto(dst, src, preferSrc){
 }
 
 async function persistWorkbook(b64, filename){
-  // The full workbook is several MB — too big for localStorage (≈5MB cap) and pointless to
-  // push to the shared DB every time. We keep it in memory (rawWorkbookB64) for this session
-  // and only try a lightweight local cache. The SHARED thing that matters is the edits blob
-  // (確認/備考), which is tiny and handled by persistEdits().
+  // Cache locally when it fits; keep it in memory (rawWorkbookB64) regardless.
   try{
     localStore.set(STORAGE_WORKBOOK, b64);
     localStore.set(STORAGE_FILENAME, filename);
   }catch(e){
-    // localStorage quota exceeded on big files — fine, we still have it in memory this session.
     console.warn("workbook local cache skipped (too big)", e);
     try{ localStore.delete(STORAGE_WORKBOOK); }catch(_){}
   }
-  // Try to share the workbook too, but never let its size break the flow.
+  // Share the workbook so other devices auto-load it. Supabase (Postgres jsonb) handles a few
+  // MB per row fine, so allow up to ~8MB of base64 — the all-stores file (~4MB b64) fits.
   try{
-    const approxBytes = b64.length * 0.75;
-    if(approxBytes <= 3_000_000){
-      const version = await saveSharedWorkbook(b64, filename);
+    const approxBytes = b64.length * 0.75; // decoded size
+    if(approxBytes <= 8_000_000){
+      await saveSharedWorkbook(b64, filename);
       flashSyncIndicator("📂 ファイルを全員に共有しました");
     }else{
-      flashSyncIndicator("📂 ファイルを読み込みました（大きいため各自でアップロードしてください）");
+      flashSyncIndicator("📂 ファイルを読み込みました（サイズが大きいため共有はスキップ）");
     }
   }catch(e){
     console.error(e);
-    flashSyncIndicator("📂 ファイルを読み込みました");
+    showError("⚠️ ファイルの共有保存に失敗しました（自分の画面では使えています）：" + (e && e.message ? e.message : e));
   }
 }
 async function persistEdits(){
@@ -1209,7 +1206,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04g";
+const CODE_VERSION = "v2026.08.04h";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1217,10 +1214,11 @@ function updateStatusBanner(){
   const fileLoaded = items.length > 0;
   let filledCount = 0;
   for(const it of items){ if((edits[it.id]||{}).確認) filledCount++; }
+  const shareState = sharedWbVersion ? '<span style="color:#0a8a3a;">🔗 共有中</span>' : '<span style="color:#c47a00;">🔗 未共有</span>';
   if(!fileLoaded){
     el.innerHTML = `📋 <b>ファイル未読み込み</b>。「今週のファイルを読み込む」からエクセルを選んでください。 <span style="color:#88a;">${CODE_VERSION}</span>`;
   }else{
-    el.innerHTML = `📋 <b>${sheetName||"—"}店</b>：${items.length}件読み込み済み ／ <b>確認入力：${filledCount}件</b>　書き出すとこの ${filledCount} 件が反映されます。 <span style="color:#88a;">${CODE_VERSION}</span>`;
+    el.innerHTML = `📋 <b>${sheetName||"—"}店</b>：${items.length}件読み込み済み ／ <b>確認入力：${filledCount}件</b> ／ ${shareState} <span style="color:#88a;">${CODE_VERSION}</span>`;
   }
 }
 
