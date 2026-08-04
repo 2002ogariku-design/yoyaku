@@ -1204,7 +1204,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04c";
+const CODE_VERSION = "v2026.08.04d";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1639,6 +1639,35 @@ async function buildSubmissionBlob(){
 
   const newXml = new XMLSerializer().serializeToString(doc);
   zip.file(sheetPath, newXml);
+
+  // Make the exported file OPEN on the store's own sheet (e.g. 渋谷), not on "main", so the
+  // person sees their filled-in sheet immediately. Set activeTab in workbookView, and move
+  // tabSelected onto our sheet.
+  try{
+    const wbPath = "xl/workbook.xml";
+    let wbText = await zip.file(wbPath).async("string");
+    const names = Array.from(wbText.matchAll(/<sheet\b[^>]*\bname="([^"]*)"[^>]*>/g)).map(m=>m[1]);
+    const idx = names.indexOf(sheetName);
+    if(idx >= 0){
+      wbText = wbText.replace(/<workbookView\b([^>]*?)(\/?)>/, (full, attrs, selfClose)=>{
+        const cleaned = attrs.replace(/\s*activeTab="[^"]*"/,"");
+        return `<workbookView${cleaned} activeTab="${idx}"${selfClose}>`;
+      });
+      zip.file(wbPath, wbText);
+      // remove tabSelected from every sheet, then add it to ours
+      for(let i=1;i<=names.length;i++){
+        const p = `xl/worksheets/sheet${i}.xml`;
+        const f = zip.file(p);
+        if(!f) continue;
+        let s = await f.async("string");
+        s = s.replace(/(<sheetView\b[^>]*?)\s*tabSelected="1"([^>]*>)/, '$1$2');
+        if(i === idx+1){ // sheetN.xml is in the same order as workbook.xml sheets
+          s = s.replace(/<sheetView\b([^>]*)>/, '<sheetView$1 tabSelected="1">');
+        }
+        zip.file(p, s);
+      }
+    }
+  }catch(e){ console.warn("active sheet set skipped", e); }
 
   // The workbook contains array formulas (FILTER etc.) with a calcChain.xml that records
   // formula calculation order. Editing cells leaves calcChain out of sync, which makes Excel
