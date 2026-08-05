@@ -262,9 +262,10 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <span style="font-size:11px;color:var(--t3);">文字サイズ</span>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;">
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;flex-wrap:wrap;">
       <button class="pill" id="shareBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:12px 24px;font-size:15px;">📤 保存・共有</button>
       <button class="pill" id="dlBtn" style="padding:12px 18px;">💾 DL</button>
+      <button class="pill" id="nextItemBtn" style="padding:12px 18px;background:var(--green);color:#fff;border-color:var(--green);">➡️ 次の商品へ</button>
     </div>
     <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
   </div>
@@ -569,8 +570,8 @@ async function scanTagQR(file, prefix){
 async function ocrProductNumber(dataUrl){
   try{
     const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-    // Whole image, capped ~2200px. Product number is small sparse printed text.
-    const maxd=2200, sc=Math.min(maxd/Math.max(img.width,img.height),1.2);
+    // Whole image, capped ~1600px for speed. Product number is small sparse printed text.
+    const maxd=1600, sc=Math.min(maxd/Math.max(img.width,img.height),1.2);
     const cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
     const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
     const c2=cv.getContext("2d");c2.imageSmoothingQuality="high";
@@ -587,7 +588,7 @@ async function ocrProductNumber(dataUrl){
       return m?m[1]:"";
     };
     let result="";
-    for(const thr of [165,150,180,135]){
+    for(const thr of [160,180]){
       const idd=c2.createImageData(cw,ch);const d=idd.data;
       for(let i=0,p=0;i<d.length;i+=4,p++){const v=lum[p]>thr?255:0;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
       c2.putImageData(idd,0,0);
@@ -625,8 +626,8 @@ async function ocrTagPrice(dataUrl){
     let sx=c0/dscale, sy=r0/dscale, sw=(c1-c0)/dscale, sh=(r1-r0)/dscale;
     if(sw<img.width*0.15||sh<img.height*0.05){sx=0;sy=0;sw=img.width;sh=img.height;} // fallback: whole image
 
-    // 2) Render cropped tag upscaled to grayscale
-    const up=Math.min(2, 2600/Math.max(sw,sh));
+    // 2) Render cropped tag upscaled to grayscale (capped lower for speed)
+    const up=Math.min(1.6, 1800/Math.max(sw,sh));
     const cw=Math.round(sw*up), ch=Math.round(sh*up);
     const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
     const c2=cv.getContext("2d");c2.imageSmoothingQuality="high";
@@ -640,7 +641,7 @@ async function ocrTagPrice(dataUrl){
     const rng=Math.max(1,hi-lo);
 
     let best=0,bestAll=0;
-    for(const thr of [148,170,130]){
+    for(const thr of [150,170]){
       for(let i=0,p=0;i<d.length;i+=4,p++){
         let v=(lum[p]-lo)/rng*255; // autocontrast
         v=v>thr?255:0;
@@ -909,7 +910,36 @@ function updateBrandDl(){
   document.getElementById("sBrandDl").innerHTML=brands.map(b=>`<option value="${esc(b)}">`).join("");
 }
 
-// ===== キャプション自動生成 =====
+// ===== 連続作成：次の商品へ（入力と写真をクリア、アーカイブは残す） =====
+function clearForNext(){
+  ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("sTag").value="📩DMにて割引可能";
+  setRank("");
+  // photo reset
+  photoImg=null;photoOffX=0;photoOffY=0;photoZoom=1;
+  document.getElementById("photoControls").style.display="none";
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+  const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
+  document.getElementById("photoDrop").innerHTML="📷 タップして選択";
+  // tag scan reset
+  tagQueue=[];window._priceFromTag=false;
+  const tt=document.getElementById("tagThumbs");if(tt)tt.innerHTML="";
+  const tsb=document.getElementById("tagScanBtn");if(tsb)tsb.style.display="none";
+  const tra=document.getElementById("tagRefArea");if(tra)tra.style.display="none";
+  const os=document.getElementById("ocrStatus");if(os){os.style.display="none";os.textContent="";}
+  if(td2)td2.innerHTML='🏷️ 値札を追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表＋裏を追加してからスキャン</span>';
+  // caption + suggestions reset
+  document.getElementById("captionBox").value="";
+  const bs=document.getElementById("bottomSuggest");if(bs)bs.innerHTML="";
+  drawStory();
+  // scroll back to top for the next item
+  window.scrollTo({top:0,behavior:"smooth"});
+  const tick=document.getElementById("shareTick");
+  tick.textContent="✅ クリアしました。次の商品をどうぞ";tick.style.opacity="1";
+  setTimeout(()=>tick.style.opacity="0",2500);
+}
+document.getElementById("nextItemBtn").addEventListener("click",clearForNext);
+
 // ブランド辞書：正式表記 → よみ・関連ハッシュタグ・雰囲気。部分一致で拾う。
 const BRAND_DB=[
   {k:["chrome hearts","クロムハーツ","クロム"],ja:"クロムハーツ",tags:["#クロムハーツ","#chromehearts","#シルバーアクセサリー"],vibe:"存在感抜群のシルバー"},
@@ -1172,6 +1202,8 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
 });
 
 updateBrandDl();renderArchive();drawStory();
+// Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
+setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
 </script>
 </body>
 </html>
