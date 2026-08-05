@@ -256,6 +256,24 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <input type="range" id="zoomSlider" min="100" max="250" value="100" style="flex:1;max-width:240px;">
         <button class="pill" id="resetPhotoBtn" style="padding:8px 14px;font-size:13px;">リセット</button>
       </div>
+      <div style="margin-top:12px;">
+        <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">✨ 画像加工</div>
+        <div class="seg" id="fxSeg" style="flex-wrap:wrap;">
+          <button type="button" data-fx="none" class="on">なし</button>
+          <button type="button" data-fx="blur">背景ぼかし</button>
+          <button type="button" data-fx="spotlight">スポットライト</button>
+          <button type="button" data-fx="cutout">切り抜き風</button>
+        </div>
+        <div id="cutoutBgRow" style="display:none;margin-top:8px;">
+          <div style="font-size:11px;color:var(--t3);margin-bottom:6px;">切り抜き背景色</div>
+          <div class="seg" id="cutBgSeg">
+            <button type="button" data-bg="#ffffff" class="on">白</button>
+            <button type="button" data-bg="#111111">黒</button>
+            <button type="button" data-bg="#f2efe9">ベージュ</button>
+            <button type="button" data-bg="#e8e4f0">ラベンダー</button>
+          </div>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px;">
         <span style="font-size:13px;">🔤</span>
         <input type="range" id="textScaleSlider" min="70" max="140" value="100" style="flex:1;max-width:240px;">
@@ -268,6 +286,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       <button class="pill" id="nextItemBtn" style="padding:12px 18px;background:var(--green);color:#fff;border-color:var(--green);">➡️ 次の商品へ</button>
     </div>
     <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c" id="marketCard" style="display:none;">
+    <div class="c-title">📊 販売データ（売れ履歴より）</div>
+    <div id="marketBody"></div>
   </div>
 
   <div class="c">
@@ -328,6 +351,97 @@ async function ocrText(canvas){
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
 
+// ===== 販売データ連動（売れ履歴ツールのデータを参照） =====
+const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY="rinkan-app-pw";
+function getAppPw(){
+  let pw=sessionStorage.getItem(SB_PW_KEY);
+  if(!pw){pw=prompt("販売データを見るには共有パスワードを入力してください");if(pw)sessionStorage.setItem(SB_PW_KEY,pw);}
+  return pw||"";
+}
+let _urekiData=null, _urekiLoading=null;
+async function loadUrekiData(){
+  if(_urekiData)return _urekiData;
+  if(_urekiLoading)return _urekiLoading;
+  _urekiLoading=(async()=>{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq.ureki&select=payload",{
+      headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw()}
+    });
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    const payload=rows.length?rows[0].payload:null;
+    if(payload&&payload.rows&&payload.schema){
+      _urekiData=payload.rows.map(row=>{const o={};payload.schema.forEach((k,i)=>o[k]=row[i]);return o;});
+    }else _urekiData=[];
+    return _urekiData;
+  })();
+  return _urekiLoading;
+}
+function median(arr){if(!arr.length)return 0;const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
+async function lookupMarketData(hinban){
+  const card=document.getElementById("marketCard"), body=document.getElementById("marketBody");
+  const brand=document.getElementById("sBrand").value.trim();
+  if(!hinban && !brand){card.style.display="none";return;}
+  card.style.display="block";
+  body.innerHTML='<div style="color:var(--t3);font-size:13px;">📊 売れ履歴を照合中...</div>';
+  let data;
+  try{ data=await loadUrekiData(); }
+  catch(e){ body.innerHTML='<div style="color:var(--orange);font-size:13px;">売れ履歴データを取得できませんでした（'+esc(e.message)+'）</div>';return; }
+  if(!data||!data.length){ body.innerHTML='<div style="color:var(--t3);font-size:13px;">売れ履歴データがまだありません。</div>';return; }
+
+  // 1) exact 品番 match (same product number sold before)
+  let exact=[];
+  if(hinban){
+    const hn=hinban.replace(/[^0-9]/g,"");
+    exact=data.filter(r=>r.price>0 && String(r.jan||"").replace(/[^0-9]/g,"")===hn);
+  }
+  // 2) same brand+model group (相場)
+  let sameModel=[];
+  const model=(document.getElementById("sBrand").value||"").trim();
+  if(brand){
+    const bl=brand.toLowerCase();
+    sameModel=data.filter(r=>r.price>0 && String(r.brand||"").toLowerCase().includes(bl.split(" ")[0]));
+  }
+
+  let html="";
+  if(exact.length){
+    const prices=exact.map(r=>r.price).filter(p=>p>0);
+    const med=median(prices);
+    const last=exact.slice().sort((a,b)=>(a.date<b.date?1:-1))[0];
+    html+=`<div style="background:rgba(52,199,89,.1);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">🎯 同じ品番の販売実績（${exact.length}件）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div><div style="font-size:11px;color:var(--t3);">相場（中央値）</div><div style="font-size:19px;font-weight:800;">¥${med.toLocaleString()}</div></div>
+        <div><div style="font-size:11px;color:var(--t3);">最高／最安</div><div style="font-size:15px;font-weight:700;">¥${Math.max(...prices).toLocaleString()} / ¥${Math.min(...prices).toLocaleString()}</div></div>
+      </div>
+      ${last?`<div style="font-size:11.5px;color:var(--t2);margin-top:8px;">直近の販売：${esc(last.date||"")} ¥${Number(last.price).toLocaleString()}</div>`:""}
+    </div>`;
+    // price hint vs current input
+    const cur=Number(document.getElementById("sPrice").value.replace(/[^\d]/g,""));
+    if(cur&&med){
+      const diff=Math.round((cur-med)/med*100);
+      const col=Math.abs(diff)<=10?"var(--green)":(diff>0?"var(--orange)":"var(--blue)");
+      html+=`<div style="font-size:12.5px;color:${col};font-weight:700;margin-bottom:12px;">💡 今回の価格 ¥${cur.toLocaleString()} は相場${diff>0?"より+"+diff+"%高い":diff<0?diff+"%安い":"どおり"}</div>`;
+    }
+  }
+  // brand 売れ筋 (top-selling models for this brand)
+  if(sameModel.length){
+    const byModel={};
+    for(const r of sameModel){const k=(r.model||r.name||"その他");(byModel[k]=byModel[k]||[]).push(r);}
+    const ranked=Object.entries(byModel).map(([k,recs])=>({k,n:recs.length,med:median(recs.map(r=>r.price))})).sort((a,b)=>b.n-a.n).slice(0,5);
+    html+=`<div style="font-size:13px;font-weight:800;color:var(--t2);margin-bottom:8px;">🔥 ${esc(brand.split(" ")[0])} の売れ筋 TOP5（過去販売数）</div>`;
+    html+=`<div style="display:flex;flex-direction:column;gap:6px;">`+ranked.map((r,i)=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border-radius:9px;padding:9px 12px;">
+        <span style="font-size:12.5px;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i+1}. ${esc(r.k)}</span>
+        <span style="font-size:12.5px;font-weight:700;">${r.n}点 / 相場¥${r.med.toLocaleString()}</span>
+      </div>`).join("")+`</div>`;
+    html+=`<div style="font-size:11px;color:var(--t3);margin-top:8px;">※ ${brand.split(" ")[0]} 全体 ${sameModel.length}点の販売実績より</div>`;
+  }
+  if(!html)html='<div style="color:var(--t3);font-size:13px;">この品番・ブランドの販売実績は見つかりませんでした。</div>';
+  body.innerHTML=html;
+}
+
 // Help sheet (slide-up)
 window.openHelp=function(){
   const m=document.getElementById("helpModal"),s=document.getElementById("helpSheet");
@@ -349,6 +463,8 @@ const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 // ===== template / text-scale =====
 let TEMPLATE="classic";      // classic | bottom | minimal | bold
 let textScale=1;             // 0.7 .. 1.4 fine-tune
+let PHOTO_FX="none";         // none | blur | spotlight | cutout
+let CUTOUT_BG="#ffffff";     // background color for cutout effect
 
 // Template definitions: where/how text is drawn. Each returns positions & colors.
 const TEMPLATES={
@@ -396,6 +512,21 @@ document.querySelectorAll("#tplSeg button").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll("#tplSeg button").forEach(x=>x.classList.toggle("on",x===b));
     TEMPLATE=b.dataset.t; drawStory();
+  });
+});
+// photo effects
+document.querySelectorAll("#fxSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    PHOTO_FX=b.dataset.fx;
+    document.getElementById("cutoutBgRow").style.display = PHOTO_FX==="cutout"?"block":"none";
+    drawStory();
+  });
+});
+document.querySelectorAll("#cutBgSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#cutBgSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    CUTOUT_BG=b.dataset.bg; drawStory();
   });
 });
 
@@ -506,16 +637,20 @@ async function scanTagQR(file, prefix){
     }
   }
 
-  let url="";
+  let url="", hinban="";
   if(qr&&qr.data){
     console.log("QR data:",qr.data);
     url=qr.data;
+    // extract 品番 pattern from the QR URL if present
+    const hm=qr.data.match(/(\d{5}-\d{6}-\d{4})/);
+    if(hm)hinban=hm[1];
   }else{
     // No QR (accessory/small-item tags) — OCR the product number instead
     status.textContent="🔍 "+prefix+"商品番号を読み取り中...";
     const pn=await ocrProductNumber(dataUrl);
-    if(pn)url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;
+    if(pn){url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;hinban=pn;}
   }
+  if(hinban)window._lastHinban=hinban;
 
   const filled=[];
   status.textContent="🔍 "+prefix+"情報を取得中...";
@@ -546,7 +681,8 @@ async function scanTagQR(file, prefix){
 
   drawStory();
 
-  // Report result. Guide the user to scan the other side for accessory tags.
+  // Look up sales data for this 品番 / brand from the 売れ履歴 database.
+  lookupMarketData(hinban);
   const missing=[];
   if(!document.getElementById("sBrand").value)missing.push("ブランド");
   if(!document.getElementById("sPrice").value)missing.push("価格");
@@ -840,7 +976,36 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     const maxDX=Math.max(0,(w-W)/2), maxDY=Math.max(0,(h-H)/2);
     const dx=(W-w)/2 + (data.offX||0)*maxDX;
     const dy=(H-h)/2 + (data.offY||0)*maxDY;
-    ctx.drawImage(data.img,dx,dy,w,h);
+    const fx=PHOTO_FX;
+    if(fx==="blur"){
+      // Blurred, zoomed-out copy fills the frame; sharp photo sits on top slightly inset.
+      ctx.save();ctx.filter="blur("+Math.round(W*0.03)+"px) brightness(0.9)";
+      const bs=Math.max(W/data.img.width,H/data.img.height)*1.15;
+      const bw=data.img.width*bs,bh=data.img.height*bs;
+      ctx.drawImage(data.img,(W-bw)/2,(H-bh)/2,bw,bh);
+      ctx.restore();
+      ctx.drawImage(data.img,dx,dy,w,h);
+    }else if(fx==="cutout"){
+      // "product on solid background" look: solid bg + soft radial reveal of the photo center.
+      ctx.fillStyle=CUTOUT_BG;ctx.fillRect(0,0,W,H);
+      ctx.save();
+      const rad=ctx.createRadialGradient(W/2,H*0.42,W*0.18,W/2,H*0.42,W*0.62);
+      rad.addColorStop(0,"rgba(0,0,0,1)");rad.addColorStop(0.72,"rgba(0,0,0,1)");rad.addColorStop(1,"rgba(0,0,0,0)");
+      // draw photo, then mask edges to blend into the bg color
+      const off=document.createElement("canvas");off.width=W;off.height=H;const oc=off.getContext("2d");
+      oc.drawImage(data.img,dx,dy,w,h);
+      oc.globalCompositeOperation="destination-in";
+      oc.fillStyle=rad;oc.fillRect(0,0,W,H);
+      ctx.drawImage(off,0,0);
+      ctx.restore();
+    }else{
+      ctx.drawImage(data.img,dx,dy,w,h);
+      if(fx==="spotlight"){
+        const rad=ctx.createRadialGradient(W/2,H*0.4,W*0.25,W/2,H*0.5,W*0.75);
+        rad.addColorStop(0,"rgba(0,0,0,0)");rad.addColorStop(1,"rgba(0,0,0,.55)");
+        ctx.fillStyle=rad;ctx.fillRect(0,0,W,H);
+      }
+    }
   }else{
     ctx.fillStyle="#1d1d1f";ctx.fillRect(0,0,W,H);
     ctx.fillStyle="#aeaeb2";ctx.font=`500 ${Math.round(36*(W/1080))}px sans-serif`;ctx.textAlign="center";
@@ -920,6 +1085,8 @@ function clearForNext(){
   document.getElementById("photoControls").style.display="none";
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
   const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
+  PHOTO_FX="none";document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx==="none"));
+  document.getElementById("cutoutBgRow").style.display="none";
   document.getElementById("photoDrop").innerHTML="📷 タップして選択";
   // tag scan reset
   tagQueue=[];window._priceFromTag=false;
