@@ -250,6 +250,8 @@ const WATCH_RE=/時計|ウォッチ|WATCH/i;
 const WATCH_BRAND_RE=/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|タグ\s*ホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO|フランクミュラー|FRANCK\s*MULLER|ジャガールクルト|カルティエ.*時計|ヴァシュロン|VACHERON|ゼニス|ZENITH|チューダー|TUDOR|ブレゲ|BREGUET/i;
 const CHROME_RE=/クロムハーツ|クロム・?ハーツ|クロムハ－ツ|CHROME\s*HEARTS|CHROMEHEARTS|C\.?H\.?ハーツ|^クロム$|^CH$|^C\.H\.?$/i;
 const GORO_RE=/ゴローズ|ゴロ－ズ|GORO'?S|GOROS|^ゴロ$/i;
+// Brands to exclude entirely from analysis (noise / non-genuine sales data).
+const EXCLUDED_BRAND_RE=/ノットシティ|ノット・?シティ|NOT\s*CITY|NOTCITY|KNOT\s*CITY|ノツトシティ/i;
 function segOf(r){
   if(CHROME_RE.test(r.brand))return "chrome";
   if(GORO_RE.test(r.brand))return "goros";
@@ -306,7 +308,7 @@ async function boot(){
   try{
     const payload=await sbLoad();
     if(payload&&payload.rows&&payload.schema){
-      DATA=payload.rows.map(r=>rowToObj(r,payload.schema));
+      DATA=payload.rows.map(r=>rowToObj(r,payload.schema)).filter(r=>!EXCLUDED_BRAND_RE.test(r.brand||""));
     }
   }catch(e){
     if(e.message==="PW"){
@@ -1144,7 +1146,7 @@ async function importFiles(files){
       const recs=await parseXlsx(file);
       totalRows+=recs.length;
       let added=0;
-      for(const rec of recs){const k=keyOf(rec);if(!seen.has(k)){seen.add(k);DATA.push(rec);lastBatchKeys.push(k);added++;}}
+      for(const rec of recs){if(EXCLUDED_BRAND_RE.test(rec.brand||""))continue;const k=keyOf(rec);if(!seen.has(k)){seen.add(k);DATA.push(rec);lastBatchKeys.push(k);added++;}}
       totalAdded+=added;
     }catch(err){console.error(err);errors.push(file.name+": "+err.message);}
   }
