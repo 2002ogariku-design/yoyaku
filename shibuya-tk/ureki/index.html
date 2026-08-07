@@ -80,6 +80,7 @@ tbody tr:active{background:#eaeaef;}
     <button class="segbtn on" data-seg="all">すべて</button>
     <button class="segbtn" data-seg="apparel">アパレル</button>
     <button class="segbtn" data-seg="chrome">クロムハーツ</button>
+    <button class="segbtn" data-seg="goros">ゴローズ</button>
     <button class="segbtn" data-seg="watch">時計</button>
   </div>
 </header>
@@ -248,8 +249,10 @@ let SEGMENT="all";
 const WATCH_RE=/時計|ウォッチ|WATCH/i;
 const WATCH_BRAND_RE=/ロレックス|ROLEX|オメガ|OMEGA|パテック|PATEK|オーデマ|AUDEMARS|ウブロ|HUBLOT|タグ\s*ホイヤー|TAG\s*HEUER|パネライ|PANERAI|ブライトリング|BREITLING|IWC|グランドセイコー|GRAND\s*SEIKO|フランクミュラー|FRANCK\s*MULLER|ジャガールクルト|カルティエ.*時計|ヴァシュロン|VACHERON|ゼニス|ZENITH|チューダー|TUDOR|ブレゲ|BREGUET/i;
 const CHROME_RE=/クロムハーツ|クロム・?ハーツ|クロムハ－ツ|CHROME\s*HEARTS|CHROMEHEARTS|C\.?H\.?ハーツ|^クロム$|^CH$|^C\.H\.?$/i;
+const GORO_RE=/ゴローズ|ゴロ－ズ|GORO'?S|GOROS|^ゴロ$/i;
 function segOf(r){
   if(CHROME_RE.test(r.brand))return "chrome";
+  if(GORO_RE.test(r.brand))return "goros";
   if(WATCH_BRAND_RE.test(r.brand)||WATCH_RE.test((r.cat||"")+(r.cat2||"")))return "watch";
   return "apparel";
 }
@@ -389,16 +392,53 @@ function detectColor(r){
 function itemKey(r){return r.brand+"|||"+(r.model||r.name);}
 
 function priceStats(recs){
-  let prices=recs.map(r=>r.price).filter(p=>p>0).sort((a,b)=>a-b);
-  let clean=recs.slice();
-  if(prices.length>=5){const med=prices[Math.floor(prices.length/2)];clean=clean.filter(r=>r.price>=med*0.35&&r.price<=med*2.8);}
+  const rawPrices=recs.map(r=>r.price).filter(p=>p>0).sort((a,b)=>a-b);
+  const rawN=rawPrices.length;
+  let clean=recs.filter(r=>r.price>0);
+  let outliersRemoved=0;
+  // Robust outlier removal via IQR (Tukey fences) — needs at least 4 points to be meaningful.
+  if(rawN>=4){
+    const q=(arr,f)=>{const pos=(arr.length-1)*f,base=Math.floor(pos),rest=pos-base;return arr[base+1]!==undefined?arr[base]+rest*(arr[base+1]-arr[base]):arr[base];};
+    const q1=q(rawPrices,0.25), q3=q(rawPrices,0.75), iqr=q3-q1;
+    const lo=q1-1.5*iqr, hi=q3+1.5*iqr;
+    const before=clean.length;
+    clean=clean.filter(r=>r.price>=Math.max(lo,rawPrices[0]*0.2)&&r.price<=hi);
+    outliersRemoved=before-clean.length;
+    if(clean.length<3){clean=recs.filter(r=>r.price>0);outliersRemoved=0;} // don't over-trim tiny samples
+  }
   const sorted=clean.slice().sort((a,b)=>a.date.localeCompare(b.date));
   const p=clean.map(r=>r.price).filter(x=>x>0);const n=p.length;
   const sp=p.slice().sort((a,b)=>a-b);
+  const med=n?(n%2?sp[Math.floor(n/2)]:Math.round((sp[n/2-1]+sp[n/2])/2)):0;
+  const avg=n?p.reduce((a,b)=>a+b,0)/n:0;
+  // Trend: compare oldest third vs newest third (needs >=4)
   let trend=0;
   if(n>=4){const k=Math.max(1,Math.floor(n/3));const fa=sorted.slice(0,k).reduce((a,r)=>a+r.price,0)/k;const la=sorted.slice(-k).reduce((a,r)=>a+r.price,0)/k;if(fa>0)trend=(la-fa)/fa*100;}
-  return {count:n,avg:n?p.reduce((a,b)=>a+b,0)/n:0,total:p.reduce((a,b)=>a+b,0),min:n?sp[0]:0,max:n?sp[n-1]:0,median:n?sp[Math.floor(n/2)]:0,trend,sorted};
+  // Reliability: based on sample size AND price spread (coefficient of variation).
+  // More samples + tighter spread = higher confidence in the 相場.
+  const mean=avg||1;
+  const variance=n?p.reduce((a,x)=>a+(x-mean)*(x-mean),0)/n:0;
+  const cv=mean>0?Math.sqrt(variance)/mean:1; // coefficient of variation
+  let conf="low";
+  if(n>=8&&cv<=0.35)conf="high";
+  else if(n>=4&&cv<=0.6)conf="mid";
+  else if(n>=8)conf="mid"; // many samples but spread out
+  return {count:n,rawCount:rawN,outliersRemoved,avg,total:p.reduce((a,b)=>a+b,0),
+    min:n?sp[0]:0,max:n?sp[n-1]:0,median:med,trend,sorted,cv,conf};
 }
+// Reliability badge/label for a price-stats object.
+const CONF_META={high:{t:"信頼度 高",c:"#34c759",bg:"rgba(52,199,89,.14)"},mid:{t:"信頼度 中",c:"#ff9500",bg:"rgba(255,149,0,.14)"},low:{t:"信頼度 低",c:"#8e8e93",bg:"rgba(142,142,147,.14)"}};
+function confBadge(s){const m=CONF_META[s.conf]||CONF_META.low;return ` <span style="font-size:10px;font-weight:800;color:${m.c};background:${m.bg};padding:2px 7px;border-radius:8px;vertical-align:middle;">${m.t}</span>`;}
+function confDot(s){const m=CONF_META[s.conf]||CONF_META.low;return `<span title="${m.t}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${m.c};vertical-align:middle;"></span>`;}
+function confNote(s){
+  const m=CONF_META[s.conf]||CONF_META.low;
+  let reason="";
+  if(s.conf==="high")reason=`販売${s.count}件・価格のばらつきが小さいため、この相場は信頼できます。`;
+  else if(s.conf==="mid")reason=`販売${s.count}件。${s.cv>0.6?"価格のばらつきがやや大きいため":"件数がやや少ないため"}、相場は目安として見てください。`;
+  else reason=`販売${s.count}件と少ない${s.cv>0.6?"／価格のばらつきが大きい":""}ため、相場の精度は低めです。参考値としてお使いください。`;
+  return `<div style="font-size:12px;color:${m.c};background:${m.bg};border-radius:10px;padding:10px 13px;margin-bottom:14px;line-height:1.6;">📊 <b>${m.t}</b>：${reason}${s.outliersRemoved?`<br><span style="color:var(--t3);">※ 極端な価格${s.outliersRemoved}件を自動除外して算出しています。</span>`:""}</div>`;
+}
+
 function buildItems(){
   const m={};
   for(const r of segData()){
@@ -638,7 +678,7 @@ function drawItemsTable(items){
     const fav=FAVS.has(i.key);
     return `<tr onclick='showItem(${JSON.stringify(itemKeyStr(i)).replace(/'/g,"&#39;")})'>
       <td onclick='event.stopPropagation();toggleFav(${JSON.stringify(i.key).replace(/'/g,"&#39;")})' style="cursor:pointer;font-size:17px;color:${fav?'#ffcc00':'var(--t3)'};">${fav?'★':'☆'}</td>
-      <td><b>${i.count}</b>回</td>
+      <td><b>${i.count}</b>回 ${confDot(i)}</td>
       <td>${esc(i.brand)}</td>
       <td style="max-width:240px;"><div style="display:flex;align-items:center;gap:6px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.item)}</span>${(i.ranks.length>1||i.colors.length>1)?`<span style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--blue);background:rgba(0,113,227,.1);padding:2px 6px;border-radius:6px;white-space:nowrap;">${[i.ranks.length>1?i.ranks.length+"ランク":"",i.colors.length>1?i.colors.length+"色":""].filter(Boolean).join(" ")}</span>`:""}${gSearchBtn(i.brand,i.item)}</div></td>
       <td><b>${YEN(i.avg)}</b></td>
@@ -741,11 +781,12 @@ function renderItemModal(){
     </div>`:""}
 
     <div class="kpis" style="margin:16px 0;">
-      <div class="kpi"><div class="lbl">中央値（相場）</div><div class="val">${YEN(s.median)}</div><div class="sub">${s.count}件</div></div>
+      <div class="kpi"><div class="lbl">中央値（相場）${confBadge(s)}</div><div class="val">${YEN(s.median)}</div><div class="sub">${s.count}件${s.outliersRemoved?`（外れ値${s.outliersRemoved}件除外）`:""}</div></div>
       <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(s.avg)}</div></div>
       <div class="kpi"><div class="lbl">価格帯</div><div class="val" style="font-size:16px;">${YEN(s.min)}〜${YEN(s.max)}</div></div>
       <div class="kpi"><div class="lbl">相場推移</div><div class="val" style="font-size:20px;">${trendHtml}</div></div>
     </div>
+    ${confNote(s)}
 
     <div class="card" style="box-shadow:none;border:1px solid var(--line);"><div class="card-t">価格推移${st.rank||st.color||st.mat?`（${[st.rank&&"ランク"+st.rank,st.color,st.mat&&(MATLABEL[st.mat]||st.mat)].filter(Boolean).join(" / ")}）`:""}</div><canvas id="chItemPrice" height="140"></canvas></div>
 
