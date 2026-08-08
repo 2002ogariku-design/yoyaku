@@ -137,6 +137,11 @@ tbody tr:active{background:#eaeaef;}
     </div>
   </div>
 
+  <!-- 分析・予測 -->
+  <div class="view" id="v-insight">
+    <div id="insightBody"></div>
+  </div>
+
   <!-- 相場 -->
   <div class="view" id="v-price">
     <div class="card">
@@ -226,6 +231,7 @@ tbody tr:active{background:#eaeaef;}
 <div class="tabbar" id="tabbar">
   <button data-v="dash" class="on"><span class="ic">📊</span>概要</button>
   <button data-v="items"><span class="ic">🔥</span>売れ筋</button>
+  <button data-v="insight"><span class="ic">📈</span>分析</button>
   <button data-v="price"><span class="ic">💹</span>相場</button>
   <button data-v="store"><span class="ic">🏬</span>店舗</button>
   <button data-v="turn"><span class="ic">🔄</span>回転</button>
@@ -459,7 +465,207 @@ function buildItems(){
 }
 
 // ---- renders ----
-function renderAll(){renderDash();renderItems();renderPriceSel();renderStore();renderTurn();renderCust();renderStaff();renderDataStats();}
+// ================= 分析・予測エンジン =================
+// 日付ユーティリティ：r.date は "YYYYMMDD" 形式
+function ymd(r){const d=String(r.date||"");return d.length>=8?{y:+d.slice(0,4),m:+d.slice(4,6),day:+d.slice(6,8)}:null;}
+function ymKey(r){const p=ymd(r);return p?p.y*100+p.m:0;}
+function dowOf(r){const p=ymd(r);if(!p)return -1;return new Date(p.y,p.m-1,p.day).getDay();}
+const DOW_JA=["日","月","火","水","木","金","土"];
+function yen(n){return "¥"+Math.round(n).toLocaleString("ja-JP");}
+function yenMan(n){return n>=10000?"¥"+(n/10000).toFixed(n>=100000?0:1)+"万":yen(n);}
+
+// 線形回帰（最小二乗法）→ 傾き・切片・次期予測
+function linReg(pts){ // pts=[{x,y}]
+  const n=pts.length;if(n<2)return null;
+  let sx=0,sy=0,sxy=0,sxx=0;
+  for(const p of pts){sx+=p.x;sy+=p.y;sxy+=p.x*p.y;sxx+=p.x*p.x;}
+  const d=n*sxx-sx*sx;if(d===0)return null;
+  const slope=(n*sxy-sx*sy)/d, intercept=(sy-slope*sx)/n;
+  // R^2
+  const mean=sy/n;let ssTot=0,ssRes=0;
+  for(const p of pts){const pred=slope*p.x+intercept;ssTot+=(p.y-mean)**2;ssRes+=(p.y-pred)**2;}
+  const r2=ssTot>0?1-ssRes/ssTot:0;
+  return {slope,intercept,r2};
+}
+
+function renderInsight(){
+  const el=document.getElementById("insightBody");
+  if(!el)return;
+  const data=segData().filter(r=>r.price>0&&ymd(r));
+  if(data.length<10){el.innerHTML='<div class="card"><div class="muted" style="padding:30px;text-align:center;">分析にはもう少しデータが必要です（最低10件）。</div></div>';return;}
+
+  // ---- 月別集計 ----
+  const byMonth={};
+  data.forEach(r=>{const k=ymKey(r);if(!byMonth[k])byMonth[k]={sales:0,count:0};byMonth[k].sales+=r.price;byMonth[k].count++;});
+  const months=Object.keys(byMonth).map(Number).sort();
+  const monthsFull=months.slice(0,-1); // 最新月は途中の可能性→予測の学習からは除外
+  let html="";
+
+  // ===== 1. 売上予測 =====
+  html+=`<div class="card"><div class="card-t">🔮 来月の売上予測</div>`;
+  if(monthsFull.length>=3){
+    const pts=monthsFull.map((m,i)=>({x:i,y:byMonth[m].sales}));
+    const reg=linReg(pts);
+    const nextX=pts.length; // 次の月
+    let pred=reg?reg.slope*nextX+reg.intercept:0;
+    // 直近3ヶ月平均も併記（安定した参考値）
+    const recent=monthsFull.slice(-3);
+    const avg3=recent.reduce((a,m)=>a+byMonth[m].sales,0)/recent.length;
+    if(pred<0)pred=avg3;
+    const trendPct=reg&&reg.slope?Math.round(reg.slope/(avg3||1)*100):0;
+    const conf=reg?(reg.r2>=0.6?"高":reg.r2>=0.3?"中":"低"):"低";
+    const confC=conf==="高"?"var(--green)":conf==="中"?"var(--orange)":"var(--t3)";
+    // ブレンド予測：回帰と直近平均の中間（外れに強い）
+    const blended=Math.round((pred+avg3)/2);
+    html+=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+      <div style="flex:1;min-width:150px;background:linear-gradient(135deg,#eaf4ff,#fff);border-radius:14px;padding:16px;">
+        <div style="font-size:12px;color:var(--t3);">来月の予測売上</div>
+        <div style="font-size:26px;font-weight:800;color:var(--blue);">${yenMan(blended)}</div>
+        <div style="font-size:11.5px;color:${confC};font-weight:700;margin-top:4px;">予測信頼度 ${conf}</div>
+      </div>
+      <div style="flex:1;min-width:150px;background:var(--card2);border-radius:14px;padding:16px;">
+        <div style="font-size:12px;color:var(--t3);">直近3ヶ月の平均</div>
+        <div style="font-size:22px;font-weight:800;">${yenMan(avg3)}</div>
+        <div style="font-size:11.5px;color:${trendPct>=0?'var(--green)':'var(--red,#e5484d)'};font-weight:700;margin-top:4px;">${trendPct>0?'▲ 増加傾向 +':trendPct<0?'▼ 減少傾向 ':'→ 横ばい '}${trendPct!==0?Math.abs(trendPct)+'%/月':''}</div>
+      </div>
+    </div>`;
+    html+=insBox(`過去${monthsFull.length}ヶ月の売上推移から算出。${reg&&reg.r2>=0.6?'傾向がはっきりしている（データのばらつきが小さい）ため信頼度は高めです。':reg&&reg.r2>=0.3?'ある程度の傾向は見えますが、月ごとのばらつきがあるため目安です。':'月ごとのばらつきが大きく、予測は参考程度に見てください。'}回帰予測（${yenMan(pred)}）と直近3ヶ月平均（${yenMan(avg3)}）の中間値を採用しています。`);
+  }else{
+    html+=`<div class="muted" style="padding:10px 0;">予測には最低3ヶ月分のデータが必要です（現在${monthsFull.length}ヶ月）。</div>`;
+  }
+  html+=`</div>`;
+
+  // ===== 2. 月別売上グラフ =====
+  html+=`<div class="card"><div class="card-t">📊 月別売上の推移</div><canvas id="chInsightMonth" height="150"></canvas></div>`;
+
+  // ===== 3. 曜日別の売れ方 =====
+  html+=`<div class="card"><div class="card-t">📅 曜日別の売れ方</div>`;
+  const byDow=Array.from({length:7},()=>({sales:0,count:0,days:new Set()}));
+  data.forEach(r=>{const d=dowOf(r);if(d>=0){byDow[d].sales+=r.price;byDow[d].count++;const p=ymd(r);byDow[d].days.add(p.y*10000+p.m*100+p.day);}});
+  // 1日あたり平均売上で比較（営業日数の違いを補正）
+  const dowAvg=byDow.map(x=>x.days.size?x.sales/x.days.size:0);
+  const maxDow=Math.max(...dowAvg,1);
+  const bestDow=dowAvg.indexOf(Math.max(...dowAvg)), worstDowVal=Math.min(...dowAvg.filter(v=>v>0));
+  const worstDow=dowAvg.indexOf(worstDowVal);
+  html+=`<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px;">`+
+    dowAvg.map((v,i)=>`<div style="display:flex;align-items:center;gap:8px;">
+      <span style="width:24px;font-size:13px;font-weight:700;color:${i===0?'#e5484d':i===6?'#3b82f6':'var(--t1)'};">${DOW_JA[i]}</span>
+      <div style="flex:1;background:var(--card2);border-radius:6px;overflow:hidden;height:22px;position:relative;">
+        <div style="width:${v/maxDow*100}%;height:100%;background:${i===bestDow?'var(--green)':'var(--blue)'};opacity:${i===bestDow?1:.65};"></div>
+      </div>
+      <span style="width:70px;text-align:right;font-size:12px;font-weight:700;">${yenMan(v)}</span>
+    </div>`).join("")+`</div>`;
+  html+=insBox(`1営業日あたりの平均売上で比較しています（各曜日の営業日数の違いを補正済み）。<b>${DOW_JA[bestDow]}曜日</b>が最も売上が高く、<b>${DOW_JA[worstDow]}曜日</b>が低い傾向です。${dowAvg[bestDow]/worstDowVal>=1.4?`その差は約${(dowAvg[bestDow]/worstDowVal).toFixed(1)}倍あり、${DOW_JA[bestDow]}曜に人員や目玉商品を厚くする価値があります。`:'曜日による差はそれほど大きくありません。'}`);
+  html+=`</div>`;
+
+  // ===== 4. 月（季節）別の売れ方 =====
+  const byMon=Array.from({length:13},()=>({sales:0,count:0}));
+  data.forEach(r=>{const p=ymd(r);if(p){byMon[p.m].sales+=r.price;byMon[p.m].count++;}});
+  const monVals=byMon.map(x=>x.sales).slice(1);
+  if(monVals.some(v=>v>0)){
+    const maxMon=Math.max(...monVals,1);
+    const bestMon=monVals.indexOf(Math.max(...monVals))+1;
+    html+=`<div class="card"><div class="card-t">🗓 月別（季節）の売れ方</div>`;
+    html+=`<div style="display:flex;gap:3px;align-items:flex-end;height:120px;margin-bottom:10px;">`+
+      monVals.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end;height:100%;">
+        <div style="width:100%;background:${i+1===bestMon?'var(--green)':'var(--blue)'};opacity:${i+1===bestMon?1:.55};border-radius:4px 4px 0 0;height:${v/maxMon*100}%;min-height:2px;"></div>
+        <span style="font-size:10px;color:var(--t3);">${i+1}</span>
+      </div>`).join("")+`</div>`;
+    html+=insBox(`月ごとの累計売上です（複数年ある場合は合算）。データ上は<b>${bestMon}月</b>が最も売れています。季節商材やセール時期の計画に使えます。${months.length<12?'※ まだ1年分のデータが揃っていないため、参考値です。':''}`);
+    html+=`</div>`;
+  }
+
+  // ===== 5. 伸びてる/落ちてるブランド =====
+  html+=`<div class="card"><div class="card-t">📈 伸びているブランド・落ちているブランド</div>`;
+  const momentum=brandMomentum(data,months);
+  if(momentum.up.length||momentum.down.length){
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">`;
+    html+=`<div><div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:8px;">▲ 伸びている</div>`+
+      (momentum.up.length?momentum.up.map(b=>`<div style="background:rgba(52,199,89,.09);border-radius:9px;padding:8px 11px;margin-bottom:6px;">
+        <div style="font-size:13px;font-weight:700;">${esc(b.brand)}</div>
+        <div style="font-size:11.5px;color:var(--green);">+${b.pct}% <span style="color:var(--t3);">（${yenMan(b.prev)}→${yenMan(b.recent)}）</span></div>
+      </div>`).join(""):'<div class="muted" style="font-size:12px;">該当なし</div>')+`</div>`;
+    html+=`<div><div style="font-size:12px;font-weight:800;color:#e5484d;margin-bottom:8px;">▼ 落ちている</div>`+
+      (momentum.down.length?momentum.down.map(b=>`<div style="background:rgba(229,72,77,.08);border-radius:9px;padding:8px 11px;margin-bottom:6px;">
+        <div style="font-size:13px;font-weight:700;">${esc(b.brand)}</div>
+        <div style="font-size:11.5px;color:#e5484d;">${b.pct}% <span style="color:var(--t3);">（${yenMan(b.prev)}→${yenMan(b.recent)}）</span></div>
+      </div>`).join(""):'<div class="muted" style="font-size:12px;">該当なし</div>')+`</div>`;
+    html+=`</div>`;
+    html+=insBox(`直近${momentum.window}ヶ月と、その前の${momentum.window}ヶ月の売上を比較しています。販売実績が一定以上あるブランドのみ対象（偶発的な変動を除外）。伸びているブランドは仕入れ強化、落ちているブランドは在庫の見直しや値付けの再検討の目安になります。`);
+  }else{
+    html+=`<div class="muted" style="padding:10px 0;">比較には2期間分（各${momentum.window}ヶ月）のデータが必要です。</div>`;
+  }
+  html+=`</div>`;
+
+  // ===== 6. 売れ残り（回転が悪い）検出 =====
+  html+=`<div class="card"><div class="card-t">🐌 売れ残り・回転が鈍いアイテム</div>`;
+  const stale=staleItems(data);
+  if(stale.length){
+    html+=`<div style="display:flex;flex-direction:column;gap:7px;">`+stale.map(s=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border-radius:9px;padding:9px 12px;">
+        <div style="max-width:62%;"><div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.brand)} ${esc(s.item)}</div>
+        <div style="font-size:11px;color:var(--t3);">最終販売から <b style="color:#e5484d;">${s.daysSince}日</b></div></div>
+        <div style="text-align:right;"><div style="font-size:12px;font-weight:700;">相場 ${yenMan(s.median)}</div><div style="font-size:11px;color:var(--t3);">${s.count}回販売</div></div>
+      </div>`).join("")+`</div>`;
+    html+=insBox(`過去に売れていたのに、最近しばらく動いていないアイテムです。「以前は定期的に売れていた（${STALE_MIN_COUNT}回以上）のに、直近の販売間隔が過去平均の2倍以上空いている」ものを抽出しています。値下げ・陳列変更・SNS露出などのテコ入れ候補です。`);
+  }else{
+    html+=`<div class="muted" style="padding:10px 0;">回転が極端に鈍いアイテムは見つかりませんでした。</div>`;
+  }
+  html+=`</div>`;
+
+  el.innerHTML=html;
+
+  // draw monthly chart
+  if(months.length>=2){
+    const labels=months.map(m=>`${Math.floor(m/100)}/${String(m%100).padStart(2,"0")}`);
+    const vals=months.map(m=>byMonth[m].sales);
+    drawChart("chInsightMonth","bar",
+      {labels,datasets:[{label:"月別売上",data:vals,backgroundColor:vals.map((_,i)=>i===vals.length-1?"rgba(255,149,0,.5)":"rgba(0,113,227,.55)"),borderRadius:5}]},
+      {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>yenMan(c.raw)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>yenMan(v)}}}}
+    );
+  }
+}
+function insBox(html){return `<div style="font-size:12px;color:var(--t2);background:var(--card2);border-radius:10px;padding:11px 13px;line-height:1.7;">💡 <b>なぜこの数字？</b> ${html}</div>`;}
+
+// ブランドの勢い：直近N月 vs その前のN月
+function brandMomentum(data,months){
+  const window=months.length>=6?3:2;
+  if(months.length<window*2)return {up:[],down:[],window};
+  const recentMs=new Set(months.slice(-window));
+  const prevMs=new Set(months.slice(-window*2,-window));
+  const agg={};
+  data.forEach(r=>{const k=ymKey(r);const b=r.brand||"不明";if(!agg[b])agg[b]={recent:0,prev:0,cnt:0};if(recentMs.has(k)){agg[b].recent+=r.price;agg[b].cnt++;}else if(prevMs.has(k)){agg[b].prev+=r.price;agg[b].cnt++;}});
+  const arr=Object.entries(agg).map(([brand,v])=>({brand,...v})).filter(b=>b.cnt>=5&&(b.prev>0||b.recent>0));
+  const scored=arr.map(b=>({...b,pct:b.prev>0?Math.round((b.recent-b.prev)/b.prev*100):(b.recent>0?999:0)}));
+  const up=scored.filter(b=>b.pct>=20&&b.recent>0).sort((a,b)=>b.pct-a.pct).slice(0,5);
+  const down=scored.filter(b=>b.pct<=-20&&b.prev>0).sort((a,b)=>a.pct-b.pct).slice(0,5);
+  return {up,down,window};
+}
+
+// 売れ残り検出
+const STALE_MIN_COUNT=4;
+function staleItems(data){
+  const groups={};
+  data.forEach(r=>{const k=itemKey(r);if(!groups[k])groups[k]={brand:r.brand,item:(r.model||r.name),dates:[],prices:[]};const p=ymd(r);groups[k].dates.push(new Date(p.y,p.m-1,p.day).getTime());groups[k].prices.push(r.price);});
+  const now=Math.max(...data.map(r=>{const p=ymd(r);return new Date(p.y,p.m-1,p.day).getTime();}));
+  const out=[];
+  for(const k in groups){
+    const g=groups[k];if(g.dates.length<STALE_MIN_COUNT)continue;
+    const sorted=g.dates.slice().sort((a,b)=>a-b);
+    const last=sorted[sorted.length-1];
+    const daysSince=Math.round((now-last)/86400000);
+    // 過去の平均販売間隔
+    let gaps=0;for(let i=1;i<sorted.length;i++)gaps+=sorted[i]-sorted[i-1];
+    const avgGap=gaps/(sorted.length-1)/86400000;
+    if(avgGap>0&&daysSince>=avgGap*2&&daysSince>=21){
+      const sp=g.prices.slice().sort((a,b)=>a-b);
+      out.push({brand:g.brand,item:g.item,daysSince,count:g.dates.length,median:sp[Math.floor(sp.length/2)]});
+    }
+  }
+  return out.sort((a,b)=>b.daysSince-a.daysSince).slice(0,10);
+}
+
+
 
 // ===== 客層（日本人 vs 外国人） =====
 function isForeign(r){return /外国人|免税|UK|海外|inbound|INBOUND/i.test(r.cust||"");}
