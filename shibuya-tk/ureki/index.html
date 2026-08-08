@@ -49,6 +49,8 @@ tbody tr:hover{background:var(--card2);}
 tbody tr:active{background:#eaeaef;}
 .rank-badge{display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;font-weight:800;font-size:12px;color:#fff;}
 .chip{display:inline-block;padding:6px 12px;margin:3px;border-radius:16px;border:1px solid var(--line);background:var(--card2);font-size:12.5px;cursor:pointer;font-weight:600;transition:all .2s var(--spring);}
+.qchip{border:1.5px solid #d6ccff;background:#fff;color:#5b3fc4;border-radius:20px;padding:9px 15px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s var(--smooth);}
+.qchip:hover,.qchip:active{background:#5b3fc4;color:#fff;border-color:#5b3fc4;}
 .chip.on{background:var(--t1);color:#fff;border-color:var(--t1);transform:scale(1.04);}
 .trend-up{color:var(--green);font-weight:700;}
 .trend-down{color:var(--red);font-weight:700;}
@@ -491,8 +493,12 @@ function linReg(pts){ // pts=[{x,y}]
 function renderInsight(){
   const el=document.getElementById("insightBody");
   if(!el)return;
-  const data=segData().filter(r=>r.price>0&&ymd(r));
-  if(data.length<10){el.innerHTML='<div class="card"><div class="muted" style="padding:30px;text-align:center;">分析にはもう少しデータが必要です（最低10件）。</div></div>';return;}
+  const allData=segData().filter(r=>r.price>0&&ymd(r));
+  if(allData.length<10){el.innerHTML='<div class="card"><div class="muted" style="padding:30px;text-align:center;">分析にはもう少しデータが必要です（最低10件）。</div></div>';return;}
+
+  // 店舗フィルタ（分析全体を店舗で絞れる）
+  const stores=[...new Set(allData.map(r=>r.store||"不明"))].sort();
+  const data=insightStore?allData.filter(r=>(r.store||"不明")===insightStore):allData;
 
   // ---- 月別集計 ----
   const byMonth={};
@@ -501,7 +507,30 @@ function renderInsight(){
   const monthsFull=months.slice(0,-1); // 最新月は途中の可能性→予測の学習からは除外
   let html="";
 
-  // ===== 1. 売上予測 =====
+  // ===== 店舗フィルタ =====
+  html+=`<div class="card" style="padding:14px 16px;">
+    <div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;">🏬 店舗で絞り込み</div>
+    <select id="insightStoreSel" style="width:100%;">
+      <option value="">全店舗</option>${stores.map(s=>`<option value="${esc(s)}" ${insightStore===s?"selected":""}>${esc(s)}</option>`).join("")}
+    </select>
+  </div>`;
+
+  // ===== 🤔 なぜ？に答える（質問→データ推測） =====
+  html+=`<div class="card" style="background:linear-gradient(135deg,#f3f0ff,#fff);">
+    <div class="card-t">🤔 データに質問する</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:12px;line-height:1.6;">気になることをタップすると、実際のデータからその場で理由を推測します${insightStore?`（${esc(insightStore)}のデータ）`:""}。</p>
+    <div id="qaChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <button class="qchip" data-q="sales_change">💰 なぜ売上が変わった？</button>
+      <button class="qchip" data-q="best_brand">👑 何が一番売れてる？なぜ？</button>
+      <button class="qchip" data-q="trend">📈 今の勢いは？</button>
+      <button class="qchip" data-q="price_advice">🏷 値付けのアドバイス</button>
+      <button class="qchip" data-q="customer">🌏 どんな客層が買ってる？</button>
+      <button class="qchip" data-q="what_stock">📦 何を仕入れるべき？</button>
+      <button class="qchip" data-q="dow">📅 いつが売れる？</button>
+    </div>
+    <div id="qaAnswer" style="display:none;background:#fff;border-radius:14px;padding:16px;font-size:13.5px;line-height:1.85;box-shadow:0 2px 10px rgba(0,0,0,.06);"></div>
+  </div>`;
+
   html+=`<div class="card"><div class="card-t">🔮 来月の売上予測</div>`;
   if(monthsFull.length>=3){
     const pts=monthsFull.map((m,i)=>({x:i,y:byMonth[m].sales}));
@@ -615,6 +644,20 @@ function renderInsight(){
 
   el.innerHTML=html;
 
+  // store filter listener
+  const ssel=document.getElementById("insightStoreSel");
+  if(ssel)ssel.addEventListener("change",e=>{insightStore=e.target.value;renderInsight();});
+
+  // Q&A chips → answer from data
+  document.querySelectorAll("#qaChips .qchip").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const ans=document.getElementById("qaAnswer");
+      ans.style.display="block";
+      ans.innerHTML=answerQuestion(b.dataset.q,data,months,byMonth,insightStore);
+      ans.scrollIntoView({behavior:"smooth",block:"nearest"});
+    });
+  });
+
   // draw monthly chart
   if(months.length>=2){
     const labels=months.map(m=>`${Math.floor(m/100)}/${String(m%100).padStart(2,"0")}`);
@@ -625,7 +668,120 @@ function renderInsight(){
     );
   }
 }
+let insightStore=""; // 分析タブの店舗フィルタ
+
+// ============ 「なぜ？」に答える推測エンジン ============
+function answerQuestion(q,data,months,byMonth,store){
+  const scope=store?`<b>${esc(store)}</b>の`:"全店舗の";
+  const A=(title,body)=>`<div style="font-weight:800;font-size:15px;margin-bottom:10px;">${title}</div>${body}`;
+  const brandAgg=(recs)=>{const m={};recs.forEach(r=>{const b=r.brand||"不明";if(!m[b])m[b]={sales:0,count:0};m[b].sales+=r.price;m[b].count++;});return m;};
+
+  if(q==="sales_change"){
+    if(months.length<2)return A("💰 売上の変化","比較できる月がまだありません（1ヶ月分のみ）。");
+    const cur=months[months.length-1], prev=months[months.length-2];
+    const curS=byMonth[cur].sales, prevS=byMonth[prev].sales;
+    const diff=curS-prevS, pct=prevS>0?Math.round(diff/prevS*100):0;
+    const dir=diff>=0?"増加":"減少";
+    // ブランド別で主因を特定
+    const curB=brandAgg(data.filter(r=>ymKey(r)===cur)), prevB=brandAgg(data.filter(r=>ymKey(r)===prev));
+    const brands=[...new Set([...Object.keys(curB),...Object.keys(prevB)])];
+    const changes=brands.map(b=>({b,d:(curB[b]?.sales||0)-(prevB[b]?.sales||0),cur:curB[b]?.sales||0,prev:prevB[b]?.sales||0})).sort((a,b)=>diff>=0?b.d-a.d:a.d-b.d);
+    const top=changes.slice(0,3).filter(c=>Math.abs(c.d)>0);
+    let body=`<p>${scope}売上は前月比 <b style="color:${diff>=0?'var(--green)':'#e5484d'};">${pct>0?"+":""}${pct}%</b>（${yenMan(prevS)} → ${yenMan(curS)}）で<b>${dir}</b>しました。</p>`;
+    if(top.length){
+      body+=`<p style="margin-top:10px;">📌 <b>主な要因</b>：</p><ul style="margin:6px 0 0 18px;">`;
+      top.forEach(c=>{body+=`<li><b>${esc(c.b)}</b> が ${yenMan(c.prev)}→${yenMan(c.cur)}（${c.d>=0?"+":""}${yenMan(c.d)}）</li>`;});
+      body+=`</ul>`;
+      const lead=top[0];
+      body+=`<p style="margin-top:10px;color:var(--t2);">特に <b>${esc(lead.b)}</b> の${lead.d>=0?"伸び":"落ち込み"}が全体を${diff>=0?"押し上げ":"押し下げ"}た主因と推測されます。</p>`;
+    }
+    return A("💰 なぜ売上が変わった？",body);
+  }
+
+  if(q==="best_brand"){
+    const agg=brandAgg(data);
+    const ranked=Object.entries(agg).map(([b,v])=>({b,...v})).sort((a,b)=>b.sales-a.sales).slice(0,3);
+    if(!ranked.length)return A("👑 一番売れてる","データがありません。");
+    const top=ranked[0];
+    const totalSales=Object.values(agg).reduce((a,v)=>a+v.sales,0);
+    const share=Math.round(top.sales/totalSales*100);
+    // その主力ブランドで一番売れたアイテム
+    const items={};data.filter(r=>r.brand===top.b).forEach(r=>{const k=r.model||r.name||"その他";if(!items[k])items[k]={c:0,s:0};items[k].c++;items[k].s+=r.price;});
+    const topItem=Object.entries(items).sort((a,b)=>b[1].c-a[1].c)[0];
+    let body=`<p>${scope}売上トップは <b>${esc(top.b)}</b>（${yenMan(top.sales)}／${top.count}点、全体の<b>${share}%</b>）です。</p>`;
+    body+=`<p style="margin-top:8px;">2位以降：${ranked.slice(1).map(r=>`${esc(r.b)}（${yenMan(r.sales)}）`).join("、")}</p>`;
+    if(topItem)body+=`<p style="margin-top:10px;color:var(--t2);">📌 ${esc(top.b)}の中では <b>${esc(topItem[0])}</b> が${topItem[1].c}点で最も動いており、これが主力商品と推測されます。単価・在庫を厚めに持つ価値があります。</p>`;
+    return A("👑 何が一番売れてる？なぜ？",body);
+  }
+
+  if(q==="trend"){
+    if(months.length<3)return A("📈 今の勢い","傾向を見るには3ヶ月以上のデータが必要です。");
+    const recent=months.slice(-3).map(m=>byMonth[m].sales);
+    const rising=recent[2]>recent[0];
+    const mom=brandMomentum(data,months);
+    let body=`<p>${scope}直近3ヶ月の売上は ${recent.map(v=>yenMan(v)).join(" → ")} と推移し、全体としては<b style="color:${rising?'var(--green)':'#e5484d'};">${rising?"上向き":"やや停滞〜下降"}</b>です。</p>`;
+    if(mom.up.length)body+=`<p style="margin-top:10px;">🔥 <b>勢いのあるブランド</b>：${mom.up.slice(0,3).map(b=>`${esc(b.brand)}(+${b.pct}%)`).join("、")}</p>`;
+    if(mom.down.length)body+=`<p style="margin-top:6px;">🥶 <b>失速中</b>：${mom.down.slice(0,3).map(b=>`${esc(b.brand)}(${b.pct}%)`).join("、")}</p>`;
+    body+=`<p style="margin-top:10px;color:var(--t2);">勢いのあるブランドは今が仕入れ・展開の好機、失速中は在庫と値付けの見直し時期と推測されます。</p>`;
+    return A("📈 今の勢いは？",body);
+  }
+
+  if(q==="price_advice"){
+    // 値付け：直近で相場より大きく外れて売れているものを拾う
+    const groups={};data.forEach(r=>{const k=itemKey(r);if(!groups[k])groups[k]={brand:r.brand,item:r.model||r.name,prices:[]};groups[k].prices.push(r.price);});
+    const multi=Object.values(groups).filter(g=>g.prices.length>=4);
+    let body=`<p>${scope}複数回売れた商品の価格ばらつきから、値付けのヒントをまとめました。</p>`;
+    if(!multi.length){body+=`<p style="margin-top:8px;color:var(--t2);">まだ同一商品の複数販売が少なく、確かな値付け助言は出せません。</p>`;return A("🏷 値付けのアドバイス",body);}
+    // ばらつきが大きい＝値付けが安定していない
+    const spread=multi.map(g=>{const s=g.prices.slice().sort((a,b)=>a-b);const med=s[Math.floor(s.length/2)];const cv=med>0?(s[s.length-1]-s[0])/med:0;return {...g,med,cv};}).sort((a,b)=>b.cv-a.cv).slice(0,3);
+    body+=`<p style="margin-top:10px;">📌 <b>値付けがブレやすい商品</b>（相場が固まっていない＝交渉余地あり）：</p><ul style="margin:6px 0 0 18px;">`;
+    spread.forEach(g=>{body+=`<li><b>${esc(g.brand)} ${esc(g.item||"")}</b>：相場${yenMan(g.med)}前後だが幅が大きい</li>`;});
+    body+=`</ul><p style="margin-top:10px;color:var(--t2);">こうした商品は相場（中央値）を基準にしつつ、状態・付属品で上下させるのが安全です。相場より高く売れている実績があれば、強気の値付けも可能です。</p>`;
+    return A("🏷 値付けのアドバイス",body);
+  }
+
+  if(q==="customer"){
+    const fn=data.filter(r=>isForeign(r)), jp=data.filter(r=>!isForeign(r));
+    const fnS=fn.reduce((a,r)=>a+r.price,0), jpS=jp.reduce((a,r)=>a+r.price,0), tot=fnS+jpS||1;
+    const fnPct=Math.round(fnS/tot*100);
+    let body=`<p>${scope}売上の客層内訳は、日本人 <b>${100-fnPct}%</b>（${yenMan(jpS)}）／ 外国人 <b>${fnPct}%</b>（${yenMan(fnS)}）です。</p>`;
+    // 外国人が好むブランド
+    if(fn.length){
+      const fb=brandAgg(fn);const topFb=Object.entries(fb).sort((a,b)=>b[1].sales-a[1].sales).slice(0,3);
+      body+=`<p style="margin-top:10px;">🌏 <b>外国人客に人気</b>：${topFb.map(([b,v])=>`${esc(b)}（${yenMan(v.sales)}）`).join("、")}</p>`;
+    }
+    if(jp.length){
+      const jb=brandAgg(jp);const topJb=Object.entries(jb).sort((a,b)=>b[1].sales-a[1].sales).slice(0,3);
+      body+=`<p style="margin-top:6px;">🇯🇵 <b>日本人客に人気</b>：${topJb.map(([b,v])=>`${esc(b)}（${yenMan(v.sales)}）`).join("、")}</p>`;
+    }
+    body+=`<p style="margin-top:10px;color:var(--t2);">${fnPct>=40?"外国人比率が高いので、免税対応や英語での接客・SNS発信が売上に直結すると推測されます。":"日本人客が中心なので、国内トレンドやリピーター施策が効きやすいと推測されます。"}</p>`;
+    return A("🌏 どんな客層が買ってる？",body);
+  }
+
+  if(q==="what_stock"){
+    const mom=brandMomentum(data,months);
+    const agg=brandAgg(data);
+    const strong=Object.entries(agg).map(([b,v])=>({b,...v})).sort((a,b)=>b.count-a.count).slice(0,3);
+    let body=`<p>${scope}販売実績から、仕入れると回転が見込めるものを推測しました。</p>`;
+    if(mom.up.length){body+=`<p style="margin-top:10px;">🔥 <b>今伸びている（狙い目）</b>：${mom.up.slice(0,3).map(b=>`${esc(b.brand)}（+${b.pct}%）`).join("、")}</p>`;}
+    body+=`<p style="margin-top:6px;">💪 <b>安定して売れている（鉄板）</b>：${strong.map(s=>`${esc(s.b)}（${s.count}点）`).join("、")}</p>`;
+    body+=`<p style="margin-top:10px;color:var(--t2);">「伸びている」ブランドは今が仕入れ時、「安定」ブランドは切らさず在庫を持つのが定石です。逆に失速中（${mom.down.slice(0,2).map(b=>esc(b.brand)).join("、")||"該当なし"}）は仕入れを控えめにする判断ができます。</p>`;
+    return A("📦 何を仕入れるべき？",body);
+  }
+
+  if(q==="dow"){
+    const byDow=Array.from({length:7},()=>({sales:0,days:new Set()}));
+    data.forEach(r=>{const d=dowOf(r);if(d>=0){const p=ymd(r);byDow[d].sales+=r.price;byDow[d].days.add(p.y*10000+p.m*100+p.day);}});
+    const avg=byDow.map(x=>x.days.size?x.sales/x.days.size:0);
+    const best=avg.indexOf(Math.max(...avg));const worst=avg.indexOf(Math.min(...avg.filter(v=>v>0)));
+    let body=`<p>${scope}1営業日あたりの平均売上で見ると、<b>${DOW_JA[best]}曜</b>が最も高く、<b>${DOW_JA[worst]}曜</b>が低めです。</p>`;
+    body+=`<p style="margin-top:8px;color:var(--t2);">${avg[best]/(avg[worst]||1)>=1.4?`差が約${(avg[best]/(avg[worst]||1)).toFixed(1)}倍あるので、${DOW_JA[best]}曜に目玉商品の投入やスタッフ増員が効果的と推測されます。`:"曜日差は小さめなので、曜日より商品・客層の要因が大きいと推測されます。"}</p>`;
+    return A("📅 いつが売れる？",body);
+  }
+  return "質問を選んでください。";
+}
 function insBox(html){return `<div style="font-size:12px;color:var(--t2);background:var(--card2);border-radius:10px;padding:11px 13px;line-height:1.7;">💡 <b>なぜこの数字？</b> ${html}</div>`;}
+
 
 // ブランドの勢い：直近N月 vs その前のN月
 function brandMomentum(data,months){
