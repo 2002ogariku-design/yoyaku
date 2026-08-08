@@ -665,7 +665,12 @@ function staleItems(data){
   return out.sort((a,b)=>b.daysSince-a.daysSince).slice(0,10);
 }
 
-
+// ---- render dispatcher ----
+function renderAll(){
+  renderDash();renderItems();renderPriceSel();renderStore();renderTurn();renderCust();renderStaff();renderDataStats();
+  try{ renderInsight(); }
+  catch(e){ console.error("renderInsight error",e); const el=document.getElementById("insightBody"); if(el)el.innerHTML='<div class="card"><div class="muted" style="padding:20px;">分析の表示中にエラーが発生しました（他の機能は使えます）。</div></div>'; }
+}
 
 // ===== 客層（日本人 vs 外国人） =====
 function isForeign(r){return /外国人|免税|UK|海外|inbound|INBOUND/i.test(r.cust||"");}
