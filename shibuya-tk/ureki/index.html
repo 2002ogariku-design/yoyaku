@@ -106,6 +106,7 @@ tbody tr:active{background:#eaeaef;}
       <div id="dashFilterInfo" style="font-size:11.5px;color:var(--t3);margin-top:8px;"></div>
     </div>
     <div class="kpis" id="dashKpis"></div>
+    <div id="dashInsight"></div>
     <div class="card" id="dashCompare"></div>
     <div class="card"><div class="card-t">📈 月別売上推移</div><canvas id="chMonthly" height="90"></canvas></div>
     <div class="grid2">
@@ -126,6 +127,7 @@ tbody tr:active{background:#eaeaef;}
         </div>
       </div>
       <div style="margin-bottom:14px;"><input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名で検索..."></div>
+      <div id="itemsInsight"></div>
       <div style="margin-bottom:12px;" id="itemBrandChips"></div>
       <div style="overflow-x:auto;">
         <table id="itemsTable">
@@ -170,6 +172,7 @@ tbody tr:active{background:#eaeaef;}
 
   <!-- 店舗 -->
   <div class="view" id="v-store">
+    <div id="storeInsight"></div>
     <div class="card"><div class="card-t">🏬 店舗別 売上</div><div id="storeBars"></div></div>
     <div class="card">
       <div class="card-t">🏬 店舗を選んで売れ筋を見る</div>
@@ -947,6 +950,26 @@ function renderDash(){
   ];
   document.getElementById("dashKpis").innerHTML=kpis.map(k=>`<div class="kpi"><div class="lbl">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join("");
 
+  // 自動分析コメント
+  const di=document.getElementById("dashInsight");
+  if(di){
+    const withDate=valid.filter(r=>ymd(r));
+    let msg="";
+    if(withDate.length>=10){
+      const bm={};withDate.forEach(r=>{const k=ymKey(r);bm[k]=(bm[k]||0)+r.price;});
+      const ms=Object.keys(bm).map(Number).sort();
+      const profRate=total>0?Math.round(profit/total*100):0;
+      // 主力ブランド
+      const ba={};valid.forEach(r=>{ba[r.brand||"不明"]=(ba[r.brand||"不明"]||0)+r.price;});
+      const topB=Object.entries(ba).sort((a,b)=>b[1]-a[1])[0];
+      const topShare=topB?Math.round(topB[1]/total*100):0;
+      let trendTxt="";
+      if(ms.length>=2){const c=bm[ms[ms.length-1]],p=bm[ms[ms.length-2]];const pc=p>0?Math.round((c-p)/p*100):0;trendTxt=pc>=8?`直近月は前月比 <b style="color:var(--green)">+${pc}%</b> と伸びています。`:pc<=-8?`直近月は前月比 <b style="color:#e5484d">${pc}%</b> と落ちています。`:`直近月は前月比 ${pc>0?"+":""}${pc}% でほぼ横ばいです。`;}
+      msg=`${trendTxt} 売上の柱は <b>${esc(topB?topB[0]:"—")}</b>（全体の${topShare}%）。粗利率は ${profRate}% です。${topShare>=40?"1ブランド依存度が高めなので、他ブランドの育成も検討余地あり。":""}`;
+      di.innerHTML=`<div class="card" style="background:var(--card2);"><div style="font-size:12.5px;line-height:1.8;">🤖 <b>自動分析</b>：${msg} <span style="color:var(--t3);">詳しい理由は「📈 分析」タブの質問機能で。</span></div></div>`;
+    }else di.innerHTML="";
+  }
+
   // 前月比・前年比（最新月ベース）
   const byMo={};valid.forEach(r=>{const m=r.date.slice(0,6);byMo[m]=(byMo[m]||0)+r.price;});
   const moKeys=Object.keys(byMo).sort();
@@ -1025,6 +1048,19 @@ function renderItems(){
   document.getElementById("itemBrandChips").innerHTML='<span class="chip'+(itemBrandFilter===""?" on":"")+'" onclick="setItemBrand(\'\')">すべて</span>'+
     topBrands.map(b=>`<span class="chip${itemBrandFilter===b?' on':''}" onclick="setItemBrand('${esc(b).replace(/'/g,"")}')">${esc(b)}</span>`).join("");
   drawItemsTable(items);
+
+  // 売れ筋の自動分析
+  const ii=document.getElementById("itemsInsight");
+  if(ii){
+    const ranked=items.slice().sort((a,b)=>b.count-a.count);
+    const top=ranked[0];
+    if(top&&top.count>=2){
+      const rising=items.filter(i=>i.trend>=15&&i.count>=3).sort((a,b)=>b.trend-a.trend).slice(0,3);
+      let msg=`最も売れているのは <b>${esc(top.brand)} ${esc(top.item)}</b>（${top.count}回）。`;
+      if(rising.length)msg+=` 相場が上昇中で狙い目なのは ${rising.map(r=>`${esc(r.brand)}${esc(r.item)}(+${Math.round(r.trend)}%)`).join("、")}。`;
+      ii.innerHTML=`<div class="card" style="background:var(--card2);margin-bottom:12px;"><div style="font-size:12.5px;line-height:1.8;">🤖 <b>売れ筋分析</b>：${msg} <span style="color:var(--t3);">信頼度ドットが緑=データ十分。</span></div></div>`;
+    }else ii.innerHTML="";
+  }
 }
 window.setItemBrand=function(b){itemBrandFilter=b;renderItems();};
 function drawItemsTable(items){
@@ -1369,6 +1405,24 @@ function renderStore(){
   const sel=document.getElementById("storeSel");const cur=sel.value;
   sel.innerHTML='<option value="">店舗を選択...</option>'+stores.map(([s])=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
   if(stores.some(x=>x[0]===cur))sel.value=cur;
+
+  // 店舗比較の自動分析
+  const si=document.getElementById("storeInsight");
+  if(si){
+    if(stores.length>=2){
+      const top=stores[0],bottom=stores[stores.length-1];
+      const totalAll=stores.reduce((a,[,v])=>a+v.sales,0);
+      const topShare=Math.round(top[1].sales/totalAll*100);
+      // 各店の平均単価
+      const avgUp=top[1].sales/top[1].count, avgLo=bottom[1].sales/bottom[1].count;
+      let msg=`<b>${esc(top[0])}</b> が売上トップ（${YENk(top[1].sales)}、全体の${topShare}%）。`;
+      if(avgUp&&avgLo){
+        const hi=stores.map(([s,v])=>({s,a:v.sales/v.count})).sort((a,b)=>b.a-a.a)[0];
+        msg+=` 客単価が最も高いのは <b>${esc(hi.s)}</b>（${YEN(hi.a)}）で、高単価商品が動いている店舗と推測されます。`;
+      }
+      si.innerHTML=`<div class="card" style="background:var(--card2);"><div style="font-size:12.5px;line-height:1.8;">🤖 <b>店舗分析</b>：${msg} <span style="color:var(--t3);">店舗ごとの深掘りは「📈 分析」タブの店舗フィルタで。</span></div></div>`;
+    }else si.innerHTML="";
+  }
 }
 document.getElementById("storeSel").addEventListener("change",e=>{if(e.target.value)showStore(e.target.value);else document.getElementById("storeDetail").innerHTML="";});
 function showStore(store){
