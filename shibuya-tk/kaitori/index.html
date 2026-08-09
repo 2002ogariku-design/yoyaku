@@ -141,6 +141,8 @@ tbody tr:hover td{background:#fafafa;}
 .dz .note{text-align:center;font-size:11.5px;color:var(--faint);margin-top:10px;}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99;}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;align-items:center;justify-content:center;}
+.dmtone{border:1.5px solid #d6ccff;background:#fff;color:#5b3fc4;border-radius:18px;padding:8px 13px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s;}
+.dmtone.on{background:#5b3fc4;color:#fff;border-color:#5b3fc4;}
 .modal .box{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:92%;max-height:80vh;overflow-y:auto;font-size:13px;line-height:1.9;}
 </style>
 </head>
@@ -293,6 +295,30 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <div id="toast"></div>
+<div class="modal" id="dmModal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="box" style="max-width:560px;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">💬 営業文を作成</div>
+    <div id="dmItemLabel" style="font-size:12px;color:var(--dim);margin-bottom:14px;"></div>
+    <div style="font-size:11.5px;font-weight:700;color:var(--dim);margin-bottom:6px;">送り先・シーン</div>
+    <div id="dmToneSeg" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="dmtone on" data-t="new">新入荷のご案内</button>
+      <button class="dmtone" data-t="regular">常連様へ</button>
+      <button class="dmtone" data-t="hunting">探し物にヒット</button>
+      <button class="dmtone" data-t="pricedown">お値下げ・再案内</button>
+      <button class="dmtone" data-t="en">English</button>
+    </div>
+    <div style="font-size:11.5px;font-weight:700;color:var(--dim);margin-bottom:6px;">お客様のお名前（任意）</div>
+    <input type="text" id="dmCustName" placeholder="例：山田" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line,#ddd);font-size:14px;margin-bottom:12px;">
+    <textarea id="dmText" style="width:100%;min-height:230px;padding:14px;border-radius:11px;border:1px solid var(--line,#ddd);font-size:14px;line-height:1.8;font-family:inherit;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn dark" id="dmCopyBtn" style="flex:1;min-width:120px;">📋 コピー</button>
+      <button class="btn" id="dmRegenBtn" style="background:#eee;color:#333;">🔄 作り直す</button>
+      <button class="btn" onclick="document.getElementById('dmModal').style.display='none'" style="background:#eee;color:#333;">閉じる</button>
+    </div>
+    <div id="dmTick" style="font-size:12.5px;color:#0a8a3a;font-weight:700;opacity:0;transition:opacity .4s;margin-top:8px;">✓ コピーしました</div>
+  </div>
+</div>
+
 <div class="modal" id="helpModal" onclick="if(event.target===this)this.style.display='none'">
   <div class="box">
     <div style="font-size:15px;font-weight:800;margin-bottom:10px;">使い方</div>
@@ -627,7 +653,8 @@ function renderList(){
       <td class="hide-narrow" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">${esc(i.comment)||"-"}</td>
       <td class="hide-narrow">${esc(i.acc)||"-"}</td>
       <td><a class="g-btn" style="text-decoration:none;display:inline-block;" href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a></td>
-      <td><button class="st-btn" onclick="makeStory(${items.indexOf(i)})">📸 作成</button></td>
+      <td><button class="st-btn" onclick="makeStory(${items.indexOf(i)})">📸 作成</button>
+          <button class="st-btn" style="background:#5b3fc4;margin-top:3px;" onclick="makeDM(${items.indexOf(i)})">💬 営業文</button></td>
     </tr>`;
   }).join("")+(list.length>500?`<tr><td colspan="14" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
 
@@ -661,6 +688,7 @@ function renderList(){
           <div class="kc-actions">
             <a href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a>
             <button onclick="makeStory(${items.indexOf(i)})">📸 ストーリー</button>
+            <button onclick="makeDM(${items.indexOf(i)})" style="background:#5b3fc4;color:#fff;">💬 営業文</button>
           </div>
         </div>`;
       }).join("")+(list.length>300?`<div style="text-align:center;color:var(--faint);padding:12px;font-size:12px;">…他 ${list.length-300} 点（検索で絞り込んでください）</div>`:"");
@@ -794,6 +822,121 @@ document.getElementById("sItem").addEventListener("change",e=>{
   document.getElementById("sPrice").value=i.price||Math.round((i.priceExTax||0)*1.1)||"";
   drawStory();
 });
+// ===== 営業文（DM）自動生成 =====
+let dmIdx=null, dmTone="new";
+const DM_BRAND_VIBE=[
+  {k:["chrome hearts","クロムハーツ"],v:"存在感のあるシルバー"},
+  {k:["supreme","シュプリーム"],v:"人気のストリート"},
+  {k:["louis vuitton","ルイヴィトン","ヴィトン"],v:"王道のラグジュアリー"},
+  {k:["hermes","エルメス"],v:"最高峰のラグジュアリー"},
+  {k:["celine","セリーヌ"],v:"上品でミニマルな"},
+  {k:["prada","プラダ"],v:"洗練されたモードな"},
+  {k:["gucci","グッチ"],v:"華やかな"},
+  {k:["balenciaga","バレンシアガ"],v:"エッジの効いたモードな"},
+  {k:["rick owens","リックオウエンス"],v:"独創的でダークな"},
+  {k:["goro","ゴローズ"],v:"希少なシルバー"},
+  {k:["tiffany","ティファニー"],v:"上質なジュエリー"},
+  {k:["dior","ディオール"],v:"エレガントな"},
+  {k:["saint laurent","サンローラン"],v:"クールな"},
+];
+function dmVibe(brand){const l=(brand||"").toLowerCase();for(const b of DM_BRAND_VIBE){if(b.k.some(k=>l.includes(k)))return b.v;}return "";}
+function rankWord(rank){
+  return {S:"未使用に近い極上のコンディション",A:"目立つダメージのない綺麗なコンディション",B:"使用感はありますが状態良好",C:"使用感のあるお買い得なコンディション",D:"ダメージはありますがその分お求めやすい"}[rank]||"";
+}
+function buildDM(it,tone,custName){
+  const nm=custName?`${custName}様`:"いつもお世話になっております";
+  const brand=it.brand||"";
+  const name=it.name||"";
+  const vibe=dmVibe(brand);
+  const spec=[];
+  if(it.item)spec.push(it.item);
+  if(it.size)spec.push(`サイズ ${it.size}`);
+  if(it.color)spec.push(it.color);
+  const specTxt=spec.length?spec.join("／"):"";
+  const rw=rankWord(it.rank);
+  const price=it.price?`¥${Number(it.price).toLocaleString("ja-JP")}（税込）`:"";
+  const L=[];
+
+  if(tone==="en"){
+    L.push(custName?`Hello ${custName},`:"Hello,");
+    L.push("");
+    L.push(`We've just received a piece we think you'll love at RINKAN Shibuya.`);
+    L.push("");
+    L.push(`▪️ ${brand}${name?" "+name:""}`);
+    if(specTxt)L.push(`▪️ ${specTxt}`);
+    if(it.rank)L.push(`▪️ Condition: Rank ${it.rank}`);
+    if(price)L.push(`▪️ ${price} (tax included)`);
+    if(it.acc)L.push(`▪️ Includes: ${it.acc}`);
+    L.push("");
+    L.push("Tax-free shopping and worldwide shipping are available.");
+    L.push("Feel free to reply here if you'd like more photos or details.");
+    L.push("");
+    L.push("RINKAN Shibuya");
+    return L.join("\n");
+  }
+
+  // 冒頭
+  if(tone==="regular")L.push(`${nm}。いつもRINKAN渋谷店をご利用いただきありがとうございます。`);
+  else if(tone==="hunting")L.push(`${nm}。以前お探しとおっしゃっていた商品に近いお品が入荷しましたのでご連絡いたしました。`);
+  else if(tone==="pricedown")L.push(`${nm}。以前ご覧いただいた商品について、お値段の見直しができましたのでご案内いたします。`);
+  else L.push(`${nm}。RINKAN渋谷店より新入荷のご案内です。`);
+  L.push("");
+
+  // 本題
+  if(tone==="regular"&&vibe)L.push(`${custName?custName+"様":"お客様"}に好んでいただけそうな、${vibe}お品が入荷しました。`);
+  else if(vibe)L.push(`${vibe}お品が入荷しました。`);
+  L.push("");
+  L.push(`【${brand}】${name}`);
+  if(it.feature)L.push(it.feature);
+  if(specTxt)L.push(`・${specTxt}`);
+  if(it.rank)L.push(`・ランク${it.rank}${rw?`（${rw}）`:""}`);
+  if(price)L.push(`・${price}`);
+  if(it.acc)L.push(`・付属品：${it.acc}`);
+  L.push("");
+
+  // クロージング
+  if(tone==="pricedown"){
+    L.push("数に限りがございますので、ご検討中でしたらお早めにご連絡いただけますと幸いです。");
+  }else if(tone==="hunting"){
+    L.push("イメージに近いかどうか、写真の追加や詳細のご説明も可能です。お気軽にお申し付けください。");
+  }else if(tone==="regular"){
+    L.push("お取り置きも承っておりますので、気になるようでしたらお気軽にご返信ください。");
+  }else{
+    L.push("追加のお写真やご不明点など、お気軽にご返信ください。お取り置きも可能です。");
+  }
+  L.push("");
+  L.push("RINKAN渋谷店");
+  return L.join("\n");
+}
+window.makeDM=function(idx){
+  dmIdx=idx; dmTone="new";
+  const it=items[idx]; if(!it)return;
+  document.getElementById("dmItemLabel").textContent=`${it.brand} ${it.name}${it.size?" / "+it.size:""}`;
+  document.querySelectorAll("#dmToneSeg .dmtone").forEach(b=>b.classList.toggle("on",b.dataset.t==="new"));
+  regenDM();
+  document.getElementById("dmModal").style.display="flex";
+};
+function regenDM(){
+  if(dmIdx==null)return;
+  const it=items[dmIdx]; if(!it)return;
+  const nm=document.getElementById("dmCustName").value.trim();
+  document.getElementById("dmText").value=buildDM(it,dmTone,nm);
+}
+document.querySelectorAll("#dmToneSeg .dmtone").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#dmToneSeg .dmtone").forEach(x=>x.classList.toggle("on",x===b));
+    dmTone=b.dataset.t; regenDM();
+  });
+});
+document.getElementById("dmCustName").addEventListener("input",regenDM);
+document.getElementById("dmRegenBtn").addEventListener("click",regenDM);
+document.getElementById("dmCopyBtn").addEventListener("click",async()=>{
+  const ta=document.getElementById("dmText");
+  try{ await navigator.clipboard.writeText(ta.value); }
+  catch(e){ ta.select(); document.execCommand("copy"); }
+  const t=document.getElementById("dmTick"); t.style.opacity="1"; setTimeout(()=>t.style.opacity="0",2200);
+});
+
 window.makeStory=function(idx){
   document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
   document.querySelector('nav button[data-v="story"]').classList.add("on");
