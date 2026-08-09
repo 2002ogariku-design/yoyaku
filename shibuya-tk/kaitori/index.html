@@ -60,6 +60,8 @@ tbody tr:hover td{background:#fafafa;}
 .price{font-variant-numeric:tabular-nums;font-weight:700;}
 .g-btn,.st-btn{border-radius:5px;padding:4px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;}
 .dm-btn{background:#5b3fc4 !important;border-color:#5b3fc4 !important;color:#fff;}
+.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+.sortable:hover{background:#27272a;}
 /* comment / accessory: show the whole text (wrap) instead of cutting it off */
 .cmt-cell,.acc-cell{white-space:normal !important;word-break:break-word;line-height:1.5;min-width:150px;max-width:240px;font-size:12px;}
 .act-cell{white-space:nowrap;min-width:170px;}
@@ -156,7 +158,7 @@ tbody tr:hover td{background:#fafafa;}
 <header>
   <div>
     <h1>RINKAN SHIBUYA</h1>
-    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.09b</span></div>
+    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.09c</span></div>
   </div>
   <div class="right">
     <span class="count" id="hCount">0点</span>
@@ -193,12 +195,16 @@ tbody tr:hover td{background:#fafafa;}
       <select id="fDate"><option value="">すべての買取日</option></select>
     </div>
   </div>
+  <div id="bulkBar" style="display:none;position:sticky;top:0;z-index:20;background:#5b3fc4;color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:12px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:0 3px 12px rgba(91,63,196,.3);">
+    <span id="bulkCount" style="font-size:14px;font-weight:800;"></span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="makeBulkDM()" style="background:#fff;color:#5b3fc4;border:none;border-radius:9px;padding:9px 16px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit;">💬 まとめて営業文</button>
+      <button onclick="clearSelection()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">選択解除</button>
+    </div>
+  </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr>
-        <th>ブランド</th><th>商品名</th><th>アイテム</th><th>サイズ</th><th class="hide-narrow">カラー</th><th>ランク</th>
-        <th>税込売価</th><th>買取日</th><th>仕入店</th><th>バイヤー</th><th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>操作</th>
-      </tr></thead>
+      <thead><tr id="listHead"></tr></thead>
       <tbody id="tbody"><tr><td colspan="13"><div class="empty">データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。</div></td></tr></tbody>
     </table>
   </div>
@@ -300,6 +306,15 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <div id="toast"></div>
+<div class="modal" id="mkModal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="box" style="max-width:480px;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:2px;">📊 売れ履歴の相場</div>
+    <div id="mkTitle" style="font-size:12px;color:var(--dim);margin-bottom:14px;"></div>
+    <div id="mkBody"></div>
+    <button class="btn dark w" style="margin-top:14px;" onclick="document.getElementById('mkModal').style.display='none'">閉じる</button>
+  </div>
+</div>
+
 <div class="modal" id="dmModal" onclick="if(event.target===this)this.style.display='none'">
   <div class="box" style="max-width:560px;">
     <div style="font-size:16px;font-weight:800;margin-bottom:4px;">💬 営業文を作成</div>
@@ -627,8 +642,41 @@ function filtered(){
     return true;
   });
 }
+// ===== 並び替え =====
+let sortKey="", sortDir=-1; // dir: -1 = 大きい順/新しい順, 1 = 小さい順/古い順
+function sortList(list){
+  if(!sortKey)return list;
+  const val=(i)=>{
+    switch(sortKey){
+      case "price": return i.price||0;
+      case "cost": return i.cost||0;
+      case "date": return normDate(i.date)||"";
+      case "brand": return i.brand||"";
+      case "name": return i.name||"";
+      case "item": return i.item||"";
+      case "rank": return ({S:5,A:4,B:3,C:2,D:1})[i.rank]||0;
+      case "store": return i.store||i.origStore||"";
+      case "buyer": return i.buyer||"";
+      case "size": return i.size||"";
+      default: return "";
+    }
+  };
+  return list.slice().sort((a,b)=>{
+    const x=val(a),y=val(b);
+    if(typeof x==="number"&&typeof y==="number")return (x-y)*sortDir;
+    return String(x).localeCompare(String(y),"ja")*sortDir;
+  });
+}
+window.setSort=function(key){
+  if(sortKey===key)sortDir=-sortDir; else {sortKey=key;sortDir=(key==="brand"||key==="name"||key==="item"||key==="store"||key==="buyer"||key==="size")?1:-1;}
+  renderList();
+};
+function sortArrow(key){
+  if(sortKey!==key)return '<span style="opacity:.3;">⇅</span>';
+  return sortDir===-1?"▼":"▲";
+}
 function renderList(){
-  const list=filtered();
+  const list=sortList(filtered());
   const bi=document.getElementById("batchIndicator");
   if(bi){
     if(batchFilter){
@@ -643,12 +691,30 @@ function renderList(){
   document.getElementById("stCost").textContent=yenMan(items.reduce((s,i)=>s+i.cost,0));
   document.getElementById("dataCount").textContent=`現在 ${items.length} 点のデータが保存されています`;
   const tb=document.getElementById("tbody");
-  if(!list.length){tb.innerHTML=`<tr><td colspan="13"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;return;}
+  // sortable header + select-all checkbox
+  const head=document.getElementById("listHead");
+  if(head){
+    head.innerHTML=`
+      <th style="width:34px;"><input type="checkbox" id="selAll" title="表示中をすべて選択" style="width:16px;height:16px;cursor:pointer;"></th>
+      <th class="sortable" onclick="setSort('brand')">ブランド ${sortArrow("brand")}</th>
+      <th class="sortable" onclick="setSort('name')">商品名 ${sortArrow("name")}</th>
+      <th class="sortable" onclick="setSort('item')">アイテム ${sortArrow("item")}</th>
+      <th class="sortable" onclick="setSort('size')">サイズ ${sortArrow("size")}</th>
+      <th class="hide-narrow">カラー</th>
+      <th class="sortable" onclick="setSort('rank')">ランク ${sortArrow("rank")}</th>
+      <th class="sortable" onclick="setSort('price')">税込売価 ${sortArrow("price")}</th>
+      <th class="sortable" onclick="setSort('date')">買取日 ${sortArrow("date")}</th>
+      <th class="sortable" onclick="setSort('store')">仕入店 ${sortArrow("store")}</th>
+      <th class="sortable" onclick="setSort('buyer')">バイヤー ${sortArrow("buyer")}</th>
+      <th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>操作</th>`;
+  }
+  if(!list.length){tb.innerHTML=`<tr><td colspan="14"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;updateBulkBar();return;}
   tb.innerHTML=list.slice(0,500).map((i,idx)=>{
     const gq=encodeURIComponent([i.brand,i.name].filter(Boolean).join(" "));
     const rk=i.rank||"";
     const dateStr=i.date?i.date.split(" ")[0].replace(/-/g,"/"):"";
     return `<tr>
+      <td><input type="checkbox" class="selBox" data-idx="${items.indexOf(i)}" ${selectedIdx.has(items.indexOf(i))?"checked":""} style="width:16px;height:16px;cursor:pointer;"></td>
       <td style="font-weight:700;">${esc(i.brand)}</td>
       <td><div class="iname">${esc(i.name)}</div><div class="isub">${esc(i.feature||"")}</div></td>
       <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td class="hide-narrow">${esc(i.color)||"-"}</td>
@@ -659,9 +725,28 @@ function renderList(){
       <td class="hide-narrow acc-cell" title="${esc(i.acc)||""}">${esc(i.acc)||"-"}</td>
       <td class="act-cell"><a class="g-btn" style="text-decoration:none;display:inline-block;" href="https://www.google.com/search?q=${gq}" target="_blank">🔍</a>
           <button class="st-btn" onclick="makeStory(${items.indexOf(i)})">📸</button>
+          <button class="st-btn" style="background:#0071e3;border-color:#0071e3;" onclick="showMarket(${items.indexOf(i)})">📊 相場</button>
           <button class="st-btn dm-btn" onclick="makeDM(${items.indexOf(i)})">💬 営業文</button></td>
     </tr>`;
-  }).join("")+(list.length>500?`<tr><td colspan="13" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
+  }).join("")+(list.length>500?`<tr><td colspan="14" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
+
+  // selection wiring
+  tb.querySelectorAll(".selBox").forEach(cb=>{
+    cb.addEventListener("change",()=>{
+      const n=Number(cb.dataset.idx);
+      if(cb.checked)selectedIdx.add(n); else selectedIdx.delete(n);
+      updateBulkBar();
+    });
+  });
+  const sa=document.getElementById("selAll");
+  if(sa){
+    sa.checked=list.length>0&&list.every(i=>selectedIdx.has(items.indexOf(i)));
+    sa.addEventListener("change",()=>{
+      list.forEach(i=>{const n=items.indexOf(i);if(sa.checked)selectedIdx.add(n);else selectedIdx.delete(n);});
+      renderList();
+    });
+  }
+  updateBulkBar();
 
   // Mobile card view
   const cl=document.getElementById("cardList");
@@ -673,10 +758,13 @@ function renderList(){
         const rk=i.rank||"";
         return `<div class="kcard">
           <div class="kc-top">
-            <div style="min-width:0;">
-              <div class="kc-brand">${esc(i.brand)}</div>
-              <div class="kc-name">${esc(i.name)}</div>
-              ${i.feature?`<div class="kc-feat">${esc(i.feature)}</div>`:""}
+            <div style="min-width:0;display:flex;gap:10px;align-items:flex-start;">
+              <input type="checkbox" class="selBoxM" data-idx="${items.indexOf(i)}" ${selectedIdx.has(items.indexOf(i))?"checked":""} style="width:20px;height:20px;margin-top:2px;flex-shrink:0;cursor:pointer;">
+              <div style="min-width:0;">
+                <div class="kc-brand">${esc(i.brand)}</div>
+                <div class="kc-name">${esc(i.name)}</div>
+                ${i.feature?`<div class="kc-feat">${esc(i.feature)}</div>`:""}
+              </div>
             </div>
             <div class="kc-price">${i.price?yen(i.price):"-"}</div>
           </div>
@@ -693,10 +781,18 @@ function renderList(){
           <div class="kc-actions">
             <a href="https://www.google.com/search?q=${gq}" target="_blank">🔍 Google</a>
             <button onclick="makeStory(${items.indexOf(i)})">📸 ストーリー</button>
+            <button onclick="showMarket(${items.indexOf(i)})" style="background:#0071e3;color:#fff;">📊 相場</button>
             <button onclick="makeDM(${items.indexOf(i)})" style="background:#5b3fc4;color:#fff;">💬 営業文</button>
           </div>
         </div>`;
       }).join("")+(list.length>300?`<div style="text-align:center;color:var(--faint);padding:12px;font-size:12px;">…他 ${list.length-300} 点（検索で絞り込んでください）</div>`:"");
+      cl.querySelectorAll(".selBoxM").forEach(cb=>{
+        cb.addEventListener("change",()=>{
+          const n=Number(cb.dataset.idx);
+          if(cb.checked)selectedIdx.add(n); else selectedIdx.delete(n);
+          updateBulkBar();
+        });
+      });
     }
   }
 }
@@ -827,6 +923,142 @@ document.getElementById("sItem").addEventListener("change",e=>{
   document.getElementById("sPrice").value=i.price||Math.round((i.priceExTax||0)*1.1)||"";
   drawStory();
 });
+// ===== 売れ履歴との連動（相場・販売実績を照合） =====
+// Supabase の設定・認証ヘッダはこのツール既存のもの（SB_URL / sbHeaders）を再利用する。
+let _ureki=null,_urekiLoading=null;
+async function loadUreki(){
+  if(_ureki)return _ureki;
+  if(_urekiLoading)return _urekiLoading;
+  _urekiLoading=(async()=>{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq.ureki&select=payload",{headers:sbHeaders()});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    _ureki=(p&&p.rows&&p.schema)?p.rows.map(row=>{const o={};p.schema.forEach((k,i)=>o[k]=row[i]);return o;}):[];
+    return _ureki;
+  })();
+  return _urekiLoading;
+}
+function med(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);}
+// 商品に対する相場を返す
+function marketFor(data,it){
+  const bl=(it.brand||"").toLowerCase().split("×")[0].trim();
+  const nm=(it.name||"").toLowerCase();
+  if(!bl)return null;
+  const sameBrand=data.filter(r=>r.price>0&&String(r.brand||"").toLowerCase().includes(bl));
+  if(!sameBrand.length)return null;
+  // 同じ商品名（部分一致）を優先
+  let exact=[];
+  if(nm){
+    const key=nm.replace(/[\s\/]/g,"").slice(0,10);
+    exact=sameBrand.filter(r=>String(r.model||r.name||"").toLowerCase().replace(/[\s\/]/g,"").includes(key));
+  }
+  const use=exact.length>=2?exact:sameBrand;
+  const prices=use.map(r=>r.price);
+  return {n:use.length,median:med(prices),min:Math.min(...prices),max:Math.max(...prices),exact:exact.length>=2,brandN:sameBrand.length};
+}
+window.showMarket=async function(idx){
+  const it=items[idx];if(!it)return;
+  const box=document.getElementById("mkBody");
+  document.getElementById("mkTitle").textContent=`${it.brand} ${it.name||""}`;
+  document.getElementById("mkModal").style.display="flex";
+  box.innerHTML='<div style="color:#71717a;">📊 売れ履歴を照合中...</div>';
+  let data;
+  try{data=await loadUreki();}
+  catch(e){box.innerHTML='<div style="color:#dc2626;">売れ履歴データを取得できませんでした（'+e.message+'）</div>';return;}
+  const m=marketFor(data,it);
+  if(!m){box.innerHTML='<div style="color:#71717a;">この商品・ブランドの販売実績は見つかりませんでした。</div>';return;}
+  const cur=it.price||0;
+  const diff=m.median?Math.round((cur-m.median)/m.median*100):0;
+  const col=Math.abs(diff)<=10?"#16a34a":(diff>0?"#d97706":"#0071e3");
+  box.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:#f4f4f5;border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:#71717a;">相場（中央値）</div>
+        <div style="font-size:22px;font-weight:800;">${yen(m.median)}</div>
+      </div>
+      <div style="background:#f4f4f5;border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:#71717a;">価格帯</div>
+        <div style="font-size:15px;font-weight:700;">${yen(m.min)}〜${yen(m.max)}</div>
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:#52525b;margin-bottom:12px;line-height:1.7;">
+      ${m.exact?`同一商品の販売実績 <b>${m.n}件</b> を元に算出しています。`:`同一商品の実績が少ないため、<b>${it.brand}</b> 全体の販売 <b>${m.n}件</b> から算出した参考値です。`}
+    </div>
+    ${cur?`<div style="background:${col}18;color:${col};border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;line-height:1.6;">
+      💡 今回の売価 ${yen(cur)} は相場${diff>0?`より <b>+${diff}%</b> 高め`:diff<0?`より <b>${diff}%</b> 安め`:`どおり`}です。
+      ${Math.abs(diff)<=10?"適正な値付けと考えられます。":diff>0?"強気の設定なので、回転を優先するなら調整余地があります。":"早期回転が見込める一方、利益は控えめです。"}
+    </div>`:""}`;
+};
+
+// ===== 複数選択 & まとめて営業文 =====
+let selectedIdx=new Set();
+function updateBulkBar(){
+  const bar=document.getElementById("bulkBar");
+  if(!bar)return;
+  if(selectedIdx.size){
+    bar.style.display="flex";
+    document.getElementById("bulkCount").textContent=`✓ ${selectedIdx.size}点を選択中`;
+  }else bar.style.display="none";
+}
+window.clearSelection=function(){selectedIdx.clear();renderList();};
+window.makeBulkDM=function(){
+  const picks=[...selectedIdx].map(n=>items[n]).filter(Boolean);
+  if(!picks.length)return;
+  dmIdx=null; dmBulk=picks; dmTone="new";
+  document.getElementById("dmItemLabel").textContent=`${picks.length}点をまとめてご案内`;
+  document.querySelectorAll("#dmToneSeg .dmtone").forEach(b=>b.classList.toggle("on",b.dataset.t==="new"));
+  regenDM();
+  document.getElementById("dmModal").style.display="flex";
+};
+let dmBulk=null;
+function buildBulkDM(list,tone,custName){
+  const nm=custName?`${custName}様`:"いつもお世話になっております";
+  const L=[];
+  if(tone==="en"){
+    L.push(custName?`Hello ${custName},`:"Hello,");
+    L.push("");
+    L.push(`We've just received ${list.length} pieces we think you'll love at RINKAN Shibuya.`);
+    L.push("");
+    list.forEach((it,n)=>{
+      L.push(`${n+1}. ${it.brand}${it.name?" "+it.name:""}`);
+      const sp=[];if(it.item)sp.push(it.item);if(it.size)sp.push("Size "+it.size);if(it.color)sp.push(it.color);
+      if(sp.length)L.push(`   ${sp.join(" / ")}`);
+      if(it.rank)L.push(`   Condition: Rank ${it.rank}`);
+      if(it.price)L.push(`   ¥${Number(it.price).toLocaleString("ja-JP")} (tax incl.)`);
+      L.push("");
+    });
+    L.push("Tax-free shopping and worldwide shipping available.");
+    L.push("Reply here for more photos or details.");
+    L.push("");L.push("RINKAN Shibuya");
+    return L.join("\n");
+  }
+  if(tone==="regular")L.push(`${nm}。いつもRINKAN渋谷店をご利用いただきありがとうございます。`);
+  else if(tone==="hunting")L.push(`${nm}。以前お探しとおっしゃっていた条件に近いお品が入荷しましたのでご連絡いたしました。`);
+  else if(tone==="pricedown")L.push(`${nm}。以前ご覧いただいた商品を含め、お値段の見直しができましたのでご案内いたします。`);
+  else L.push(`${nm}。RINKAN渋谷店より新入荷のご案内です。`);
+  L.push("");
+  L.push(`${custName?custName+"様":"お客様"}におすすめのお品を${list.length}点ご紹介いたします。`);
+  L.push("");
+  list.forEach((it,n)=>{
+    L.push(`──────────`);
+    L.push(`${n+1}. 【${it.brand}】${it.name||""}`);
+    if(it.feature)L.push(`　${it.feature}`);
+    const sp=[];if(it.item)sp.push(it.item);if(it.size)sp.push(`サイズ ${it.size}`);if(it.color)sp.push(it.color);
+    if(sp.length)L.push(`　${sp.join("／")}`);
+    if(it.rank){const rw=rankWord(it.rank);L.push(`　ランク${it.rank}${rw?`（${rw}）`:""}`);}
+    if(it.price)L.push(`　¥${Number(it.price).toLocaleString("ja-JP")}（税込）`);
+    if(it.acc)L.push(`　付属品：${it.acc}`);
+  });
+  L.push(`──────────`);
+  L.push("");
+  if(tone==="pricedown")L.push("数に限りがございますので、気になるお品がございましたらお早めにご連絡ください。");
+  else L.push("気になるお品がございましたら、追加のお写真もお送りできます。お取り置きも承っております。");
+  L.push("");
+  L.push("RINKAN渋谷店");
+  return L.join("\n");
+}
+
 // ===== 営業文（DM）自動生成 =====
 let dmIdx=null, dmTone="new";
 const DM_BRAND_VIBE=[
@@ -914,7 +1146,7 @@ function buildDM(it,tone,custName){
   return L.join("\n");
 }
 window.makeDM=function(idx){
-  dmIdx=idx; dmTone="new";
+  dmIdx=idx; dmBulk=null; dmTone="new";
   const it=items[idx]; if(!it)return;
   document.getElementById("dmItemLabel").textContent=`${it.brand} ${it.name}${it.size?" / "+it.size:""}`;
   document.querySelectorAll("#dmToneSeg .dmtone").forEach(b=>b.classList.toggle("on",b.dataset.t==="new"));
@@ -922,9 +1154,13 @@ window.makeDM=function(idx){
   document.getElementById("dmModal").style.display="flex";
 };
 function regenDM(){
+  const nm=document.getElementById("dmCustName").value.trim();
+  if(dmBulk&&dmBulk.length){
+    document.getElementById("dmText").value=buildBulkDM(dmBulk,dmTone,nm);
+    return;
+  }
   if(dmIdx==null)return;
   const it=items[dmIdx]; if(!it)return;
-  const nm=document.getElementById("dmCustName").value.trim();
   document.getElementById("dmText").value=buildDM(it,dmTone,nm);
 }
 document.querySelectorAll("#dmToneSeg .dmtone").forEach(b=>{
