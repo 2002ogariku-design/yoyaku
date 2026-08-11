@@ -159,9 +159,18 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
     <button data-m="post">📸 投稿の記録</button>
   </div>
   <div class="c" id="fInsight">
-    <div class="c-title">今日のアカウント数値</div>
+    <div class="c-title">アカウント数値の記録</div>
+    <p style="font-size:12px;color:var(--t2);margin:0 0 12px;line-height:1.5;">当日のインサイトは確定していないため、<b>実際に見られる最新2日間</b>の数字を入力し、その対象期間を選んでください。</p>
+    <div style="background:var(--card2);border-radius:12px;padding:12px 14px;margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600;color:var(--t2);">📅 対象期間</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <input type="date" id="iFrom" style="flex:1;min-width:130px;">
+        <span style="color:var(--t3);">〜</span>
+        <input type="date" id="iTo" style="flex:1;min-width:130px;">
+        <button type="button" id="iAuto" style="border:none;background:#fff;color:var(--blue,#0071e3);font-family:inherit;font-size:12px;font-weight:700;padding:9px 12px;border-radius:9px;cursor:pointer;white-space:nowrap;">最新2日間</button>
+      </div>
+    </div>
     <div class="fg">
-      <div class="f full"><label>📅 日付</label><input type="date" id="iDate"></div>
       <div class="f"><label>フォロワー数</label><input type="number" min="0" id="iF" placeholder="27000"></div>
       <div class="f"><label>リーチ</label><input type="number" min="0" id="iR" placeholder="0"></div>
       <div class="f"><label>インプレッション</label><input type="number" min="0" id="iI" placeholder="0"></div>
@@ -336,10 +345,15 @@ document.querySelectorAll(".ctab").forEach(b=>{b.addEventListener("click",()=>{b
 // save insight
 document.getElementById("saveI").addEventListener("click",async()=>{
   const name=await ensureName(false);if(!name)return;
-  const e={date:document.getElementById("iDate").value||today(),followers:Number(document.getElementById("iF").value)||0,reach:Number(document.getElementById("iR").value)||0,impressions:Number(document.getElementById("iI").value)||0,profileVisits:Number(document.getElementById("iP").value)||0,webTaps:Number(document.getElementById("iW").value)||0,dm:Number(document.getElementById("iD").value)||0,saleClients:Number(document.getElementById("iSC").value)||0,saleItems:Number(document.getElementById("iSI").value)||0,saleAmount:Number(document.getElementById("iSA").value)||0,buyClients:Number(document.getElementById("iBC").value)||0,buyItems:Number(document.getElementById("iBI").value)||0,buyAmount:Number(document.getElementById("iBA").value)||0,by:name,savedAt:new Date().toISOString()};
+  const from=document.getElementById("iFrom").value;
+  const to=document.getElementById("iTo").value;
+  if(!from||!to){alert("対象期間（開始日と終了日）を選んでください");return;}
+  if(from>to){alert("開始日が終了日より後になっています");return;}
+  // date = 期間の終了日（グラフ・並び順の基準）。期間そのものも保存する。
+  const e={date:to,insightFrom:from,insightTo:to,followers:Number(document.getElementById("iF").value)||0,reach:Number(document.getElementById("iR").value)||0,impressions:Number(document.getElementById("iI").value)||0,profileVisits:Number(document.getElementById("iP").value)||0,webTaps:Number(document.getElementById("iW").value)||0,dm:Number(document.getElementById("iD").value)||0,saleClients:Number(document.getElementById("iSC").value)||0,saleItems:Number(document.getElementById("iSI").value)||0,saleAmount:Number(document.getElementById("iSA").value)||0,buyClients:Number(document.getElementById("iBC").value)||0,buyItems:Number(document.getElementById("iBI").value)||0,buyAmount:Number(document.getElementById("iBA").value)||0,by:name,savedAt:new Date().toISOString()};
   if(!e.followers){alert("フォロワー数を入力してください");return;}
   const btn=document.getElementById("saveI");btn.textContent="保存中...";btn.disabled=true;
-  try{DB=await ghGet();const i=DB.insights.findIndex(x=>x.date===e.date);if(i>=0)DB.insights[i]=e;else DB.insights.push(e);DB.insights.sort((a,b)=>a.date<b.date?-1:1);await ghSet(DB);const t=document.getElementById("tickI");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["iF","iR","iI","iP","iW","iD","iSC","iSI","iSA","iBC","iBI","iBA"].forEach(id=>document.getElementById(id).value="");renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="インサイトを記録";btn.disabled=false;}
+  try{DB=await ghGet();const i=DB.insights.findIndex(x=>x.date===e.date);if(i>=0)DB.insights[i]=e;else DB.insights.push(e);DB.insights.sort((a,b)=>a.date<b.date?-1:1);await ghSet(DB);const t=document.getElementById("tickI");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["iF","iR","iI","iP","iW","iD","iSC","iSI","iSA","iBC","iBI","iBA"].forEach(id=>document.getElementById(id).value="");setInsightPeriodDefault();renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="インサイトを記録";btn.disabled=false;}
 });
 
 // save post
@@ -362,7 +376,7 @@ function renderPulse(){
   if(!ins.length){document.getElementById("pNum").textContent="—";document.getElementById("pDate").textContent="データを記録するとここに表示されます";return;}
   const last=ins[ins.length-1],prev=ins.length>1?ins[ins.length-2]:null;
   document.getElementById("pNum").innerHTML=nf(last.followers)+(prev?`<span class="delta ${last.followers>prev.followers?"up":last.followers<prev.followers?"dn":"fl"}">${last.followers>=prev.followers?"+":""}${nf(last.followers-prev.followers)}</span>`:"");
-  document.getElementById("pDate").textContent=`${last.date}${prev?` (前回比)`:""}`; 
+  document.getElementById("pDate").textContent=`${(last.insightFrom&&last.insightTo)?`${last.insightFrom} 〜 ${last.insightTo}`:last.date}${prev?` (前回比)`:""}`; 
 }
 function renderKpis(){
   const days=dl(7),ins7=DB.insights.filter(i=>days.includes(i.date)),posts7=DB.posts.filter(p=>days.includes(p.date));
@@ -393,7 +407,7 @@ function renderDash(){renderPulse();renderKpis();renderFolChart();renderReachCha
 
 // list
 function renderPosts(){const q=(document.getElementById("qS").value||"").toLowerCase(),cat=document.getElementById("qC").value;let list=[...DB.posts].reverse();if(q)list=list.filter(p=>[p.brand,p.itemName,p.note].join(" ").toLowerCase().includes(q));if(cat)list=list.filter(p=>p.category===cat);const el=document.getElementById("postList");if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.slice(0,50).map(p=>`<div class="pi"><div class="top"><div><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><button class="del" onclick="delPost('${p.id}')">✕</button></div><div class="chips"><span class="chip">${p.date}</span><span class="chip">${esc(p.type)}</span>${p.priceRange?`<span class="chip">${esc(p.priceRange)}</span>`:""}${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div>${(p.views||p.likes)?`<div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span></div>`:""}</div>`).join("");}
-function renderInsights(){const el=document.getElementById("insList"),list=[...DB.insights].reverse().slice(0,30);if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.map(i=>`<div class="pi"><div class="top"><span class="brand">${i.date}</span></div><div class="mrow" style="flex-wrap:wrap;gap:8px;">  <span>👥 <b>${nf(i.followers)}</b></span><span>📡 <b>${nf(i.reach)}</b></span><span>👁 <b>${nf(i.impressions)}</b></span><span>🚪 <b>${nf(i.profileVisits)}</b></span><span>✉️ <b>${nf(i.dm)}</b></span></div>${(i.saleClients||i.buyClients)?`<div class="mrow" style="flex-wrap:wrap;gap:8px;margin-top:4px;"><span style="color:var(--green);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span><span style="color:var(--blue);">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span></div>`:""}</div>`).join("");}
+function renderInsights(){const el=document.getElementById("insList"),list=[...DB.insights].reverse().slice(0,30);if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.map(i=>`<div class="pi"><div class="top"><span class="brand">${(i.insightFrom&&i.insightTo)?`${i.insightFrom} 〜 ${i.insightTo}`:i.date}</span>${(i.insightFrom&&i.insightTo)?'<span style="font-size:10px;color:var(--t3);font-weight:600;">対象期間</span>':""}</div><div class="mrow" style="flex-wrap:wrap;gap:8px;">  <span>👥 <b>${nf(i.followers)}</b></span><span>📡 <b>${nf(i.reach)}</b></span><span>👁 <b>${nf(i.impressions)}</b></span><span>🚪 <b>${nf(i.profileVisits)}</b></span><span>✉️ <b>${nf(i.dm)}</b></span></div>${(i.saleClients||i.buyClients)?`<div class="mrow" style="flex-wrap:wrap;gap:8px;margin-top:4px;"><span style="color:var(--green);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span><span style="color:var(--blue);">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span></div>`:""}</div>`).join("");}
 
 document.getElementById("badge").addEventListener("click",()=>openName(false));
 document.getElementById("nameCancel").addEventListener("click",closeName);
@@ -808,9 +822,20 @@ function renderArchive(){
     </div>`).join("")+'</div>';
 }
 
+// インサイト対象期間のデフォルト：前日〜2日前（当日はまだ確定しないため）
+function setInsightPeriodDefault(){
+  const d=new Date();
+  const to=new Date(d);to.setDate(d.getDate()-1);      // 前日
+  const from=new Date(d);from.setDate(d.getDate()-2);  // 2日前
+  const f=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+  document.getElementById("iFrom").value=f(from);
+  document.getElementById("iTo").value=f(to);
+}
+document.getElementById("iAuto").addEventListener("click",setInsightPeriodDefault);
+
 (async function(){
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
-  document.getElementById("iDate").value=today();document.getElementById("pDt").value=today();
+  setInsightPeriodDefault();document.getElementById("pDt").value=today();
   updBadge();await ensureName(true);
   try{DB=await ghGet();}catch(e){err("読み込み失敗："+e.message);}
   updBrandDl();renderDash();renderPosts();renderInsights();renderArchive();drawStory();updateBrandDl();
