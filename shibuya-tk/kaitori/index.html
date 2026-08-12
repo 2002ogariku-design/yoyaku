@@ -158,7 +158,7 @@ tbody tr:hover td{background:#fafafa;}
 <header>
   <div>
     <h1>RINKAN SHIBUYA</h1>
-    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.11</span></div>
+    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.12</span></div>
   </div>
   <div class="right">
     <span class="count" id="hCount">0点</span>
@@ -363,13 +363,42 @@ let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
 let uploadHistory=[];
 let batchFilter="";
 
+// HTTP ヘッダーには ISO-8859-1（実質ASCII）しか入れられない。
+// 日本語入力(IME)がオンのまま入力すると全角文字が混ざり、
+// fetch が "String contains non ISO-8859-1 code point" で即座に失敗する。
+// → 全角英数を半角へ正規化し、それでも残る非ASCII文字は取り除く。
+function sanitizePw(s){
+  if(!s)return "";
+  // 全角英数字・記号を半角へ
+  let t=String(s).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  t=t.replace(/\u3000/g," ");      // 全角スペース→半角
+  t=t.trim();
+  t=t.replace(/[^\x20-\x7E]/g,""); // 残った非ASCIIは除去
+  return t;
+}
 function getAppPw(){
   let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
-  if(!p){p=prompt("共有パスワードを入力してください");if(p){p=p.trim();try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}}
+  if(p){
+    const clean=sanitizePw(p);
+    if(clean!==p){try{sessionStorage.setItem(SB_PW_KEY,clean);}catch(e){}}
+    p=clean;
+  }
+  if(!p){
+    let raw=prompt("共有パスワードを入力してください（半角英数字）");
+    if(raw!=null){
+      const clean=sanitizePw(raw);
+      if(!clean){
+        toast("パスワードに使えない文字が含まれています。半角英数字で入力してください（日本語入力をオフに）。");
+        return "";
+      }
+      p=clean;
+      try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}
+    }
+  }
   return p||"";
 }
 function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
-function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};}
+function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":sanitizePw(getAppPw()),"Content-Type":"application/json"};}
 function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
 
 async function ghLoadData(){
@@ -390,7 +419,16 @@ async function ghLoadData(){
       uploadMeta={uploadedAt:parsed.uploadedAt||null,uploadedBy:parsed.uploadedBy||null,filename:parsed.filename||null};
       uploadHistory=parsed.uploadHistory||[];
     }
-  }catch(e){console.error(e);toast("データの読み込みに失敗："+e.message);}
+  }catch(e){
+    console.error(e);
+    const m=String(e&&e.message||e);
+    if(/ISO-8859-1|code point/i.test(m)){
+      clearAppPw();
+      toast("パスワードに全角文字が含まれていたため通信できませんでした。日本語入力をオフにして、半角英数字で入れ直してください。");
+    }else{
+      toast("データの読み込みに失敗："+m);
+    }
+  }
 }
 
 async function ghSaveData(){
