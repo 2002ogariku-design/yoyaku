@@ -624,6 +624,12 @@ const TOOL_WB = "hold-wb";         // shared workbook (base64)
 let sharedWbVersion = 0;
 
 // Ask for the shared password once (kept only for this browser session).
+function sanitizePw(s){
+  if(!s)return "";
+  let t=String(s).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  t=t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+  return t;
+}
 function getAppPw(){
   let p; try{ p = sessionStorage.getItem(SB_PW_KEY); }catch(e){}
   if(!p){
@@ -634,7 +640,7 @@ function getAppPw(){
 }
 function clearAppPw(){ try{ sessionStorage.removeItem(SB_PW_KEY); }catch(e){} }
 function sbHeaders(){
-  return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};
+  return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":sanitizePw(getAppPw()),"Content-Type":"application/json"};
 }
 // Read one tool blob's payload from Supabase; returns parsed object or null.
 async function sbGetPayload(tool){
