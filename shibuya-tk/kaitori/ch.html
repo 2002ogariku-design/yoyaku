@@ -316,13 +316,19 @@ let uploadMeta={uploadedAt:null,uploadedBy:null,filename:null};
 let uploadHistory=[];
 let batchFilter="";
 
+function sanitizePw(s){
+  if(!s)return "";
+  let t=String(s).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  t=t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+  return t;
+}
 function getAppPw(){
   let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
   if(!p){p=prompt("共有パスワードを入力してください");if(p){p=p.trim();try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}}
   return p||"";
 }
 function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
-function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":getAppPw(),"Content-Type":"application/json"};}
+function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":sanitizePw(getAppPw()),"Content-Type":"application/json"};}
 function getStaffName(){try{return localStorage.getItem(STAFFNAME_KEY)||"";}catch(e){return "";}}
 
 async function ghLoadData(){
