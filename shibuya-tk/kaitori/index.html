@@ -158,11 +158,12 @@ tbody tr:hover td{background:#fafafa;}
 <header>
   <div>
     <h1>RINKAN SHIBUYA</h1>
-    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.09c</span></div>
+    <div class="sub">買取管理 & ストーリー作成ツール <span style="color:#6b6b73;">v2026.08.11</span></div>
   </div>
   <div class="right">
     <span class="count" id="hCount">0点</span>
     <div id="uploadInfo" style="display:none;font-size:11px;color:#a1a1aa;"></div>
+    <button id="reloadBtn" title="最新の共有データを取り込みます" style="border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">🔄 最新に更新</button>
     <button class="help-btn" onclick="document.getElementById('helpModal').style.display='flex'">使い方</button>
   </div>
 </header>
@@ -571,13 +572,50 @@ async function importWorkbook(wb){
     uploadHistory.unshift({at:uploadMeta.uploadedAt,by:uploadMeta.uploadedBy,file:uploadMeta.filename,added:added,total:items.length,batch:batchId});
     if(uploadHistory.length>50)uploadHistory=uploadHistory.slice(0,50);
   }
-  await save();
+  await saveMerged();
   await renderAll();
   toast(added?`${added}点を追加しました（合計 ${items.length}点）`:"追加できる新しい行が見つかりませんでした");
 }
 async function save(){
   try{await ghSaveData();}catch(e){console.error(e);toast("共有保存に失敗："+e.message);}
   updateUploadInfo();
+}
+
+// 保存直前に共有データを取り直して統合する。
+// これをしないと、ページを開いたままの古い items で上書きし、
+// 他の人が追加したデータが消えてしまう（実際に発生した不具合）。
+async function saveMerged(){
+  let remote={items:[],uploadHistory:[],meta:null};
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+    if(r.ok){
+      const rows=await r.json();
+      if(rows.length){
+        const p=rows[0].payload||{};
+        remote.items=p.items||[];
+        remote.uploadHistory=p.uploadHistory||[];
+        remote.meta={uploadedAt:p.uploadedAt,uploadedBy:p.uploadedBy,filename:p.filename};
+      }
+    }
+  }catch(e){ console.error("merge fetch failed",e); }
+
+  // 重複キーで統合（リモート優先で全件を保持し、ローカルの新規分を足す）
+  const keyOf=it=>it.__key||[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer].join("|");
+  const map=new Map();
+  for(const it of remote.items) map.set(keyOf(it),it);
+  let newly=0;
+  for(const it of items){ const k=keyOf(it); if(!map.has(k)){ map.set(k,it); newly++; } }
+  items=[...map.values()];
+
+  // 履歴も統合（重複除去して新しい順に50件）
+  const hKey=h=>`${h.at}|${h.by}|${h.file}|${h.batch}`;
+  const hMap=new Map();
+  for(const h of [...(remote.uploadHistory||[]),...uploadHistory]) hMap.set(hKey(h),h);
+  uploadHistory=[...hMap.values()].sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,50);
+
+  try{await ghSaveData();}catch(e){console.error(e);toast("共有保存に失敗："+e.message);}
+  updateUploadInfo();
+  return newly;
 }
 function handleXlsxFile(file){
   uploadMeta.filename=file.name;
@@ -1262,6 +1300,25 @@ async function renderAll(){fillFilters();renderList();updateUploadInfo();renderH
   await ghLoadData();
   renderAll();
   drawStory();
+  // 手動更新：他の人が追加したデータを取り込む
+  const rb=document.getElementById("reloadBtn");
+  if(rb)rb.addEventListener("click",async()=>{
+    rb.textContent="更新中...";rb.disabled=true;
+    const before=items.length;
+    await ghLoadData();
+    await renderAll();
+    const diff=items.length-before;
+    toast(diff>0?`最新データを取り込みました（+${diff}点／合計${items.length}点）`:`最新の状態です（${items.length}点）`);
+    rb.textContent="🔄 最新に更新";rb.disabled=false;
+  });
+  // 60秒ごとに自動で共有データを取り込む（自分の未保存編集はないので安全）
+  setInterval(async()=>{
+    try{
+      const before=items.length;
+      await ghLoadData();
+      if(items.length!==before)await renderAll();
+    }catch(e){}
+  },60000);
 })();
 </script>
 </body>
