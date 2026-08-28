@@ -328,7 +328,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0725";
+const APP_VERSION="v2026.08.28.0810";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -600,10 +600,16 @@ async function scanTagQR(file, prefix){
   let url="", hinban="";
   if(qr&&qr.data){
     console.log("QR data:",qr.data);
-    url=qr.data;
-    // extract 品番 pattern from the QR URL if present
-    const hm=qr.data.match(/(\d{5}-\d{6}-\d{4})/);
+    const raw=qr.data.trim();
+    // 品番パターンを拾う
+    const hm=raw.match(/(\d{5}-\d{6}-\d{4})/);
     if(hm)hinban=hm[1];
+    if(/^https?:\/\//i.test(raw)){
+      url=raw;
+    }else if(hinban){
+      // QRがURLでなく品番だけの場合でも楽天ページを組み立てる
+      url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;
+    }
   }else{
     // No QR (accessory/small-item tags) — OCR the product number instead
     status.textContent="🔍 "+prefix+"商品番号を読み取り中...";
@@ -616,8 +622,10 @@ async function scanTagQR(file, prefix){
   status.textContent="🔍 "+prefix+"情報を取得中...";
 
   // Run tag-price OCR and Rakuten fetch in PARALLEL (big speed win)
+  // 楽天ドメインなら取得を試みる（item. が付かない短縮URL等にも対応）
+  const isRakuten=url&&/rakuten\.co\.jp/i.test(url);
   const pricePromise=ocrTagPrice(dataUrl);
-  const rakutenPromise=(url&&url.includes("item.rakuten.co.jp"))?fetchRakuten(url):Promise.resolve(null);
+  const rakutenPromise=isRakuten?fetchRakuten(url):Promise.resolve(null);
   const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
 
   if(got&&got.ok){
@@ -647,23 +655,29 @@ async function scanTagQR(file, prefix){
   // QR付きタグ（衣類など）は1枚で完結する。裏面を求めるのは QR がなく
   // OCRで商品番号を読んだ小物タグの場合だけ。
   const wasQR = !!(qr && qr.data);
+  // 楽天からの取得に失敗したか（ブランド・サイズ・ランクはここから取る）
+  const rakutenFailed = isRakuten && (!got || !got.ok);
   if(filled.length){
     td2.innerHTML="🏷️ もう一度タップで別の面をスキャン";
     let msg='✓ '+filled.join("・")+'を入力しました';
-    if(missing.length){
+    if(rakutenFailed){
+      msg+='<br><span style="color:var(--orange);font-size:12px;">⚠ 楽天ページに接続できず、ブランド・サイズ・ランクを取得できませんでした。'
+        +(url?'<a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:underline;">ページを開いて確認</a>するか、手入力してください。':'手入力してください。')+'</span>';
+    }else if(missing.length){
       if(wasQR){
         msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力です。手入力するか、もう一度スキャンしてください。</span>';
       }else{
         msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力。小物タグの場合は<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>の両方をスキャンしてください。</span>';
       }
     }
-    if(url)msg+='<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを確認</a>';
+    if(url&&!rakutenFailed)msg+='<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを確認</a>';
     status.innerHTML=msg;
     status.style.color="var(--green)";
   }else{
     td2.innerHTML="🏷️ 読み取れず（もう一度/手入力）";
     if(wasQR){
-      status.innerHTML='⚠ QRは読めましたが、商品情報を取得できませんでした。<br><span style="font-size:12px;color:var(--t2);">楽天ページで確認するか、手入力してください。</span>';
+      status.innerHTML='⚠ QRは読めましたが、商品情報を取得できませんでした。<br><span style="font-size:12px;color:var(--t2);">'
+        +(url?'<a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:underline;">楽天ページを開いて確認</a>するか、手入力してください。':'手入力してください。')+'</span>';
     }else{
       status.innerHTML='⚠ この面からは読み取れませんでした。<br><span style="font-size:12px;color:var(--t2);">QR付きタグはQRが写るように、小物タグは<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>をそれぞれスキャンしてください。ピントを合わせて明るく撮るのがコツです。</span>';
     }
@@ -781,19 +795,40 @@ async function ocrTagPrice(dataUrl){
 
 // Fetch Rakuten product page and extract info (brand-English, size, rank, price)
 async function fetchRakuten(url){
+  // 外部のCORSプロキシ経由で楽天ページを取得する。
+  // 無料プロキシは停止・仕様変更が起きやすいので複数用意し、順に試す。
   const proxies=[
-    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
-    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
-    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
+    ["allorigins",  u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)],
+    ["corsproxy",   u=>"https://corsproxy.io/?url="+encodeURIComponent(u)],
+    ["codetabs",    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)],
+    ["thingproxy",  u=>"https://thingproxy.freeboard.io/fetch/"+u],
+    ["jina",        u=>"https://r.jina.ai/"+u],
+    ["whateverorigin", u=>"https://www.whateverorigin.org/get?url="+encodeURIComponent(u)],
+    ["allorigins2", u=>"https://api.allorigins.win/get?url="+encodeURIComponent(u)]
   ];
-  let html2="";
-  for(const mk of proxies){
+  let html2="", usedProxy="";
+  window._rakutenDebug={url,tried:[]};
+  for(const [pname,mk] of proxies){
     try{
       const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
-      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
-    }catch(e){console.log("proxy fail:",e.message);}
+      if(resp&&resp.ok){
+        let t=await resp.text();
+        // 一部のプロキシは JSON でくるむ（{contents:"..."}）ので取り出す
+        if(t && t.trim().startsWith("{")){
+          try{const j=JSON.parse(t); t=j.contents||j.data||t;}catch(e){}
+        }
+        if(t&&t.length>500){html2=t;usedProxy=pname;window._rakutenDebug.tried.push(pname+":OK");break;}
+        window._rakutenDebug.tried.push(pname+":short");
+      }else{
+        window._rakutenDebug.tried.push(pname+":HTTP"+(resp?resp.status:"?"));
+      }
+    }catch(e){
+      window._rakutenDebug.tried.push(pname+":"+(e.name||e.message||"err"));
+      console.log("proxy fail:",pname,e.message);
+    }
   }
-  if(!html2)return{ok:false};
+  console.log("Rakuten fetch via:",usedProxy||"(all failed)",window._rakutenDebug.tried);
+  if(!html2)return{ok:false,reason:"proxy",tried:window._rakutenDebug.tried};
 
   const out={ok:true,brand:"",size:"",rank:"",price:0};
 
