@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#2563eb">
 <meta name="mobile-web-app-capable" content="yes">
@@ -341,6 +344,11 @@
   #mobileActionBar .ma-menu{ background:var(--panel2); color:var(--text-dim); flex:0 0 50px; }
 }
 
+
+#verBadge{position:fixed;right:8px;bottom:8px;z-index:9999;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;font-family:inherit;
+  letter-spacing:.02em;cursor:pointer;user-select:none;line-height:1.4;}
+#verBadge:active{background:rgba(0,0,0,.85);}
 </style>
 </head>
 <body>
@@ -501,6 +509,8 @@
 </div>
 
 <script>
+const APP_VERSION="v2026.08.28.0725";
+
 const STORAGE_WORKBOOK = "tk-workbook-b64";
 const STORAGE_FILENAME = "tk-filename";
 const STORAGE_EDITS = "tk-edits"; // {id: {確認, 備考, done}}
@@ -1216,7 +1226,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = "v2026.08.04i";
+const CODE_VERSION = (typeof APP_VERSION!=="undefined")?APP_VERSION:"v2026.08.04i";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -2028,6 +2038,21 @@ async function checkSharedConnection(){
     return false;
   }
 }
+
+/* ===== バージョン表示 & 更新チェック ===== */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";
+  b.textContent=APP_VERSION;
+  b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{
+    // キャッシュを回避して強制的に読み直す
+    const u=new URL(location.href);
+    u.searchParams.set("v",Date.now());
+    location.replace(u.toString());
+  });
+  document.body.appendChild(b);
+})();
 </script>
 </body>
 </html>
