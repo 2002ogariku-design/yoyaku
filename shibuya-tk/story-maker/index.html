@@ -634,16 +634,29 @@ async function scanTagQR(file, prefix){
   const missing=[];
   if(!document.getElementById("sBrand").value)missing.push("ブランド");
   if(!document.getElementById("sPrice").value)missing.push("価格");
+  // QR付きタグ（衣類など）は1枚で完結する。裏面を求めるのは QR がなく
+  // OCRで商品番号を読んだ小物タグの場合だけ。
+  const wasQR = !!(qr && qr.data);
   if(filled.length){
     td2.innerHTML="🏷️ もう一度タップで別の面をスキャン";
     let msg='✓ '+filled.join("・")+'を入力しました';
-    if(missing.length)msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力。小物は<b>裏面（商品番号）と表面（税込金額）の両方</b>をスキャンしてください。</span>';
+    if(missing.length){
+      if(wasQR){
+        msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力です。手入力するか、もう一度スキャンしてください。</span>';
+      }else{
+        msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力。小物タグの場合は<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>の両方をスキャンしてください。</span>';
+      }
+    }
     if(url)msg+='<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを確認</a>';
     status.innerHTML=msg;
     status.style.color="var(--green)";
   }else{
     td2.innerHTML="🏷️ 読み取れず（もう一度/手入力）";
-    status.innerHTML='⚠ この面からは読み取れませんでした。<br><span style="font-size:12px;color:var(--t2);">小物タグは<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>の2面をそれぞれスキャンしてください。ピントを合わせて明るく撮るのがコツです。</span>';
+    if(wasQR){
+      status.innerHTML='⚠ QRは読めましたが、商品情報を取得できませんでした。<br><span style="font-size:12px;color:var(--t2);">楽天ページで確認するか、手入力してください。</span>';
+    }else{
+      status.innerHTML='⚠ この面からは読み取れませんでした。<br><span style="font-size:12px;color:var(--t2);">QR付きタグはQRが写るように、小物タグは<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>をそれぞれスキャンしてください。ピントを合わせて明るく撮るのがコツです。</span>';
+    }
     status.style.color="var(--orange)";
   }
   status.style.display="block";
