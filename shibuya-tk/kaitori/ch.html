@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#000000">
 <title>RINKAN SHIBUYA — CHROME HEARTS｜クロムハーツ専用 買取管理ツール</title>
@@ -142,6 +145,11 @@ tbody tr:hover td{background:#fafafa;}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#000;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99;}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;align-items:center;justify-content:center;}
 .modal .box{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:92%;max-height:80vh;overflow-y:auto;font-size:13px;line-height:1.9;}
+
+#verBadge{position:fixed;right:8px;bottom:8px;z-index:9999;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;font-family:inherit;
+  letter-spacing:.02em;cursor:pointer;user-select:none;line-height:1.4;}
+#verBadge:active{background:rgba(0,0,0,.85);}
 </style>
 </head>
 <body>
@@ -306,6 +314,8 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
+const APP_VERSION="v2026.08.28.0725";
+
 const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
 const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
 const SB_PW_KEY="rinkan-app-pw";
@@ -887,6 +897,21 @@ async function renderAll(){fillFilters();renderList();updateUploadInfo();renderH
   await ghLoadData();
   renderAll();
   drawStory();
+})();
+
+/* ===== バージョン表示 & 更新チェック ===== */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";
+  b.textContent=APP_VERSION;
+  b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{
+    // キャッシュを回避して強制的に読み直す
+    const u=new URL(location.href);
+    u.searchParams.set("v",Date.now());
+    location.replace(u.toString());
+  });
+  document.body.appendChild(b);
 })();
 </script>
 </body>
