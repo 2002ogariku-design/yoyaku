@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>RINKAN ストーリー作成</title>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
@@ -131,6 +134,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
   header{background:#ececeF;backdrop-filter:none;-webkit-backdrop-filter:none;}
   #viewerModal.show{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.92);}
 }
+
+#verBadge{position:fixed;right:8px;bottom:8px;z-index:9999;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;font-family:inherit;
+  letter-spacing:.02em;cursor:pointer;user-select:none;line-height:1.4;}
+#verBadge:active{background:rgba(0,0,0,.85);}
 </style>
 </head>
 <body>
@@ -320,6 +328,8 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
+const APP_VERSION="v2026.08.28.0725";
+
 const PHRASES=[
   // 案内・問い合わせ
   "📩DMにて割引可能","📩コメント・DMお気軽に","📩在庫確認はDMまで","📩お取り置き承ります","💬ご質問お気軽に",
@@ -1292,6 +1302,21 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
 updateBrandDl();renderArchive();drawStory();
 // Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
 setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
+
+/* ===== バージョン表示 & 更新チェック ===== */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";
+  b.textContent=APP_VERSION;
+  b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{
+    // キャッシュを回避して強制的に読み直す
+    const u=new URL(location.href);
+    u.searchParams.set("v",Date.now());
+    location.replace(u.toString());
+  });
+  document.body.appendChild(b);
+})();
 </script>
 </body>
 </html>
