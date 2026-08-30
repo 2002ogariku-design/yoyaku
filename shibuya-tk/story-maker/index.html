@@ -332,7 +332,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1120";
+const APP_VERSION="v2026.08.30.1125";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -836,6 +836,8 @@ window.runProxyTest=async function(){
     </div>`).join("")+
     `<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">✅が1つでもあれば通信は可能です。全て❌なら、外部の中継サービスが停止しています（この場合は別の取得方法に変更が必要です）。この結果をそのまま担当者に伝えてください。</div>`;
 };
+
+async function fetchRakuten(url){
   const proxies=[
     u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
     u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
