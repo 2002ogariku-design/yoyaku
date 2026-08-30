@@ -789,12 +789,13 @@ function renderList(){
       <th class="hide-narrow">カラー</th>
       <th class="sortable" onclick="setSort('rank')">ランク ${sortArrow("rank")}</th>
       <th class="sortable" onclick="setSort('price')">税込売価 ${sortArrow("price")}</th>
+      <th class="sortable" onclick="setSort('cost')">買取金額 ${sortArrow("cost")}</th>
       <th class="sortable" onclick="setSort('date')">買取日 ${sortArrow("date")}</th>
       <th class="sortable" onclick="setSort('store')">仕入店 ${sortArrow("store")}</th>
       <th class="sortable" onclick="setSort('buyer')">バイヤー ${sortArrow("buyer")}</th>
       <th class="hide-narrow">コメント</th><th class="hide-narrow">付属品</th><th>操作</th>`;
   }
-  if(!list.length){tb.innerHTML=`<tr><td colspan="14"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;updateBulkBar();return;}
+  if(!list.length){tb.innerHTML=`<tr><td colspan="15"><div class="empty">${items.length?"条件に一致する商品がありません":"データがありません。<br>「データ追加」タブからExcelファイルを読み込んでください。"}</div></td></tr>`;updateBulkBar();return;}
   tb.innerHTML=list.slice(0,500).map((i,idx)=>{
     const gq=encodeURIComponent([i.brand,i.name].filter(Boolean).join(" "));
     const rk=i.rank||"";
@@ -806,6 +807,7 @@ function renderList(){
       <td>${esc(i.item)}</td><td>${esc(i.size)||"-"}</td><td class="hide-narrow">${esc(i.color)||"-"}</td>
       <td>${rk?`<span class="rank ${rk}">${rk}</span>`:`<span class="rank N">-</span>`}</td>
       <td class="price">${i.price?yen(i.price):"-"}</td>
+      <td class="price" style="color:var(--gold,#b8860b);">${i.cost?yen(i.cost):"-"}</td>
       <td style="font-size:10px;">${normDate(i.date)?normDate(i.date).slice(5).replace("-","/"):"-"}</td><td>${esc(i.store)||esc(i.origStore)||"-"}</td><td>${esc(i.buyer)||"-"}</td>
       <td class="hide-narrow cmt-cell" title="${esc(i.comment)||""}">${esc(i.comment)||"-"}</td>
       <td class="hide-narrow acc-cell" title="${esc(i.acc)||""}">${esc(i.acc)||"-"}</td>
@@ -814,7 +816,7 @@ function renderList(){
           <button class="st-btn" style="background:#0071e3;border-color:#0071e3;" onclick="showMarket(${items.indexOf(i)})">📊 相場</button>
           <button class="st-btn dm-btn" onclick="makeDM(${items.indexOf(i)})">💬 営業文</button></td>
     </tr>`;
-  }).join("")+(list.length>500?`<tr><td colspan="14" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
+  }).join("")+(list.length>500?`<tr><td colspan="15" style="text-align:center;color:var(--faint);">…他 ${list.length-500} 点</td></tr>`:"");
 
   // selection wiring
   tb.querySelectorAll(".selBox").forEach(cb=>{
@@ -852,7 +854,10 @@ function renderList(){
                 ${i.feature?`<div class="kc-feat">${esc(i.feature)}</div>`:""}
               </div>
             </div>
-            <div class="kc-price">${i.price?yen(i.price):"-"}</div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div class="kc-price">${i.price?yen(i.price):"-"}</div>
+              ${i.cost?`<div style="font-size:12px;font-weight:700;color:var(--gold,#b8860b);margin-top:2px;">買取 ${yen(i.cost)}</div>`:""}
+            </div>
           </div>
           <div class="kc-meta">
             ${i.item?`<span class="kc-tag">${esc(i.item)}</span>`:""}
