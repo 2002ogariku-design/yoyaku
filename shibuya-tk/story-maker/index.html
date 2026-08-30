@@ -210,7 +210,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       <div id="buyStatus" style="font-size:11.5px;color:var(--t3);margin-bottom:8px;"></div>
       <div id="buyResults" style="max-height:280px;overflow-y:auto;"></div>
       <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);margin-top:10px;">
-        <input type="checkbox" id="buyShowPrice" style="width:auto;"> 買取参考価格を表示する
+        <input type="checkbox" id="buyShowPrice" style="width:auto;"> 販売価格を表示する
       </label>
     </div>
     <div style="margin-bottom:16px;">
@@ -353,7 +353,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1700";
+const APP_VERSION="v2026.08.30.1800";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -967,8 +967,25 @@ function renderBuyResults(list){
     d.addEventListener("click",()=>applyBuyItem(list[Number(d.dataset.i)]));
   });
 }
+// カタカナのブランド名を英語表記に変換する（買取履歴はカタカナ表記のため）
+function toEnglishBrand(name){
+  const s=String(name||"").trim();
+  if(!s)return "";
+  // 既に英字主体ならそのまま
+  if(!/[\u3040-\u30FF\u4E00-\u9FFF]/.test(s))return s;
+  const map=(typeof BRAND_MAP!=="undefined")?BRAND_MAP:{};
+  // 長い名前から順に照合（ボッテガヴェネタ が ボッテガ より優先されるように）
+  const keys=Object.keys(map).sort((a,b)=>b.length-a.length);
+  for(const k of keys){
+    if(s===k)return map[k];
+  }
+  for(const k of keys){
+    if(s.startsWith(k)||s.includes(k))return map[k];
+  }
+  return s; // 辞書になければカタカナのまま
+}
 function applyBuyItem(it){
-  document.getElementById("sBrand").value=it.brand||"";
+  document.getElementById("sBrand").value=toEnglishBrand(it.brand||"");
   document.getElementById("sSize").value=it.size||"";
   setRank((it.rank||"").toUpperCase());
   const showPrice=document.getElementById("buyShowPrice").checked;
@@ -1070,6 +1087,41 @@ function rakutenSearchUrl(keyword,version){
     +"&shopCode=gsc-rinkan&hits=1&format=json";
 }
 // 品番から楽天公式APIで商品情報を取得する
+// ブランド辞書（カタカナ→英語表記）。値札スキャン・買取速報の両方で使う。
+  const BRAND_MAP={
+    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
+    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
+    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
+    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
+    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
+    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
+    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
+    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
+    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
+    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
+    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
+    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
+    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING",
+    "アクネストゥディオズ":"ACNE STUDIOS","アクネ":"ACNE STUDIOS","マルタンマルジェラ":"MAISON MARGIELA",
+    "コムデギャルソン":"COMME des GARCONS","イヴサンローラン":"SAINT LAURENT","イブサンローラン":"SAINT LAURENT",
+    "アレキサンダーマックイーン":"ALEXANDER McQUEEN","トムブラウン":"THOM BROWNE","ヨウジヤマモト":"YOHJI YAMAMOTO",
+    "アンダーカバー":"UNDERCOVER","ワコマリア":"WACKO MARIA","ヒステリックグラマー":"HYSTERIC GLAMOUR",
+    "エンノイ":"ENNOY","エフシーアールビー":"F.C.Real Bristol","フラグメント":"fragment design",
+    "キャピタル":"KAPITAL","サカイ":"sacai","ジュンヤワタナベ":"JUNYA WATANABE","カラー":"kolor",
+    "ニードルス":"Needles","エムエムシックス":"MM6","ジルサンダー":"JIL SANDER","マルニ":"MARNI",
+    "ドリスヴァンノッテン":"DRIES VAN NOTEN","ラフシモンズ":"RAF SIMONS","ヴィヴィアンウエストウッド":"Vivienne Westwood",
+    "ディースクエアード":"DSQUARED2","ヴァレンティノ":"VALENTINO","フェラガモ":"Salvatore Ferragamo",
+    "トッズ":"TOD'S","コーチ":"COACH","マイケルコース":"MICHAEL KORS","トリーバーチ":"TORY BURCH",
+    "ケンゾー":"KENZO","イッセイミヤケ":"ISSEY MIYAKE","ポールスミス":"Paul Smith","エトロ":"ETRO",
+    "モンブラン":"MONTBLANC","グッチ":"GUCCI","ゼニア":"Ermenegildo Zegna","ブリオーニ":"BRIONI",
+    "オーラリー":"AURALEE","コモリ":"COMOLI","グラフペーパー":"Graphpaper","ヒューマンメイド":"HUMAN MADE",
+    "ガールズドントクライ":"Girls Don't Cry","ヴァーディ":"Verdy","ノースフェイス":"THE NORTH FACE",
+    "パタゴニア":"patagonia","カナダグース":"CANADA GOOSE","モンクレールジーニアス":"MONCLER GENIUS",
+    "ディオールオム":"Dior Homme","バルマン":"BALMAIN","ケイタマルヤマ":"KEITA MARUYAMA",
+    "エンポリオアルマーニ":"EMPORIO ARMANI","ジョルジオアルマーニ":"GIORGIO ARMANI","アルマーニ":"ARMANI"
+  };
+
 async function fetchRakutenAPI(hinban){
   if(!getRakutenAppId()||!getRakutenAccessKey()||!hinban)return null;
   for(const ver of RAKUTEN_VERSIONS){
@@ -1135,39 +1187,7 @@ function parseRakutenHtml(html2){
 
   // BRAND (English): RINKAN title starts with "カタカナ英語ブランド Englishブランド ..."
   // Use known-brand dictionary for clean names
-  const brandMap={
-    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
-    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
-    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
-    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
-    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
-    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
-    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
-    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
-    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
-    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
-    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
-    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
-    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
-    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING",
-    "アクネストゥディオズ":"ACNE STUDIOS","アクネ":"ACNE STUDIOS","マルタンマルジェラ":"MAISON MARGIELA",
-    "コムデギャルソン":"COMME des GARCONS","イヴサンローラン":"SAINT LAURENT","イブサンローラン":"SAINT LAURENT",
-    "アレキサンダーマックイーン":"ALEXANDER McQUEEN","トムブラウン":"THOM BROWNE","ヨウジヤマモト":"YOHJI YAMAMOTO",
-    "アンダーカバー":"UNDERCOVER","ワコマリア":"WACKO MARIA","ヒステリックグラマー":"HYSTERIC GLAMOUR",
-    "エンノイ":"ENNOY","エフシーアールビー":"F.C.Real Bristol","フラグメント":"fragment design",
-    "キャピタル":"KAPITAL","サカイ":"sacai","ジュンヤワタナベ":"JUNYA WATANABE","カラー":"kolor",
-    "ニードルス":"Needles","エムエムシックス":"MM6","ジルサンダー":"JIL SANDER","マルニ":"MARNI",
-    "ドリスヴァンノッテン":"DRIES VAN NOTEN","ラフシモンズ":"RAF SIMONS","ヴィヴィアンウエストウッド":"Vivienne Westwood",
-    "ディースクエアード":"DSQUARED2","ヴァレンティノ":"VALENTINO","フェラガモ":"Salvatore Ferragamo",
-    "トッズ":"TOD'S","コーチ":"COACH","マイケルコース":"MICHAEL KORS","トリーバーチ":"TORY BURCH",
-    "ケンゾー":"KENZO","イッセイミヤケ":"ISSEY MIYAKE","ポールスミス":"Paul Smith","エトロ":"ETRO",
-    "モンブラン":"MONTBLANC","グッチ":"GUCCI","ゼニア":"Ermenegildo Zegna","ブリオーニ":"BRIONI",
-    "オーラリー":"AURALEE","コモリ":"COMOLI","グラフペーパー":"Graphpaper","ヒューマンメイド":"HUMAN MADE",
-    "ガールズドントクライ":"Girls Don't Cry","ヴァーディ":"Verdy","ノースフェイス":"THE NORTH FACE",
-    "パタゴニア":"patagonia","カナダグース":"CANADA GOOSE","モンクレールジーニアス":"MONCLER GENIUS",
-    "ディオールオム":"Dior Homme","バルマン":"BALMAIN","ケイタマルヤマ":"KEITA MARUYAMA",
-    "エンポリオアルマーニ":"EMPORIO ARMANI","ジョルジオアルマーニ":"GIORGIO ARMANI","アルマーニ":"ARMANI"
-  };
+  const brandMap=BRAND_MAP;
   // Match leading katakana brand — longest match first (so ボッテガヴェネタ beats ボッテガ)
   const sortedJp=Object.keys(brandMap).sort((a,b)=>b.length-a.length);
   for(const jp of sortedJp){
@@ -1312,11 +1332,11 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   function wrap(text,size){ctx.font=`${wt} ${size}px ${serif}`;if(ctx.measureText(text).width<=MAXW)return[text];const words=text.split(" ");if(words.length<2)return[text];let best=null;for(let i=1;i<words.length;i++){const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");const w=Math.max(ctx.measureText(a).width,ctx.measureText(b).width);if(!best||w<best.w)best={a,b,w};}return[best.a,best.b];}
 
   let y=typeof T.topY==="function"?T.topY(H):T.topY;
-  // 買取速報モードでは上部にバッジを描く
+  // 買取速報モードでは上部にバッジを描き、本文はその下から始める（重なり防止）
   if(STORY_KIND==="buy"){
     const bh=Math.round(64*sc), bw=Math.round(300*sc);
     const bx=alignC?(W-bw)/2:MARGIN;
-    const by=y-Math.round(96*sc);
+    const by=y-Math.round(64*sc); // バッジの上端
     ctx.save();ctx.shadowBlur=0;
     ctx.fillStyle="#d4af37";
     ctx.beginPath();
@@ -1333,6 +1353,8 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     ctx.fillText(label,bx+(bw-tw)/2,by+bh/2+Math.round(12*sc));
     ctx.restore();
     ctx.fillStyle="#fff";ctx.shadowColor="rgba(0,0,0,.5)";ctx.shadowBlur=16;
+    // 本文の開始位置をバッジの下へ（ブランド名の文字高さぶん確保）
+    y = by + bh + Math.round(T.brandBase*sc) + Math.round(16*sc);
   }
   if(T.plate && (data.brand||data.price)){ // minimal: subtle plate behind text
     ctx.save();ctx.shadowBlur=0;ctx.fillStyle="rgba(0,0,0,.28)";
@@ -1351,9 +1373,7 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   if(data.size){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("size:"+data.size,ax,y);y+=74*sc;}
   if(data.rank){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("RANK:"+data.rank,ax,y);}
   if(data.price){
-    const ptxt=(STORY_KIND==="buy")
-      ? "買取参考価格 ¥"+Number(data.price).toLocaleString("ja-JP")
-      : "¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
+    const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
     const ps=fit(ptxt,T.priceSize,44);
     ctx.font=`${wt} ${ps}px ${serif}`;ctx.fillText(ptxt,ax,T.priceY(H));
   }
@@ -1486,7 +1506,7 @@ function buildBuyCaption(){
   if(size)spec.push(`size ${size}`);
   if(rank)spec.push(`ランク ${rank}`);
   if(spec.length)L.push(spec.join(" / "));
-  if(price)L.push(`買取参考価格 ¥${Number(price).toLocaleString("ja-JP")}`);
+  if(price)L.push(`¥${Number(price).toLocaleString("ja-JP")}-(税込)`);
   if(tag)L.push(tag);
   L.push("");
   if(tone==="polite"){
