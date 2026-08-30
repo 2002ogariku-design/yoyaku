@@ -203,9 +203,18 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
     </div>
     <div id="buyPanel" style="display:none;margin-bottom:16px;background:var(--card2);border-radius:14px;padding:14px;">
       <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">買取履歴から商品を選ぶ</div>
+      <div class="seg" id="buyDaySeg" style="margin-bottom:8px;flex-wrap:wrap;">
+        <button type="button" data-d="today" class="on">本日</button>
+        <button type="button" data-d="yesterday">昨日</button>
+        <button type="button" data-d="week">7日間</button>
+        <button type="button" data-d="all">すべて</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+        <select id="buyDateSel" style="flex:1;font-size:12.5px;"></select>
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input type="text" id="buySearch" placeholder="🔍 ブランド・商品名で検索" style="flex:1;">
-        <button type="button" id="buyLoadBtn" class="pill" style="padding:9px 14px;font-size:12.5px;white-space:nowrap;">🔄 読込</button>
+        <input type="text" id="buySearch" placeholder="🔍 さらに絞り込む（ブランド・商品名）" style="flex:1;">
+        <button type="button" id="buyLoadBtn" class="pill" style="padding:9px 14px;font-size:12.5px;white-space:nowrap;">🔄 更新</button>
       </div>
       <div id="buyStatus" style="font-size:11.5px;color:var(--t3);margin-bottom:8px;"></div>
       <div id="buyResults" style="max-height:280px;overflow-y:auto;"></div>
@@ -358,7 +367,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1900";
+const APP_VERSION="v2026.08.30.2000";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -1030,21 +1039,87 @@ function applyBuyItem(it){
   if(document.getElementById("captionBox").value)regenCaption();
   document.getElementById("buyStatus").innerHTML='<span style="color:var(--green);font-weight:700;">✓ '+esc(it.brand||"")+' を読み込みました</span>';
 }
+// 買取日を YYYY-MM-DD に正規化する（エクセル由来で表記がまちまちなため）
+function normBuyDate(d){
+  if(!d)return "";
+  if(typeof d==="number"){ // Excelシリアル値
+    const ms=(d-25569)*86400*1000;
+    const dt=new Date(ms);
+    if(!isNaN(dt))return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+  }
+  const s=String(d).trim();
+  let m=s.match(/(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  m=s.match(/^(\d{1,2})[-\/](\d{1,2})$/); // MM/DD → 今年
+  if(m)return `${new Date().getFullYear()}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  m=s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  return "";
+}
+function ymdStr(offsetDays){
+  const d=new Date();
+  if(offsetDays)d.setDate(d.getDate()+offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+let buyDayMode="today";
+// 日付プルダウンを、実際にデータがある日付で作る
+function fillBuyDateSel(){
+  const sel=document.getElementById("buyDateSel");
+  if(!sel||!_kaitori)return;
+  const counts={};
+  _kaitori.forEach(it=>{const d=normBuyDate(it.date);if(d)counts[d]=(counts[d]||0)+1;});
+  const dates=Object.keys(counts).sort().reverse().slice(0,60);
+  const cur=sel.value;
+  sel.innerHTML='<option value="">▼ 買取日を直接選ぶ</option>'
+    +dates.map(d=>`<option value="${d}">${d.replace(/-/g,"/")}（${counts[d]}点）</option>`).join("");
+  if(dates.includes(cur))sel.value=cur;
+}
 function doBuySearch(){
-  const q=(document.getElementById("buySearch").value||"").trim().toLowerCase();
   if(!_kaitori)return;
-  const list=q
-    ? _kaitori.filter(it=>((it.brand||"")+" "+(it.name||"")+" "+(it.item||"")+" "+(it.color||"")).toLowerCase().includes(q))
-    : _kaitori.slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  const q=(document.getElementById("buySearch").value||"").trim().toLowerCase();
+  const pickDate=document.getElementById("buyDateSel").value;
+  let list=_kaitori.slice();
+  // 1) 日付で絞る（買取速報は当日分を出すことが多いので既定は本日）
+  if(pickDate){
+    list=list.filter(it=>normBuyDate(it.date)===pickDate);
+  }else if(buyDayMode==="today"){
+    const t=ymdStr(0);list=list.filter(it=>normBuyDate(it.date)===t);
+  }else if(buyDayMode==="yesterday"){
+    const t=ymdStr(-1);list=list.filter(it=>normBuyDate(it.date)===t);
+  }else if(buyDayMode==="week"){
+    const from=ymdStr(-6);list=list.filter(it=>{const d=normBuyDate(it.date);return d&&d>=from;});
+  }
+  // 2) キーワードでさらに絞る
+  if(q)list=list.filter(it=>((it.brand||"")+" "+(it.name||"")+" "+(it.item||"")+" "+(it.color||"")).toLowerCase().includes(q));
+  // 3) 新しい順
+  list.sort((a,b)=>String(normBuyDate(b.date)).localeCompare(String(normBuyDate(a.date))));
+  const st=document.getElementById("buyStatus");
+  if(st&&!/読み込み中|失敗/.test(st.textContent)){
+    const label=pickDate?pickDate.replace(/-/g,"/")
+      :(buyDayMode==="today"?"本日":buyDayMode==="yesterday"?"昨日":buyDayMode==="week"?"直近7日間":"全期間");
+    st.innerHTML=`<b>${label}</b>：${list.length}件${list.length===0&&buyDayMode==="today"?' <span style="color:var(--orange);">（本日の買取はまだありません。「昨日」や「7日間」をお試しください）</span>':""}`;
+  }
   renderBuyResults(list);
 }
+document.querySelectorAll("#buyDaySeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.toggle("on",x===b));
+    buyDayMode=b.dataset.d;
+    document.getElementById("buyDateSel").value=""; // 直接選択を解除
+    doBuySearch();
+  });
+});
+document.getElementById("buyDateSel").addEventListener("change",()=>{
+  document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.remove("on"));
+  doBuySearch();
+});
 document.getElementById("buyLoadBtn").addEventListener("click",async()=>{
   const st=document.getElementById("buyStatus");
   st.textContent="買取履歴を読み込み中...";
   try{
     await loadKaitori(true);
-    st.textContent=`${_kaitori.length}件の買取データを読み込みました（新しい順に表示中）`;
-    doBuySearch();
+    st.textContent='';
+    fillBuyDateSel();doBuySearch();
   }catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'</span>'; }
 });
 document.getElementById("buySearch").addEventListener("input",doBuySearch);
@@ -1069,21 +1144,19 @@ document.querySelectorAll("#kindSeg button").forEach(b=>{
         const cache=readKaitoriCache();
         if(cache&&cache.items.length){
           _kaitori=cache.items;
-          const mins=Math.round((Date.now()-cache.at)/60000);
-          st.innerHTML=`${_kaitori.length}件を表示中 <span style="color:var(--t3);">（${mins<1?"直前":mins+"分前"}のデータ・最新を確認中…）</span>`;
-          doBuySearch();
+          st.textContent="";
+          fillBuyDateSel();doBuySearch();
           // 裏で最新を取得して差し替え
           loadKaitori(true).then(()=>{
-            st.innerHTML=`${_kaitori.length}件の買取データ（最新）`;
-            doBuySearch();
+            fillBuyDateSel();doBuySearch();
           }).catch(()=>{ st.innerHTML=`${_kaitori.length}件を表示中 <span style="color:var(--orange);">（最新の取得に失敗・🔄で再試行）</span>`; });
         }else{
           st.textContent="買取履歴を読み込み中...";
-          try{ await loadKaitori(); st.textContent=`${_kaitori.length}件の買取データを読み込みました（新しい順）`; doBuySearch(); }
+          try{ await loadKaitori(); st.textContent=''; fillBuyDateSel(); doBuySearch(); }
           catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'（🔄読込を押して再試行）</span>'; }
         }
       }else{
-        doBuySearch();
+        fillBuyDateSel();doBuySearch();
       }
       const tag=document.getElementById("sTag");
       if(!tag.value||/DM/.test(tag.value))tag.value="💰高価買取いたしました";
