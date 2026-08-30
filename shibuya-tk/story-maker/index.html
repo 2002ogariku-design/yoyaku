@@ -334,7 +334,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1200";
+const APP_VERSION="v2026.08.30.1430";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -823,39 +823,70 @@ async function ocrTagPrice(dataUrl){
 window.runProxyTest=async function(){
   const box=document.getElementById("proxyTestResult");
   box.style.display="block";
-  box.innerHTML="🔧 テスト中... しばらくお待ちください（最大30秒）";
-  const testUrl=(window._lastHinban)
-    ? "https://item.rakuten.co.jp/gsc-rinkan/"+window._lastHinban
-    : "https://item.rakuten.co.jp/gsc-rinkan/";
+  box.innerHTML="🔧 テスト中... しばらくお待ちください";
+  const hinban=window._lastHinban||"";
+  const appId=getRakutenAppId();
+  let out='<div style="font-weight:800;margin-bottom:10px;">🔧 通信テスト結果</div>';
+
+  // ---- 1) 楽天公式API ----
+  out+='<div style="font-weight:700;font-size:12.5px;margin:8px 0 6px;">① 楽天公式API</div>';
+  if(!appId){
+    out+='<div style="color:var(--orange);font-size:12px;">⚠️ アプリID未設定。「⚙️ 楽天APIを設定」から設定してください。</div>';
+  }else{
+    out+=`<div style="font-size:11px;color:var(--t3);margin-bottom:6px;">アプリID: ${esc(appId.slice(0,6))}…（${appId.length}文字）</div>`;
+    const kw=hinban||"クロムハーツ";
+    const u="https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+      +"?applicationId="+encodeURIComponent(appId)
+      +"&keyword="+encodeURIComponent(kw)+"&shopCode=gsc-rinkan&hits=1&format=json";
+    try{
+      const t0=Date.now();
+      const resp=await fetch(u,{signal:AbortSignal.timeout(12000)});
+      const ms=Date.now()-t0;
+      const txt=await resp.text();
+      if(resp.ok){
+        let j=null;try{j=JSON.parse(txt);}catch(e){}
+        const n=(j&&j.Items)?j.Items.length:0;
+        if(n>0){
+          const it=j.Items[0].Item||j.Items[0];
+          out+=`<div style="color:var(--green);font-size:12.5px;">✅ 成功（${ms}ms）<br><span style="color:var(--t2);font-size:11.5px;word-break:break-all;">${esc((it.itemName||"").slice(0,70))}</span></div>`;
+        }else{
+          out+=`<div style="color:var(--orange);font-size:12.5px;">⚠️ 接続OKだが該当商品0件（${ms}ms）<br><span style="font-size:11.5px;">検索語「${esc(kw)}」で見つかりません。品番がgsc-rinkan店に無い可能性。</span></div>`;
+        }
+      }else{
+        let msg="";try{const j=JSON.parse(txt);msg=(j.error||"")+" "+(j.error_description||"");}catch(e){msg=txt.slice(0,150);}
+        out+=`<div style="color:#e5484d;font-size:12.5px;">❌ HTTP ${resp.status}（${ms}ms）<br><span style="font-size:11.5px;word-break:break-all;">${esc(msg)}</span></div>`;
+        if(resp.status===400||resp.status===403){
+          out+='<div style="font-size:11.5px;color:var(--t2);margin-top:6px;line-height:1.6;">→ 楽天側の「許可されたウェブサイト」に <b>2002ogariku-design.github.io</b> が入っているか確認してください。</div>';
+        }
+      }
+    }catch(e){
+      out+=`<div style="color:#e5484d;font-size:12.5px;">❌ ${esc(e.name==="TimeoutError"?"タイムアウト":(e.message||"接続失敗"))}<br><span style="font-size:11.5px;">CORSブロックの可能性（許可ウェブサイト設定を確認）</span></div>`;
+    }
+  }
+
+  // ---- 2) 中継サービス（予備） ----
+  out+='<div style="font-weight:700;font-size:12.5px;margin:14px 0 6px;">② 中継サービス（予備）</div>';
+  const testUrl=hinban?("https://item.rakuten.co.jp/gsc-rinkan/"+hinban):"https://item.rakuten.co.jp/gsc-rinkan/";
   const proxies=[
     ["allorigins","https://api.allorigins.win/raw?url="+encodeURIComponent(testUrl)],
-    ["corsproxy","https://corsproxy.io/?url="+encodeURIComponent(testUrl)],
-    ["codetabs","https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(testUrl)]
+    ["codetabs","https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(testUrl)],
+    ["corsproxy","https://corsproxy.io/?url="+encodeURIComponent(testUrl)]
   ];
-  const rows=[];
   for(const [name,u] of proxies){
     const t0=Date.now();
     try{
-      const resp=await fetch(u,{signal:AbortSignal.timeout(12000)});
+      const resp=await fetch(u,{signal:AbortSignal.timeout(10000)});
       const ms=Date.now()-t0;
-      if(!resp.ok){rows.push([name,"❌","HTTP "+resp.status,ms]);continue;}
+      if(!resp.ok){out+=`<div style="font-size:12px;">❌ ${name}: HTTP ${resp.status}（${ms}ms）</div>`;continue;}
       const txt=await resp.text();
-      const hasRakuten=/rakuten/i.test(txt.slice(0,50000));
-      const t=txt.match(/<title[^>]*>([^<]{0,80})/i);
-      rows.push([name, txt.length>500&&hasRakuten?"✅":"⚠️",
-        `${txt.length}文字 ${hasRakuten?"楽天ページ":"楽天でない"}${t?" / "+t[1].slice(0,40):""}`, ms]);
+      const okk=txt.length>500&&/rakuten/i.test(txt.slice(0,50000));
+      out+=`<div style="font-size:12px;">${okk?"✅":"⚠️"} ${name}: ${txt.length}文字（${ms}ms）</div>`;
     }catch(e){
-      rows.push([name,"❌",(e.name==="TimeoutError"?"タイムアウト":e.message||"接続失敗"),Date.now()-t0]);
+      out+=`<div style="font-size:12px;">❌ ${name}: ${esc(e.name==="TimeoutError"?"タイムアウト":(e.message||"失敗"))}（${Date.now()-t0}ms）</div>`;
     }
   }
-  box.innerHTML=`<div style="font-weight:800;margin-bottom:8px;">🔧 通信テスト結果</div>
-    <div style="font-size:11px;color:var(--t3);margin-bottom:8px;word-break:break-all;">対象: ${esc(testUrl)}</div>`+
-    rows.map(r=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line,#eee);">
-      <span style="font-size:15px;">${r[1]}</span>
-      <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:12.5px;">${r[0]}</div>
-      <div style="font-size:11.5px;color:var(--t2);word-break:break-all;">${esc(String(r[2]))}（${r[3]}ms）</div></div>
-    </div>`).join("")+
-    `<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">✅が1つでもあれば通信は可能です。全て❌なら、外部の中継サービスが停止しています（この場合は別の取得方法に変更が必要です）。この結果をそのまま担当者に伝えてください。</div>`;
+  out+='<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">①が✅なら公式API経由で取得できます。①が❌の場合、その内容をそのまま担当者に伝えてください。</div>';
+  box.innerHTML=out;
 };
 
 // ===== 楽天 公式API（アプリIDを設定すると最優先で使う。中継サービス不要で安定） =====
