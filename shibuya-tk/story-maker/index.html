@@ -216,9 +216,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <div id="tagThumbs" style="display:none;gap:8px;margin-top:8px;flex-wrap:wrap;"></div>
         <button type="button" id="tagScanBtn" class="save-btn" style="display:none;margin-top:10px;padding:13px;font-size:15px;border-radius:13px;">📷 スキャン開始</button>
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
-        <div style="text-align:center;margin-top:8px;">
-          <button type="button" onclick="runProxyTest()" style="border:1px solid var(--line,#ddd);background:#fff;color:var(--t2);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">🔧 通信テスト（ブランドが入らない時）</button>
+        <div style="text-align:center;margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <button type="button" onclick="runProxyTest()" style="border:1px solid var(--line,#ddd);background:#fff;color:var(--t2);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">🔧 通信テスト</button>
+          <button type="button" onclick="setRakutenAppId()" style="border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">⚙️ 楽天APIを設定</button>
         </div>
+        <div id="apiStatus" style="text-align:center;font-size:11px;margin-top:6px;"></div>
         <div id="proxyTestResult" style="display:none;background:var(--card2);border-radius:12px;padding:14px;margin-top:10px;font-size:12.5px;line-height:1.6;"></div>
       </div>
     </div>
@@ -332,7 +334,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1125";
+const APP_VERSION="v2026.08.30.1200";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -629,7 +631,26 @@ async function scanTagQR(file, prefix){
   // 楽天ドメインなら取得を試みる（item. が付かない短縮URL等にも対応）
   const isRakuten=url&&/rakuten\.co\.jp/i.test(url);
   const pricePromise=ocrTagPrice(dataUrl);
-  const rakutenPromise=isRakuten?fetchRakuten(url):Promise.resolve(null);
+  // 公式APIが設定されていればそちらを優先（中継サービス不要で安定）。
+  // 未設定または取得失敗なら、従来どおり中継サービス経由で取得する。
+  const rakutenPromise=(async()=>{
+    if(getRakutenAppId()&&hinban){
+      const api=await fetchRakutenAPI(hinban);
+      if(api&&api.name){
+        // 公式APIの商品名・説明文を、既存パーサーが読める形（og:title + description）に包む
+        const esc2=s=>String(s||"").replace(/"/g,"&quot;");
+        const synthetic='<meta property="og:title" content="'+esc2(api.name)+'">'
+                       +'<meta name="description" content="'+esc2(api.caption)+'">';
+        const parsed=parseRakutenHtml(synthetic);
+        if(parsed&&(parsed.brand||parsed.size||parsed.rank)){
+          if(!parsed.price&&api.price)parsed.price=api.price;
+          parsed.via="api";
+          return parsed;
+        }
+      }
+    }
+    return isRakuten?fetchRakuten(url):null;
+  })();
   const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
 
   if(got&&got.ok){
@@ -837,11 +858,53 @@ window.runProxyTest=async function(){
     `<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">✅が1つでもあれば通信は可能です。全て❌なら、外部の中継サービスが停止しています（この場合は別の取得方法に変更が必要です）。この結果をそのまま担当者に伝えてください。</div>`;
 };
 
+// ===== 楽天 公式API（アプリIDを設定すると最優先で使う。中継サービス不要で安定） =====
+const RAKUTEN_APPID_KEY="rakuten-appid";
+function getRakutenAppId(){try{return localStorage.getItem(RAKUTEN_APPID_KEY)||"";}catch(e){return "";}}
+window.setRakutenAppId=function(){
+  const cur=getRakutenAppId();
+  const v=prompt("楽天アプリID（applicationId）を入力してください。\n\n取得方法：楽天ウェブサービス（webservice.rakuten.co.jp）で無料のアプリID発行が必要です。\n\n空欄で保存すると解除します。",cur||"");
+  if(v==null)return;
+  const t=v.trim();
+  try{ if(t)localStorage.setItem(RAKUTEN_APPID_KEY,t); else localStorage.removeItem(RAKUTEN_APPID_KEY); }catch(e){}
+  alert(t?"アプリIDを保存しました。次回のスキャンから公式APIを使用します。":"アプリIDを解除しました。");
+  updateApiBadge();
+};
+function updateApiBadge(){
+  const el=document.getElementById("apiStatus");
+  if(!el)return;
+  const id=getRakutenAppId();
+  el.innerHTML=id
+    ? '<span style="color:var(--green);font-weight:700;">✅ 楽天公式API 設定済み</span>'
+    : '<span style="color:var(--orange);font-weight:700;">⚠️ 中継サービス経由（不安定）</span>';
+}
+// 品番から楽天公式APIで商品情報を取得する
+async function fetchRakutenAPI(hinban){
+  const appId=getRakutenAppId();
+  if(!appId||!hinban)return null;
+  try{
+    const u="https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+      +"?applicationId="+encodeURIComponent(appId)
+      +"&keyword="+encodeURIComponent(hinban)
+      +"&shopCode=gsc-rinkan&hits=1&format=json";
+    const resp=await fetch(u,{signal:AbortSignal.timeout(9000)});
+    if(!resp.ok){console.log("Rakuten API HTTP",resp.status);return null;}
+    const j=await resp.json();
+    if(!j.Items||!j.Items.length)return null;
+    const it=j.Items[0].Item||j.Items[0];
+    return {name:it.itemName||"", caption:it.itemCaption||"", price:Number(it.itemPrice)||0, url:it.itemUrl||""};
+  }catch(e){console.log("Rakuten API error",e.message);return null;}
+}
+
 async function fetchRakuten(url){
   const proxies=[
     u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u),
     u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
-    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
+    u=>"https://proxy.cors.sh/"+u,
+    u=>"https://cors-anywhere.herokuapp.com/"+u,
+    u=>"https://api.cors.lol/?url="+encodeURIComponent(u),
+    u=>"https://test.cors.workers.dev/?"+u
   ];
   let html2="";
   for(const mk of proxies){
@@ -851,6 +914,12 @@ async function fetchRakuten(url){
     }catch(e){console.log("proxy fail:",e.message);}
   }
   if(!html2)return{ok:false};
+  return parseRakutenHtml(html2);
+}
+
+// 楽天ページ(HTML)から ブランド/サイズ/ランク/価格 を抽出する。
+// 公式API経由の場合も、商品名を og:title 形式に包んでこの関数に通す。
+function parseRakutenHtml(html2){
 
   const out={ok:true,brand:"",size:"",rank:"",price:0};
 
@@ -1356,7 +1425,7 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
   }catch(e){if(e.name!=="AbortError")console.error(e);}
 });
 
-updateBrandDl();renderArchive();drawStory();
+updateBrandDl();renderArchive();drawStory();updateApiBadge();
 // Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
 setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
 
