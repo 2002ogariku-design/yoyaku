@@ -216,6 +216,10 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <div id="tagThumbs" style="display:none;gap:8px;margin-top:8px;flex-wrap:wrap;"></div>
         <button type="button" id="tagScanBtn" class="save-btn" style="display:none;margin-top:10px;padding:13px;font-size:15px;border-radius:13px;">📷 スキャン開始</button>
         <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <button type="button" onclick="runProxyTest()" style="border:1px solid var(--line,#ddd);background:#fff;color:var(--t2);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">🔧 通信テスト（ブランドが入らない時）</button>
+        </div>
+        <div id="proxyTestResult" style="display:none;background:var(--card2);border-radius:12px;padding:14px;margin-top:10px;font-size:12.5px;line-height:1.6;"></div>
       </div>
     </div>
     <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
@@ -328,7 +332,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.1010";
+const APP_VERSION="v2026.08.30.1120";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -794,7 +798,44 @@ async function ocrTagPrice(dataUrl){
 }
 
 // Fetch Rakuten product page and extract info (brand-English, size, rank, price)
-async function fetchRakuten(url){
+// ===== 通信テスト（楽天取得が失敗する原因を特定するための診断） =====
+window.runProxyTest=async function(){
+  const box=document.getElementById("proxyTestResult");
+  box.style.display="block";
+  box.innerHTML="🔧 テスト中... しばらくお待ちください（最大30秒）";
+  const testUrl=(window._lastHinban)
+    ? "https://item.rakuten.co.jp/gsc-rinkan/"+window._lastHinban
+    : "https://item.rakuten.co.jp/gsc-rinkan/";
+  const proxies=[
+    ["allorigins","https://api.allorigins.win/raw?url="+encodeURIComponent(testUrl)],
+    ["corsproxy","https://corsproxy.io/?url="+encodeURIComponent(testUrl)],
+    ["codetabs","https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(testUrl)]
+  ];
+  const rows=[];
+  for(const [name,u] of proxies){
+    const t0=Date.now();
+    try{
+      const resp=await fetch(u,{signal:AbortSignal.timeout(12000)});
+      const ms=Date.now()-t0;
+      if(!resp.ok){rows.push([name,"❌","HTTP "+resp.status,ms]);continue;}
+      const txt=await resp.text();
+      const hasRakuten=/rakuten/i.test(txt.slice(0,50000));
+      const t=txt.match(/<title[^>]*>([^<]{0,80})/i);
+      rows.push([name, txt.length>500&&hasRakuten?"✅":"⚠️",
+        `${txt.length}文字 ${hasRakuten?"楽天ページ":"楽天でない"}${t?" / "+t[1].slice(0,40):""}`, ms]);
+    }catch(e){
+      rows.push([name,"❌",(e.name==="TimeoutError"?"タイムアウト":e.message||"接続失敗"),Date.now()-t0]);
+    }
+  }
+  box.innerHTML=`<div style="font-weight:800;margin-bottom:8px;">🔧 通信テスト結果</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:8px;word-break:break-all;">対象: ${esc(testUrl)}</div>`+
+    rows.map(r=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line,#eee);">
+      <span style="font-size:15px;">${r[1]}</span>
+      <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:12.5px;">${r[0]}</div>
+      <div style="font-size:11.5px;color:var(--t2);word-break:break-all;">${esc(String(r[2]))}（${r[3]}ms）</div></div>
+    </div>`).join("")+
+    `<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">✅が1つでもあれば通信は可能です。全て❌なら、外部の中継サービスが停止しています（この場合は別の取得方法に変更が必要です）。この結果をそのまま担当者に伝えてください。</div>`;
+};
   const proxies=[
     u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
     u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
