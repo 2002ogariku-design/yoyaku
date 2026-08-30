@@ -209,9 +209,14 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       </div>
       <div id="buyStatus" style="font-size:11.5px;color:var(--t3);margin-bottom:8px;"></div>
       <div id="buyResults" style="max-height:280px;overflow-y:auto;"></div>
-      <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);margin-top:10px;">
-        <input type="checkbox" id="buyShowPrice" style="width:auto;"> 販売価格を表示する
-      </label>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);">
+          <input type="checkbox" id="buyShowPrice" style="width:auto;"> 販売価格を表示する
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);">
+          <input type="checkbox" id="buyShowCost" style="width:auto;"> 買取金額を表示する
+        </label>
+      </div>
     </div>
     <div style="margin-bottom:16px;">
       <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">テンプレート（配置・色）</div>
@@ -353,7 +358,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1800";
+const APP_VERSION="v2026.08.30.1900";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -936,6 +941,25 @@ function getPwS(){
   }
   return p||"";
 }
+// 買取履歴はサイズが大きく毎回の取得が遅いので、端末にキャッシュして即表示する。
+// 表示後にバックグラウンドで最新を取り直す（stale-while-revalidate）。
+const KAITORI_CACHE="story-kaitori-cache-v1";
+function readKaitoriCache(){
+  try{
+    const raw=localStorage.getItem(KAITORI_CACHE);
+    if(!raw)return null;
+    const o=JSON.parse(raw);
+    return (o&&Array.isArray(o.items))?o:null;
+  }catch(e){return null;}
+}
+function writeKaitoriCache(items){
+  try{
+    // 画像等は無く軽いが、念のため必要な項目だけに絞って保存
+    const slim=items.map(it=>({brand:it.brand,name:it.name,item:it.item,size:it.size,
+      color:it.color,rank:it.rank,price:it.price,cost:it.cost,date:it.date,store:it.store}));
+    localStorage.setItem(KAITORI_CACHE,JSON.stringify({at:Date.now(),items:slim}));
+  }catch(e){ /* 容量超過時は諦める */ }
+}
 async function loadKaitori(force){
   if(_kaitori&&!force)return _kaitori;
   if(_kaitoriLoading&&!force)return _kaitoriLoading;
@@ -947,6 +971,7 @@ async function loadKaitori(force){
     const rows=await r.json();
     const p=rows.length?rows[0].payload:null;
     _kaitori=(p&&p.items)?p.items:[];
+    writeKaitoriCache(_kaitori);
     return _kaitori;
   })();
   return _kaitoriLoading;
@@ -961,6 +986,10 @@ function renderBuyResults(list){
       <div style="font-size:11.5px;color:var(--t3);margin-top:3px;">
         ${[it.item,it.size&&("size "+it.size),it.color,it.rank&&("ランク"+it.rank)].filter(Boolean).map(esc).join(" / ")}
         ${it.date?" ・ "+esc(String(it.date)):""}
+      </div>
+      <div style="font-size:11.5px;margin-top:4px;display:flex;gap:12px;">
+        ${it.price?`<span>売価 <b>¥${Number(it.price).toLocaleString("ja-JP")}</b></span>`:""}
+        ${it.cost?`<span style="color:#b8860b;">買取 <b>¥${Number(it.cost).toLocaleString("ja-JP")}</b></span>`:""}
       </div>
     </div>`).join("");
   el.querySelectorAll(".buyItem").forEach(d=>{
@@ -989,7 +1018,10 @@ function applyBuyItem(it){
   document.getElementById("sSize").value=it.size||"";
   setRank((it.rank||"").toUpperCase());
   const showPrice=document.getElementById("buyShowPrice").checked;
+  const showCost=document.getElementById("buyShowCost").checked;
   document.getElementById("sPrice").value=(showPrice&&it.price)?String(it.price):"";
+  // 買取金額（エクセルの原価欄）。画像上に「買取金額 ¥○○」として描画する。
+  window._buyCost=(showCost&&it.cost)?Number(it.cost):0;
   // 買取速報向けの下部テキストを初期値に
   const tag=document.getElementById("sTag");
   if(!tag.value||/DM/.test(tag.value))tag.value="💰高価買取いたしました";
@@ -1019,6 +1051,9 @@ document.getElementById("buySearch").addEventListener("input",doBuySearch);
 document.getElementById("buyShowPrice").addEventListener("change",()=>{
   if(window._buyItem)applyBuyItem(window._buyItem);
 });
+document.getElementById("buyShowCost").addEventListener("change",()=>{
+  if(window._buyItem)applyBuyItem(window._buyItem);
+});
 // 種類切替
 document.querySelectorAll("#kindSeg button").forEach(b=>{
   b.addEventListener("click",async()=>{
@@ -1030,9 +1065,25 @@ document.querySelectorAll("#kindSeg button").forEach(b=>{
     if(buy){
       const st=document.getElementById("buyStatus");
       if(!_kaitori){
-        st.textContent="買取履歴を読み込み中...";
-        try{ await loadKaitori(); st.textContent=`${_kaitori.length}件の買取データを読み込みました（新しい順に表示中）`; doBuySearch(); }
-        catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'（🔄読込を押して再試行）</span>'; }
+        // まずキャッシュを即表示（待たせない）
+        const cache=readKaitoriCache();
+        if(cache&&cache.items.length){
+          _kaitori=cache.items;
+          const mins=Math.round((Date.now()-cache.at)/60000);
+          st.innerHTML=`${_kaitori.length}件を表示中 <span style="color:var(--t3);">（${mins<1?"直前":mins+"分前"}のデータ・最新を確認中…）</span>`;
+          doBuySearch();
+          // 裏で最新を取得して差し替え
+          loadKaitori(true).then(()=>{
+            st.innerHTML=`${_kaitori.length}件の買取データ（最新）`;
+            doBuySearch();
+          }).catch(()=>{ st.innerHTML=`${_kaitori.length}件を表示中 <span style="color:var(--orange);">（最新の取得に失敗・🔄で再試行）</span>`; });
+        }else{
+          st.textContent="買取履歴を読み込み中...";
+          try{ await loadKaitori(); st.textContent=`${_kaitori.length}件の買取データを読み込みました（新しい順）`; doBuySearch(); }
+          catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'（🔄読込を押して再試行）</span>'; }
+        }
+      }else{
+        doBuySearch();
       }
       const tag=document.getElementById("sTag");
       if(!tag.value||/DM/.test(tag.value))tag.value="💰高価買取いたしました";
@@ -1372,10 +1423,23 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   }
   if(data.size){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("size:"+data.size,ax,y);y+=74*sc;}
   if(data.rank){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("RANK:"+data.rank,ax,y);}
+  const buyCost=(STORY_KIND==="buy"&&window._buyCost)?Number(window._buyCost):0;
   if(data.price){
     const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
     const ps=fit(ptxt,T.priceSize,44);
     ctx.font=`${wt} ${ps}px ${serif}`;ctx.fillText(ptxt,ax,T.priceY(H));
+  }
+  if(buyCost){
+    // 販売価格が出ているときはその上に、無ければ同じ位置に描く
+    const ctxt="買取金額 ¥"+buyCost.toLocaleString("ja-JP");
+    const cs=fit(ctxt,data.price?Math.round(T.priceSize*0.72):T.priceSize,40);
+    ctx.save();
+    ctx.fillStyle="#d4af37"; // ゴールドで買取金額を強調
+    ctx.font=`${wt} ${cs}px ${serif}`;
+    const cy=data.price?(T.priceY(H)-Math.round(T.priceSize*sc*1.05)):T.priceY(H);
+    ctx.fillText(ctxt,ax,cy);
+    ctx.restore();
+    ctx.fillStyle="#fff";
   }
   if(data.tag){
     ctx.fillStyle=data.tagColor||"#fff";
@@ -1507,6 +1571,7 @@ function buildBuyCaption(){
   if(rank)spec.push(`ランク ${rank}`);
   if(spec.length)L.push(spec.join(" / "));
   if(price)L.push(`¥${Number(price).toLocaleString("ja-JP")}-(税込)`);
+  if(window._buyCost)L.push(`買取金額 ¥${Number(window._buyCost).toLocaleString("ja-JP")}`);
   if(tag)L.push(tag);
   L.push("");
   if(tone==="polite"){
@@ -1710,6 +1775,11 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
 updateBrandDl();renderArchive();drawStory();updateApiBadge();
 // Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
 setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
+// 買取履歴もバックグラウンドで先読み（買取速報モードを即使えるように）
+setTimeout(()=>{
+  const cache=readKaitoriCache();
+  if(cache&&cache.items.length)_kaitori=cache.items; // 即使える状態にしておく
+}, 300);
 
 /* ===== バージョン表示 & 更新チェック ===== */
 (function(){
