@@ -334,7 +334,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.1430";
+const APP_VERSION="v2026.08.30.1520";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -826,21 +826,21 @@ window.runProxyTest=async function(){
   box.innerHTML="🔧 テスト中... しばらくお待ちください";
   const hinban=window._lastHinban||"";
   const appId=getRakutenAppId();
+  const accessKey=getRakutenAccessKey();
   let out='<div style="font-weight:800;margin-bottom:10px;">🔧 通信テスト結果</div>';
 
   // ---- 1) 楽天公式API ----
   out+='<div style="font-weight:700;font-size:12.5px;margin:8px 0 6px;">① 楽天公式API</div>';
-  if(!appId){
-    out+='<div style="color:var(--orange);font-size:12px;">⚠️ アプリID未設定。「⚙️ 楽天APIを設定」から設定してください。</div>';
+  if(!appId||!accessKey){
+    out+='<div style="color:var(--orange);font-size:12px;">⚠️ '
+      +(!appId?"アプリID未設定":"アクセスキー未設定（pk_ で始まる文字列）")
+      +'。「⚙️ 楽天APIを設定」から入力してください。</div>';
   }else{
-    out+=`<div style="font-size:11px;color:var(--t3);margin-bottom:6px;">アプリID: ${esc(appId.slice(0,6))}…（${appId.length}文字）</div>`;
+    out+=`<div style="font-size:11px;color:var(--t3);margin-bottom:6px;">ID: ${esc(appId.slice(0,8))}… / Key: ${esc(accessKey.slice(0,6))}…</div>`;
     const kw=hinban||"クロムハーツ";
-    const u="https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-      +"?applicationId="+encodeURIComponent(appId)
-      +"&keyword="+encodeURIComponent(kw)+"&shopCode=gsc-rinkan&hits=1&format=json";
     try{
       const t0=Date.now();
-      const resp=await fetch(u,{signal:AbortSignal.timeout(12000)});
+      const resp=await fetch(rakutenSearchUrl(kw),{signal:AbortSignal.timeout(12000)});
       const ms=Date.now()-t0;
       const txt=await resp.text();
       if(resp.ok){
@@ -850,14 +850,14 @@ window.runProxyTest=async function(){
           const it=j.Items[0].Item||j.Items[0];
           out+=`<div style="color:var(--green);font-size:12.5px;">✅ 成功（${ms}ms）<br><span style="color:var(--t2);font-size:11.5px;word-break:break-all;">${esc((it.itemName||"").slice(0,70))}</span></div>`;
         }else{
-          out+=`<div style="color:var(--orange);font-size:12.5px;">⚠️ 接続OKだが該当商品0件（${ms}ms）<br><span style="font-size:11.5px;">検索語「${esc(kw)}」で見つかりません。品番がgsc-rinkan店に無い可能性。</span></div>`;
+          out+=`<div style="color:var(--orange);font-size:12.5px;">⚠️ 接続OKだが該当0件（${ms}ms）<br><span style="font-size:11.5px;">検索語「${esc(kw)}」がgsc-rinkan店に無い可能性。</span></div>`;
         }
       }else{
         let msg="";try{const j=JSON.parse(txt);msg=(j.error||"")+" "+(j.error_description||"");}catch(e){msg=txt.slice(0,150);}
         out+=`<div style="color:#e5484d;font-size:12.5px;">❌ HTTP ${resp.status}（${ms}ms）<br><span style="font-size:11.5px;word-break:break-all;">${esc(msg)}</span></div>`;
-        if(resp.status===400||resp.status===403){
-          out+='<div style="font-size:11.5px;color:var(--t2);margin-top:6px;line-height:1.6;">→ 楽天側の「許可されたウェブサイト」に <b>2002ogariku-design.github.io</b> が入っているか確認してください。</div>';
-        }
+        if(/accessKey/i.test(msg))out+='<div style="font-size:11.5px;color:var(--t2);margin-top:6px;">→ アクセスキーが必要です（pk_ で始まる文字列）。</div>';
+        else if(/applicationId/i.test(msg))out+='<div style="font-size:11.5px;color:var(--t2);margin-top:6px;">→ アプリIDを確認してください。</div>';
+        else if(resp.status===403)out+='<div style="font-size:11.5px;color:var(--t2);margin-top:6px;">→ 「許可されたウェブサイト」に <b>2002ogariku-design.github.io</b> を追加してください。</div>';
       }
     }catch(e){
       out+=`<div style="color:#e5484d;font-size:12.5px;">❌ ${esc(e.name==="TimeoutError"?"タイムアウト":(e.message||"接続失敗"))}<br><span style="font-size:11.5px;">CORSブロックの可能性（許可ウェブサイト設定を確認）</span></div>`;
@@ -889,36 +889,55 @@ window.runProxyTest=async function(){
   box.innerHTML=out;
 };
 
-// ===== 楽天 公式API（アプリIDを設定すると最優先で使う。中継サービス不要で安定） =====
+// ===== 楽天 公式API（2026年2月の新仕様：openapi ドメイン + accessKey 必須） =====
 const RAKUTEN_APPID_KEY="rakuten-appid";
+const RAKUTEN_KEY_KEY="rakuten-accesskey";
 function getRakutenAppId(){try{return localStorage.getItem(RAKUTEN_APPID_KEY)||"";}catch(e){return "";}}
+function getRakutenAccessKey(){try{return localStorage.getItem(RAKUTEN_KEY_KEY)||"";}catch(e){return "";}}
 window.setRakutenAppId=function(){
-  const cur=getRakutenAppId();
-  const v=prompt("楽天アプリID（applicationId）を入力してください。\n\n取得方法：楽天ウェブサービス（webservice.rakuten.co.jp）で無料のアプリID発行が必要です。\n\n空欄で保存すると解除します。",cur||"");
-  if(v==null)return;
-  const t=v.trim();
-  try{ if(t)localStorage.setItem(RAKUTEN_APPID_KEY,t); else localStorage.removeItem(RAKUTEN_APPID_KEY); }catch(e){}
-  alert(t?"アプリIDを保存しました。次回のスキャンから公式APIを使用します。":"アプリIDを解除しました。");
+  const curId=getRakutenAppId();
+  const id=prompt("① アプリID（applicationId）を入力してください。\n\nUUID形式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\n空欄で保存すると解除します。",curId||"");
+  if(id==null)return;
+  const t=id.trim();
+  if(!t){
+    try{localStorage.removeItem(RAKUTEN_APPID_KEY);localStorage.removeItem(RAKUTEN_KEY_KEY);}catch(e){}
+    alert("設定を解除しました。");updateApiBadge();return;
+  }
+  const curKey=getRakutenAccessKey();
+  const key=prompt("② アクセスキー（accessKey）を入力してください。\n\n「pk_」から始まる文字列です。\n楽天の管理画面でアプリIDの下に表示されています。",curKey||"");
+  if(key==null)return;
+  const k=key.trim();
+  try{
+    localStorage.setItem(RAKUTEN_APPID_KEY,t);
+    if(k)localStorage.setItem(RAKUTEN_KEY_KEY,k); else localStorage.removeItem(RAKUTEN_KEY_KEY);
+  }catch(e){}
+  alert(k?"設定を保存しました。次回のスキャンから公式APIを使用します。":"アプリIDのみ保存しました。アクセスキーも必要です。");
   updateApiBadge();
 };
 function updateApiBadge(){
   const el=document.getElementById("apiStatus");
   if(!el)return;
-  const id=getRakutenAppId();
-  el.innerHTML=id
+  const id=getRakutenAppId(), key=getRakutenAccessKey();
+  el.innerHTML=(id&&key)
     ? '<span style="color:var(--green);font-weight:700;">✅ 楽天公式API 設定済み</span>'
-    : '<span style="color:var(--orange);font-weight:700;">⚠️ 中継サービス経由（不安定）</span>';
+    : (id&&!key)
+      ? '<span style="color:var(--orange);font-weight:700;">⚠️ アクセスキー未設定（⚙️から入力してください）</span>'
+      : '<span style="color:var(--orange);font-weight:700;">⚠️ 楽天API未設定</span>';
+}
+// 新エンドポイント（2026年2月移行後）
+const RAKUTEN_ENDPOINT="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
+function rakutenSearchUrl(keyword){
+  return RAKUTEN_ENDPOINT
+    +"?applicationId="+encodeURIComponent(getRakutenAppId())
+    +"&accessKey="+encodeURIComponent(getRakutenAccessKey())
+    +"&keyword="+encodeURIComponent(keyword)
+    +"&shopCode=gsc-rinkan&hits=1&format=json";
 }
 // 品番から楽天公式APIで商品情報を取得する
 async function fetchRakutenAPI(hinban){
-  const appId=getRakutenAppId();
-  if(!appId||!hinban)return null;
+  if(!getRakutenAppId()||!getRakutenAccessKey()||!hinban)return null;
   try{
-    const u="https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-      +"?applicationId="+encodeURIComponent(appId)
-      +"&keyword="+encodeURIComponent(hinban)
-      +"&shopCode=gsc-rinkan&hits=1&format=json";
-    const resp=await fetch(u,{signal:AbortSignal.timeout(9000)});
+    const resp=await fetch(rakutenSearchUrl(hinban),{signal:AbortSignal.timeout(9000)});
     if(!resp.ok){console.log("Rakuten API HTTP",resp.status);return null;}
     const j=await resp.json();
     if(!j.Items||!j.Items.length)return null;
