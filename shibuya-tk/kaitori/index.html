@@ -361,7 +361,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.2100";
+const APP_VERSION="v2026.08.30.2200";
 
 const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
 const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
@@ -549,6 +549,7 @@ const HEADER_MAP=[
   ["mdComment",["MDコメント"]],
   ["acc",["付属品"]],
   ["date",["買取日付"]],
+  ["itemNo",["品番","管理番号","管理No","商品コード","商品番号","伝票番号","査定番号","ID"]],
   ["itemRank",["アイテムランク"]],
   ["season",["シーズン"]],
   ["ref100",["100イキ"]],
@@ -557,7 +558,7 @@ const HEADER_MAP=[
   ["origStore",["元振り先"]],
 ];
 async function importWorkbook(wb){
-  let added=0;
+  let added=0, dupSkipped=0;
   const batchId=uploadMeta.uploadedAt||new Date().toISOString();
   const seen=new Set(items.map(i=>i.__key));
   for(const sn of wb.SheetNames){
@@ -610,10 +611,16 @@ async function importWorkbook(wb){
         mdComment:get("mdComment"),
         acc:get("acc"),
         date:get("date"),
+        itemNo:get("itemNo"),
         season:get("season"),
       };
-      it.__key=[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer].join("|");
-      if(seen.has(it.__key))continue;
+      // 重複判定キー：品番など一意の番号があればそれを最優先。
+      // 無い場合は内容＋買取日で判定する（買取日を含めないと、
+      // 同じ商品を別の日に買い取った分が重複扱いで落ちてしまう）。
+      it.__key = it.itemNo
+        ? "no:"+it.itemNo
+        : [it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer,normDate(it.date)].join("|");
+      if(seen.has(it.__key)){dupSkipped++;continue;}
       seen.add(it.__key);
       it.__batch=batchId;
       items.push(it);
@@ -626,7 +633,9 @@ async function importWorkbook(wb){
   }
   await saveMerged();
   await renderAll();
-  toast(added?`${added}点を追加しました（合計 ${items.length}点）`:"追加できる新しい行が見つかりませんでした");
+  toast(added
+    ? `${added}点を追加しました${dupSkipped?`（重複 ${dupSkipped}点はスキップ）`:""}／合計 ${items.length}点`
+    : (dupSkipped?`すべて登録済みでした（重複 ${dupSkipped}点をスキップ）`:"追加できる新しい行が見つかりませんでした"));
 }
 async function save(){
   try{await ghSaveData();}catch(e){console.error(e);toast("共有保存に失敗："+e.message);}
@@ -652,7 +661,8 @@ async function saveMerged(){
   }catch(e){ console.error("merge fetch failed",e); }
 
   // 重複キーで統合（リモート優先で全件を保持し、ローカルの新規分を足す）
-  const keyOf=it=>it.__key||[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer].join("|");
+  const keyOf=it=>it.__key||(it.itemNo?("no:"+it.itemNo)
+    :[it.brand,it.name,it.size,it.priceExTax,it.store,it.buyer,normDate(it.date)].join("|"));
   const map=new Map();
   for(const it of remote.items) map.set(keyOf(it),it);
   let newly=0;
