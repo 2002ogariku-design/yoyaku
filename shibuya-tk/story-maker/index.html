@@ -328,7 +328,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0930";
+const APP_VERSION="v2026.08.28.1010";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -795,50 +795,19 @@ async function ocrTagPrice(dataUrl){
 
 // Fetch Rakuten product page and extract info (brand-English, size, rank, price)
 async function fetchRakuten(url){
-  // 外部のCORSプロキシ経由で楽天ページを取得する。
-  // 実績のあるプロキシのみを使う（怪しいものを足すとエラーページを
-  // 商品情報として誤読してしまうため）。
   const proxies=[
-    ["allorigins",  u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)],
-    ["corsproxy",   u=>"https://corsproxy.io/?url="+encodeURIComponent(u)],
-    ["codetabs",    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)],
-    ["allorigins2", u=>"https://api.allorigins.win/get?url="+encodeURIComponent(u)]
+    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
   ];
-  // 取得したHTMLが「本物の楽天商品ページ」かを検証する。
-  // プロキシのエラーページや空ページを掴んだまま解析すると、
-  // ブランド名にプロキシ名（例: Whatever Origin）が入る等の誤りが起きる。
-  function looksLikeRakuten(t){
-    if(!t||t.length<2000)return false;
-    const s=t.slice(0,200000);
-    if(!/rakuten/i.test(s))return false;                 // 楽天のページである
-    if(!/<meta[^>]*og:title|<title/i.test(s))return false; // タイトルがある
-    // 典型的なプロキシ/エラーページを除外
-    if(/whatever\s*origin|thingproxy|jina\.ai|proxy error|rate limit|too many requests|access denied/i.test(s.slice(0,3000)))return false;
-    return true;
-  }
-  let html2="", usedProxy="";
-  window._rakutenDebug={url,tried:[]};
-  for(const [pname,mk] of proxies){
+  let html2="";
+  for(const mk of proxies){
     try{
       const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
-      if(resp&&resp.ok){
-        let t=await resp.text();
-        // 一部のプロキシは JSON でくるむ（{contents:"..."}）ので取り出す
-        if(t && t.trim().startsWith("{")){
-          try{const j=JSON.parse(t); t=j.contents||j.data||t;}catch(e){}
-        }
-        if(looksLikeRakuten(t)){html2=t;usedProxy=pname;window._rakutenDebug.tried.push(pname+":OK");break;}
-        window._rakutenDebug.tried.push(pname+":invalid");
-      }else{
-        window._rakutenDebug.tried.push(pname+":HTTP"+(resp?resp.status:"?"));
-      }
-    }catch(e){
-      window._rakutenDebug.tried.push(pname+":"+(e.name||e.message||"err"));
-      console.log("proxy fail:",pname,e.message);
-    }
+      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
+    }catch(e){console.log("proxy fail:",e.message);}
   }
-  console.log("Rakuten fetch via:",usedProxy||"(all failed)",window._rakutenDebug.tried);
-  if(!html2)return{ok:false,reason:"proxy",tried:window._rakutenDebug.tried};
+  if(!html2)return{ok:false};
 
   const out={ok:true,brand:"",size:"",rank:"",price:0};
 
@@ -961,23 +930,6 @@ async function fetchRakuten(url){
     const pats=[/itemprice["'\s:]*(\d[\d,]{3,})/i,/税込[^\d]{0,6}(\d[\d,]{3,})/,/"price"\s*:\s*"?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
     for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
   }
-
-  // 最終チェック：明らかにおかしい抽出結果は捨てる。
-  // （プロキシのエラーページ等を掴んだ場合に "Whatever Origin" のような
-  //   文字列がブランド名として入ってしまう事故を防ぐ）
-  const BAD=/whatever|origin|proxy|error|not found|forbidden|denied|rate limit|cloudflare|captcha|楽天市場$/i;
-  if(out.brand){
-    const b=out.brand.trim();
-    if(b.length<2||b.length>40||BAD.test(b))out.brand="";
-  }
-  if(out.size){
-    const s=out.size.trim();
-    // サイズは短い英数字のみ（XS/S/M/L/38/16号 など）。それ以外は信用しない
-    if(!/^[A-Za-z0-9.\/]{1,6}$/.test(s)||BAD.test(s))out.size="";
-  }
-  if(out.rank&&!/^[NSABCD]$/.test(out.rank))out.rank="";
-  // ブランドもサイズもランクも取れていないなら、実質失敗として扱う
-  if(!out.brand&&!out.size&&!out.rank&&!out.price)return{ok:false,reason:"parse"};
 
   return out;
 }
