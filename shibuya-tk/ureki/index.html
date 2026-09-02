@@ -134,7 +134,7 @@ tbody tr:active{background:#eaeaef;}
           <button class="btn" id="csvBtn" style="padding:8px 14px;font-size:13px;background:var(--green);">⬇ CSV</button>
         </div>
       </div>
-      <div style="margin-bottom:14px;"><input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名で検索..."></div>
+      <div style="margin-bottom:14px;"><input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名・品番で検索..."></div>
       <div id="itemsInsight"></div>
       <div style="margin-bottom:12px;" id="itemBrandChips"></div>
       <div style="overflow-x:auto;">
@@ -259,7 +259,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1330";
+const APP_VERSION="v2026.09.02.1400";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -514,7 +514,8 @@ function dispItemName(r){
   if(n.length>=2)return n;
   const alt=cleanName(r.name)||cleanName(r.model);
   if(alt.length>=2)return alt;
-  if(r.jan)return "（商品名なし）品番:"+r.jan;
+  if(r.hinban)return "（商品名なし）品番:"+r.hinban;
+  if(r.jan)return "（商品名なし）JAN:"+r.jan;
   return "（商品名なし）";
 }
 function itemKey(r){return r.brand+"|||"+(r.model||r.name);}
@@ -1182,7 +1183,10 @@ function drawItemsTable(items){
   const q=document.getElementById("itemSearch").value.trim().toLowerCase();
   let rows=items.filter(i=>i.count>=1);
   if(itemBrandFilter)rows=rows.filter(i=>i.brand===itemBrandFilter);
-  if(q)rows=rows.filter(i=>(i.brand+" "+i.item).toLowerCase().includes(q));
+  if(q)rows=rows.filter(i=>{
+    const codes=(i.recs||[]).map(r=>(r.hinban||"")+" "+(r.jan||"")).join(" ");
+    return (i.brand+" "+i.item+" "+(i.rawItem||"")+" "+codes).toLowerCase().includes(q);
+  });
   if(favOnly)rows=rows.filter(i=>FAVS.has(i.key));
   const k=itemSort.key,dir=itemSort.dir;
   rows.sort((a,b)=>{
@@ -1320,7 +1324,7 @@ function renderItemModal(){
         同じ日・同じ価格・同じ担当が並ぶ場合は、同一の販売が重複登録されている可能性があります（⚠ 印）。
       </div>
       <div style="max-height:300px;overflow-y:auto;">
-        <table><thead><tr><th>日付</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th><th>担当</th><th>品番</th></tr></thead>
+        <table><thead><tr><th>日付</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th><th>担当</th><th>品番</th><th>JAN</th></tr></thead>
         <tbody>${(()=>{
           const all=recs.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
           // 同一の販売に見える組み合わせを数える
@@ -1339,7 +1343,8 @@ function renderItemModal(){
               <td>${esc(r.size)||"-"}</td>
               <td style="white-space:nowrap;font-size:11px;">${esc(r.store)||"-"}</td>
               <td style="white-space:nowrap;font-size:11px;">${esc(r.staff)||"-"}</td>
-              <td style="white-space:nowrap;font-size:10.5px;color:var(--t3);">${esc(r.jan)||"-"}</td>
+              <td style="white-space:nowrap;font-size:10.5px;">${esc(r.hinban)||"-"}</td>
+              <td style="white-space:nowrap;font-size:10px;color:var(--t3);">${esc(r.jan)||"-"}</td>
             </tr>`;
           }).join("");
         })()}</tbody></table>
@@ -1768,7 +1773,7 @@ async function parseXlsx(file){
   if(hr<0)throw new Error("ヘッダー行（売上日付）が見つかりません");
   const head=rows[hr];
   const col=name=>head.indexOf(name);
-  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),staff:col("販売員名称"),cust:col("客層名称"),pdate:col("入金日"),color:col("カラー２")};
+  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),hinban:(function(){for(const n of ["品番","品番ハイフン有","商品品番","品番コード","商品番号"]){const i=col(n);if(i>=0)return i;}return -1;})(),staff:col("販売員名称"),cust:col("客層名称"),pdate:col("入金日"),color:col("カラー２")};
   const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
   const recs=[];
   const occ={}; // occurrence counter per identity group within this file
@@ -1802,14 +1807,14 @@ async function parseXlsx(file){
       occ[idBase]=(occ[idBase]||0)+1;
       uid=idBase+"#"+occ[idBase];
     }
-    recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),color:ci.color>=0?cl(r[ci.color]):"",qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,staff,cust});
+    recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),color:ci.color>=0?cl(r[ci.color]):"",qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,hinban:(ci.hinban>=0?cl(r[ci.hinban]):""),staff,cust});
   }
   return recs;
 }
 
 // Save ALL data to Supabase (password-protected)
 async function saveUploads(){
-  const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","color","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
+  const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","color","qty","price","cost","listPrice","jan","hinban","staff","cust","profit","taxfree","uid"];
   // 値を詰める：null/undefined/空文字は 0 バイトの null に統一し、
   // 数値は文字列化しない。レコード数が多いと数MBになり、
   // 送信サイズの上限で保存に失敗するため。
