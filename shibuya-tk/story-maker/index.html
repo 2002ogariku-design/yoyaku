@@ -213,9 +213,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <select id="buyDateSel" style="flex:1;font-size:12.5px;"></select>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input type="text" id="buySearch" placeholder="🔍 さらに絞り込む（ブランド・商品名）" style="flex:1;">
+        <input type="text" id="buySearch" placeholder="🔍 さらに絞り込む（ブランド・商品名・担当）" style="flex:1;">
         <button type="button" id="buyLoadBtn" class="pill" style="padding:9px 14px;font-size:12.5px;white-space:nowrap;">🔄 更新</button>
       </div>
+      <div id="buyStoreChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div id="buyBuyerChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
       <div id="buyBrandChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
       <div id="buyItemChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -382,7 +384,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.08.30.2359";
+const APP_VERSION="v2026.09.02.1530";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -980,7 +982,8 @@ function writeKaitoriCache(items){
   try{
     // 画像等は無く軽いが、念のため必要な項目だけに絞って保存
     const slim=items.map(it=>({brand:it.brand,name:it.name,item:it.item,size:it.size,
-      color:it.color,rank:it.rank,price:it.price,cost:it.cost,date:it.date,store:it.store}));
+      color:it.color,rank:it.rank,price:it.price,cost:it.cost,date:it.date,
+      store:it.store,origStore:it.origStore,buyer:it.buyer}));
     localStorage.setItem(KAITORI_CACHE,JSON.stringify({at:Date.now(),items:slim}));
   }catch(e){ /* 容量超過時は諦める */ }
 }
@@ -1011,9 +1014,13 @@ function renderBuyResults(list){
         ${[it.item,it.size&&("size "+it.size),it.color,it.rank&&("ランク"+it.rank)].filter(Boolean).map(esc).join(" / ")}
         ${it.date?" ・ "+esc(String(it.date)):""}
       </div>
-      <div style="font-size:11.5px;margin-top:4px;display:flex;gap:12px;">
+      <div style="font-size:11.5px;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap;">
         ${it.price?`<span>売価 <b>¥${Number(it.price).toLocaleString("ja-JP")}</b></span>`:""}
         ${it.cost?`<span style="color:#b8860b;">買取 <b>¥${Number(it.cost).toLocaleString("ja-JP")}</b></span>`:""}
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap;">
+        ${(it.store||it.origStore)?`<span>🏬 ${esc(it.store||it.origStore)}</span>`:""}
+        ${it.buyer?`<span>👤 ${esc(it.buyer)}</span>`:""}
       </div>
     </div>`).join("");
   el.querySelectorAll(".buyItem").forEach(d=>{
@@ -1061,7 +1068,8 @@ function applyBuyItem(it){
   window._buyItem=it;
   drawStory();
   if(document.getElementById("captionBox").value)regenCaption();
-  document.getElementById("buyStatus").innerHTML='<span style="color:var(--green);font-weight:700;">✓ '+esc(it.brand||"")+' を読み込みました</span>';
+  document.getElementById("buyStatus").innerHTML='<span style="color:var(--green);font-weight:700;">✓ '+esc(it.brand||"")+' を読み込みました</span>'
+    +((it.store||it.origStore||it.buyer)?'<span style="color:var(--t3);"> ／ '+esc([it.store||it.origStore,it.buyer].filter(Boolean).join(" ・ "))+'</span>':"");
 }
 // 買取日を YYYY-MM-DD に正規化する（エクセル由来で表記がまちまちなため）
 function normBuyDate(d){
@@ -1101,25 +1109,28 @@ function fillBuyDateSel(){
     +dates.map(d=>`<option value="${d}">${d.replace(/-/g,"/")}（${counts[d]}点）</option>`).join("");
   if(dates.includes(cur))sel.value=cur;
 }
-let buyBrandPick="", buyItemPick="";
-// その日のデータに実際に含まれるブランド／アイテムだけをチップにする
+let buyBrandPick="", buyItemPick="", buyStorePick="", buyBuyerPick="";
+// その日のデータに実際に含まれる 店舗／バイヤー／ブランド／アイテム をチップにする
 function renderBuyChips(dayList){
-  const bc=document.getElementById("buyBrandChips");
-  const ic=document.getElementById("buyItemChips");
-  if(!bc||!ic)return;
-  const count=(arr,key)=>{const m={};arr.forEach(it=>{const v=(it[key]||"").trim();if(v)m[v]=(m[v]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
-  const brands=count(dayList,"brand").slice(0,14);
-  const its=count(dayList,"item").slice(0,14);
-  bc.innerHTML=brands.length>1
-    ? `<span class="chip${buyBrandPick?"":" on"}" data-b="">全ブランド</span>`
-      +brands.map(([b,n])=>`<span class="chip${buyBrandPick===b?" on":""}" data-b="${esc(b)}">${esc(b)} <span style="opacity:.55;">${n}</span></span>`).join("")
-    : "";
-  ic.innerHTML=its.length>1
-    ? `<span class="chip${buyItemPick?"":" on"}" data-i="">全アイテム</span>`
-      +its.map(([b,n])=>`<span class="chip${buyItemPick===b?" on":""}" data-i="${esc(b)}">${esc(b)} <span style="opacity:.55;">${n}</span></span>`).join("")
-    : "";
-  bc.querySelectorAll(".chip").forEach(el=>el.addEventListener("click",()=>{buyBrandPick=el.dataset.b||"";doBuySearch();}));
-  ic.querySelectorAll(".chip").forEach(el=>el.addEventListener("click",()=>{buyItemPick=el.dataset.i||"";doBuySearch();}));
+  const els={store:document.getElementById("buyStoreChips"),buyer:document.getElementById("buyBuyerChips"),
+             brand:document.getElementById("buyBrandChips"),item:document.getElementById("buyItemChips")};
+  if(!els.brand)return;
+  const count=(arr,getter)=>{const m={};arr.forEach(it=>{const v=(getter(it)||"").trim();if(v)m[v]=(m[v]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+  const defs=[
+    {el:els.store, get:it=>it.store||it.origStore, pick:()=>buyStorePick, set:v=>buyStorePick=v, all:"全店舗",   attr:"s", max:12},
+    {el:els.buyer, get:it=>it.buyer,               pick:()=>buyBuyerPick, set:v=>buyBuyerPick=v, all:"全バイヤー", attr:"y", max:12},
+    {el:els.brand, get:it=>it.brand,               pick:()=>buyBrandPick, set:v=>buyBrandPick=v, all:"全ブランド", attr:"b", max:14},
+    {el:els.item,  get:it=>it.item,                pick:()=>buyItemPick,  set:v=>buyItemPick=v,  all:"全アイテム", attr:"i", max:14},
+  ];
+  for(const d of defs){
+    if(!d.el)continue;
+    const list=count(dayList,d.get).slice(0,d.max);
+    d.el.innerHTML=list.length>1
+      ? `<span class="chip${d.pick()?"":" on"}" data-v="">${d.all}</span>`
+        +list.map(([v,n])=>`<span class="chip${d.pick()===v?" on":""}" data-v="${esc(v)}">${esc(v)} <span style="opacity:.55;">${n}</span></span>`).join("")
+      : "";
+    d.el.querySelectorAll(".chip").forEach(el=>el.addEventListener("click",()=>{d.set(el.dataset.v||"");doBuySearch();}));
+  }
 }
 function doBuySearch(){
   if(!_kaitori)return;
@@ -1139,10 +1150,12 @@ function doBuySearch(){
   // チップはこの時点（日付で絞った状態）の内訳から作る
   const dayList=list.slice();
   // 2) ブランド／アイテムのチップで絞る
+  if(buyStorePick)list=list.filter(it=>((it.store||it.origStore||"").trim())===buyStorePick);
+  if(buyBuyerPick)list=list.filter(it=>(it.buyer||"").trim()===buyBuyerPick);
   if(buyBrandPick)list=list.filter(it=>(it.brand||"").trim()===buyBrandPick);
   if(buyItemPick)list=list.filter(it=>(it.item||"").trim()===buyItemPick);
   // 3) キーワードでさらに絞る
-  if(q)list=list.filter(it=>((it.brand||"")+" "+(it.name||"")+" "+(it.item||"")+" "+(it.color||"")).toLowerCase().includes(q));
+  if(q)list=list.filter(it=>((it.brand||"")+" "+(it.name||"")+" "+(it.item||"")+" "+(it.color||"")+" "+(it.store||it.origStore||"")+" "+(it.buyer||"")).toLowerCase().includes(q));
   // 4) 並び替え
   const sort=(document.getElementById("buySort")||{}).value||"new";
   if(sort==="costHigh")list.sort((a,b)=>(Number(b.cost)||0)-(Number(a.cost)||0));
@@ -1155,7 +1168,7 @@ function doBuySearch(){
   if(st&&!/読み込み中|失敗/.test(st.textContent)){
     const label=pickDate?pickDate.replace(/-/g,"/")
       :(buyDayMode==="today"?"本日":buyDayMode==="yesterday"?"昨日":buyDayMode==="week"?"直近7日間":"全期間");
-    const narrowed=[buyBrandPick,buyItemPick,q].filter(Boolean).length;
+    const narrowed=[buyStorePick,buyBuyerPick,buyBrandPick,buyItemPick,q].filter(Boolean).length;
     st.innerHTML=`<b>${label}</b>：${list.length}件${narrowed?` <span style="color:var(--t3);">（${dayList.length}件から絞り込み）</span>`:""}`
       +(list.length===0&&buyDayMode==="today"&&!narrowed?' <span style="color:var(--orange);">（本日の買取はまだありません。「昨日」や「7日間」をお試しください）</span>':"");
   }
@@ -1166,13 +1179,13 @@ document.querySelectorAll("#buyDaySeg button").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.toggle("on",x===b));
     buyDayMode=b.dataset.d;
-    buyBrandPick="";buyItemPick=""; // 日を変えたらチップ選択もリセット
+    buyBrandPick="";buyItemPick="";buyStorePick="";buyBuyerPick=""; // 日を変えたらチップ選択もリセット
     document.getElementById("buyDateSel").value=""; // 直接選択を解除
     doBuySearch();
   });
 });
 document.getElementById("buyDateSel").addEventListener("change",()=>{
-  buyBrandPick="";buyItemPick="";
+  buyBrandPick="";buyItemPick="";buyStorePick="";buyBuyerPick="";
   document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.remove("on"));
   doBuySearch();
 });
