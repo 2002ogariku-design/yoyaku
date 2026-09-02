@@ -258,7 +258,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0725";
+const APP_VERSION="v2026.09.02.1130";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -1605,8 +1605,8 @@ async function importFiles(files){
 
   msg.innerHTML=`<span style="color:var(--blue);">💾 保存中...</span>`;
   renderAll(); // update UI immediately even before save completes
-  let saveOk=true;
-  try{await saveUploads();}catch(e){saveOk=false;console.error(e);}
+  let saveOk=true, saveErr="";
+  try{await saveUploads();}catch(e){saveOk=false;saveErr=(e&&e.message)||String(e);console.error(e);}
 
   let html=`<div style="background:var(--card2);border-radius:14px;padding:16px;">`;
   if(totalAdded>0){
@@ -1619,7 +1619,7 @@ async function importFiles(files){
     読込ファイル数：${files.length}件<br>
     総レコード（処理後）：<b>${afterValid.length.toLocaleString()}件</b>（+${(afterValid.length-beforeCount).toLocaleString()}）<br>
     期間：<b>${fmtD(newMin)} 〜 ${fmtD(newMax)}</b> ${periodChanged?'<span style="color:var(--green);font-weight:700;">← 更新！</span>':'<span class="muted">（変わらず）</span>'}<br>
-    保存：${saveOk?'<span style="color:var(--green);">✓ 全端末で共有されました</span>':'<span style="color:var(--red);">⚠ 保存失敗（アクセスキーを確認）</span>'}
+    保存：${saveOk?'<span style="color:var(--green);">✓ 全端末で共有されました</span>':'<span style="color:var(--red);">⚠ 保存失敗：'+esc(saveErr==="PW"?"共有パスワードが違います（半角で入力し直してください）":saveErr)+'<br><span style="font-size:11.5px;">このデータはこの端末には残っていますが、他の端末には共有されていません。</span></span>'}
   </div>`;
   if(errors.length)html+=`<div style="color:var(--red);font-size:12px;margin-top:8px;">エラー：${errors.map(esc).join("<br>")}</div>`;
   html+=`</div>`;
@@ -1670,8 +1670,27 @@ async function parseXlsx(file){
 // Save ALL data to Supabase (password-protected)
 async function saveUploads(){
   const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","color","qty","price","cost","listPrice","jan","staff","cust","profit","taxfree","uid"];
-  const rows=DATA.map(r=>schema.map(k=>r[k]));
-  await sbSave({schema,rows,updated:new Date().toISOString()});
+  // 値を詰める：null/undefined/空文字は 0 バイトの null に統一し、
+  // 数値は文字列化しない。レコード数が多いと数MBになり、
+  // 送信サイズの上限で保存に失敗するため。
+  const rows=DATA.map(r=>schema.map(k=>{
+    const v=r[k];
+    if(v===undefined||v===""||v===null)return null;
+    return v;
+  }));
+  const payload={schema,rows,updated:new Date().toISOString()};
+  // 送信サイズを把握しておき、失敗時に原因が分かるようにする
+  let bytes=0;
+  try{ bytes=new Blob([JSON.stringify(payload)]).size; }catch(e){}
+  try{
+    await sbSave(payload);
+  }catch(e){
+    const mb=(bytes/1024/1024).toFixed(1);
+    if(bytes>4*1024*1024){
+      throw new Error(`データ量が大きすぎます（約${mb}MB / ${rows.length.toLocaleString()}件）。古い期間のデータを整理してください。`);
+    }
+    throw new Error((e&&e.message||e)+`（送信サイズ 約${mb}MB）`);
+  }
 }
 
 // chart helper
