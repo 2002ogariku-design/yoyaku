@@ -259,7 +259,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1400";
+const APP_VERSION="v2026.09.02.1430";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -499,6 +499,14 @@ function detectColor(r){
 // are analyzed WITHIN each item in the detail view.
 // 商品名に機種依存文字・外字（フォントで表示できない文字）が含まれると
 // 「▮▮▮」のような豆腐文字になる。表示用に読める名前へ整える。
+// 品番は15桁の数字で入っているため、値札と同じ「00000-000000-0000」形式に整える
+function fmtHinban(v){
+  const s=String(v==null?"":v).trim();
+  if(!s)return "";
+  const d=s.replace(/[^0-9]/g,"");
+  if(/^\d{15}$/.test(d))return d.slice(0,5)+"-"+d.slice(5,11)+"-"+d.slice(11);
+  return s;
+}
 function cleanName(s){
   return String(s||"")
     .replace(/[\u0000-\u001F\u007F]/g,"")        // 制御文字
@@ -1773,7 +1781,19 @@ async function parseXlsx(file){
   if(hr<0)throw new Error("ヘッダー行（売上日付）が見つかりません");
   const head=rows[hr];
   const col=name=>head.indexOf(name);
-  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),hinban:(function(){for(const n of ["品番","品番ハイフン有","商品品番","品番コード","商品番号"]){const i=col(n);if(i>=0)return i;}return -1;})(),staff:col("販売員名称"),cust:col("客層名称"),pdate:col("入金日"),color:col("カラー２")};
+  const ci={date:col("売上日付"),store:col("店舗名称"),brand:col("ブランド名"),brandEn:col("ブランド名称"),model:col("モデル名"),name:col("商品名称"),cat:col("大分類名称"),cat2:col("中分類名称"),size:col("サイズ名称"),rank:col("状態ランク"),qty:col("売上数量"),price:col("売上売価金額"),cost:col("売上原価金額"),listPrice:col("標準売価(税込)"),jan:col("JANコード"),hinban:(function(){
+    // ヘッダー名で探す（表記ゆれに幅広く対応）
+    for(const n of ["品番","品番ハイフン有","品番ハイフンなし","商品品番","品番コード","商品番号","商品コード","品目コード","管理番号","商品管理番号","SKU"]){
+      const i=col(n); if(i>=0)return i;
+    }
+    // 部分一致でも探す
+    for(let i=0;i<head.length;i++){
+      const h=String(head[i]||""); if(/品番|品目コード|商品コード/.test(h))return i;
+    }
+    // それでも見つからない場合、C列（3列目）を品番とみなす。
+    // この売上明細表では C列=品番（15桁）、D列=JANコード（13桁）で固定のため。
+    return 2;
+  })(),staff:col("販売員名称"),cust:col("客層名称"),pdate:col("入金日"),color:col("カラー２")};
   const cl=v=>String(v==null?"":v).replace(/\u3000/g," ").trim();
   const recs=[];
   const occ={}; // occurrence counter per identity group within this file
@@ -1807,7 +1827,7 @@ async function parseXlsx(file){
       occ[idBase]=(occ[idBase]||0)+1;
       uid=idBase+"#"+occ[idBase];
     }
-    recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),color:ci.color>=0?cl(r[ci.color]):"",qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,hinban:(ci.hinban>=0?cl(r[ci.hinban]):""),staff,cust});
+    recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),color:ci.color>=0?cl(r[ci.color]):"",qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,hinban:(ci.hinban>=0?fmtHinban(r[ci.hinban]):""),staff,cust});
   }
   return recs;
 }
