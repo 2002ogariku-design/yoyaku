@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>タスク集計｜RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
@@ -221,6 +222,9 @@ tr:last-child td{border-bottom:none;}
       <span id="monthLabel" style="font-size:18px;font-weight:800;flex:1;text-align:center;"></span>
       <button class="pill" id="monthNext" style="padding:8px 14px;">▶</button>
     </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button id="xlsxMonth" style="border:none;background:#217346;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer;touch-action:manipulation;">⬇ エクセルに書き出す</button>
+    </div>
     <!-- sub-tabs: store tasks / instagram / insight -->
     <div class="subtabs" id="monthSubtabs">
       <button class="subtab on" data-sub="store">🏬 店頭タスク</button>
@@ -289,7 +293,7 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0725";
+const APP_VERSION="v2026.09.02.1500";
 
 const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/kpi-data.json";
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
@@ -741,6 +745,85 @@ document.getElementById("monthPrev").addEventListener("click",()=>{currentMonth=
 document.getElementById("monthNext").addEventListener("click",()=>{currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()+1,1);renderMonth();});
 
 // CSV export — matches the Excel column order for easy transcription
+// ===== 月別集計をエクセルに書き出す =====
+// 「店頭タスク」「インスタ」「インサイト」「日別明細」をシート分けして出力する。
+document.getElementById("xlsxMonth").addEventListener("click",()=>{
+  const mr=monthRecords();
+  if(!mr.length){alert("この月のデータがありません。");return;}
+  const ym=`${currentMonth.getFullYear()}年${currentMonth.getMonth()+1}月`;
+  const wb=XLSX.utils.book_new();
+  const setW=(ws,widths)=>{ws["!cols"]=widths.map(w=>({wch:w}));};
+
+  // --- 1. 店頭タスク（人ごとの合計＋合計行） ---
+  {
+    const map={};
+    mr.forEach(r=>{ if(!map[r.staff])map[r.staff]={}; STORE_FIELDS.forEach(f=>{map[r.staff][f.key]=(map[r.staff][f.key]||0)+(r[f.key]||0);}); });
+    const names=Object.keys(map).sort((a,b)=>STORE_FIELDS.reduce((s,f)=>s+(map[b][f.key]||0),0)-STORE_FIELDS.reduce((s,f)=>s+(map[a][f.key]||0),0));
+    const aoa=[[ym+" 店頭タスク"],[],["名前",...STORE_FIELDS.map(f=>f.label)]];
+    names.forEach(n=>aoa.push([n,...STORE_FIELDS.map(f=>map[n][f.key]||0)]));
+    aoa.push(["合計",...STORE_FIELDS.map(f=>names.reduce((s,n)=>s+(map[n][f.key]||0),0))]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    setW(ws,[14,...STORE_FIELDS.map(()=>13)]);
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:STORE_FIELDS.length}}];
+    XLSX.utils.book_append_sheet(wb,ws,"店頭タスク");
+  }
+
+  // --- 2. インスタ（人ごとの合計＋合計行） ---
+  {
+    const map={};
+    mr.forEach(r=>{ if(!map[r.staff])map[r.staff]={}; INSTA_FIELDS.forEach(f=>{map[r.staff][f.key]=(map[r.staff][f.key]||0)+(r[f.key]||0);}); });
+    const names=Object.keys(map).filter(n=>INSTA_FIELDS.some(f=>map[n][f.key])).sort((a,b)=>(map[b].instaSaleAmount||0)-(map[a].instaSaleAmount||0));
+    const aoa=[[ym+" インスタ"],[],["名前",...INSTA_FIELDS.map(f=>f.label)]];
+    names.forEach(n=>aoa.push([n,...INSTA_FIELDS.map(f=>map[n][f.key]||0)]));
+    aoa.push(["合計",...INSTA_FIELDS.map(f=>names.reduce((s,n)=>s+(map[n][f.key]||0),0))]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    setW(ws,[14,...INSTA_FIELDS.map(f=>f.isAmt?15:12)]);
+    // 金額列は3桁区切りにする
+    const amtIdx=INSTA_FIELDS.map((f,i)=>f.isAmt?i+1:-1).filter(i=>i>=0);
+    for(let r=3;r<3+names.length+1;r++){
+      amtIdx.forEach(ci=>{const a=XLSX.utils.encode_cell({r,c:ci});if(ws[a])ws[a].z="#,##0";});
+    }
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:INSTA_FIELDS.length}}];
+    XLSX.utils.book_append_sheet(wb,ws,"インスタ");
+  }
+
+  // --- 3. インサイト（合計せず日毎・人毎にそのまま） ---
+  {
+    const rows=mr.filter(r=>INSIGHT_FIELDS.some(f=>r[f.key])||(r.insightFrom&&r.insightTo))
+                 .sort((a,b)=>a.date<b.date?1:-1);
+    const aoa=[[ym+" インサイト（合計せず日毎・人毎）"],[],
+      ["記録日","対象期間",...INSIGHT_FIELDS.map(f=>f.label),"名前"]];
+    rows.forEach(r=>aoa.push([
+      r.date,
+      (r.insightFrom&&r.insightTo)?`${r.insightFrom}〜${r.insightTo}`:"",
+      ...INSIGHT_FIELDS.map(f=>r[f.key]||0),
+      r.staff
+    ]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    setW(ws,[12,22,...INSIGHT_FIELDS.map(()=>16),14]);
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:INSIGHT_FIELDS.length+2}}];
+    XLSX.utils.book_append_sheet(wb,ws,"インサイト");
+  }
+
+  // --- 4. 日別明細（全項目・元データ） ---
+  {
+    const rows=mr.slice().sort((a,b)=>a.date<b.date?-1:1);
+    const aoa=[[ym+" 日別明細"],[],["日付","名前",...ALL_FIELDS.map(f=>f.label),"インサイト対象期間"]];
+    rows.forEach(r=>aoa.push([
+      r.date, r.staff, ...ALL_FIELDS.map(f=>r[f.key]||0),
+      (r.insightFrom&&r.insightTo)?`${r.insightFrom}〜${r.insightTo}`:""
+    ]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    setW(ws,[12,14,...ALL_FIELDS.map(f=>f.isAmt?15:13),22]);
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:ALL_FIELDS.length+2}}];
+    ws["!freeze"]={xSplit:2,ySplit:3};
+    XLSX.utils.book_append_sheet(wb,ws,"日別明細");
+  }
+
+  const fname=`タスク集計_${currentMonth.getFullYear()}${String(currentMonth.getMonth()+1).padStart(2,"0")}.xlsx`;
+  XLSX.writeFile(wb,fname);
+});
+
 document.getElementById("csvToday").addEventListener("click",()=>{
   const date=document.getElementById("inDate").value||today();
   const td=records.filter(r=>r.date===date);
