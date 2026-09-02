@@ -236,6 +236,7 @@ tbody tr:active{background:#eaeaef;}
     </div>
     <div class="card">
       <div class="card-t">💾 データ状況</div>
+      <div id="dupNote"></div>
       <div id="dataStats"></div>
     </div>
   </div>
@@ -258,7 +259,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1230";
+const APP_VERSION="v2026.09.02.1300";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -396,7 +397,7 @@ async function boot(){
   try{
     const payload=await sbLoad();
     if(payload&&payload.rows&&payload.schema){
-      DATA=payload.rows.map(r=>rowToObj(r,payload.schema)).filter(r=>!EXCLUDED_BRAND_RE.test(r.brand||""));
+      DATA=dedupeByJan(payload.rows.map(r=>rowToObj(r,payload.schema)).filter(r=>!EXCLUDED_BRAND_RE.test(r.brand||"")));
     }
   }catch(e){
     if(e.message==="PW"){
@@ -424,7 +425,24 @@ async function boot(){
   renderAll();
 }
 function rowToObj(r,schema){const o={};schema.forEach((k,i)=>o[k]=r[i]);return o;}
-function keyOf(o){return o.uid||(o.jan+"|"+o.date+"|"+o.price);}
+function keyOf(o){return o.uid||(o.jan?("jan:"+o.jan):(o.jan+"|"+o.date+"|"+o.price));}
+// 品番(JAN)は1点ごとに固有。同じ品番が複数あるのは同一販売の重複登録なので
+// 1件だけ残す（過去に取り込んだ重複データもこれで自動的に整理される）。
+function dedupeByJan(list){
+  const seen=new Set(); const out=[];
+  let removed=0;
+  for(const r of list){
+    if(r.jan){
+      const k="jan:"+r.jan;
+      if(seen.has(k)){removed++;continue;}
+      seen.add(k);
+    }
+    out.push(r);
+  }
+  if(removed)console.log("重複データを整理しました:",removed,"件");
+  window.__dupRemoved=(window.__dupRemoved||0)+removed;
+  return out;
+}
 
 // ---- item grouping ----
 // Detect precious-metal material from product name/model — gold and silver items of the
@@ -1609,6 +1627,14 @@ function showSizeBreak(cat){
 }
 
 function renderDataStats(){
+  // 過去データから重複を整理した場合は知らせる
+  const dn=window.__dupRemoved||0;
+  const note=document.getElementById("dupNote");
+  if(note){
+    note.innerHTML = dn
+      ? `<div style="background:rgba(255,149,0,.12);color:#b26a00;border-radius:10px;padding:10px 13px;font-size:12.5px;line-height:1.6;margin-bottom:12px;">🧹 同じ品番の重複データ <b>${dn.toLocaleString()}件</b> を自動で整理しました。<br><span style="font-size:11.5px;">正しい件数で集計されています。次回の保存で確定します。</span></div>`
+      : "";
+  }
   const valid=DATA.filter(r=>r.price>0);
   const dates=valid.map(r=>r.date).sort();
   const months=[...new Set(valid.map(r=>r.date.slice(0,6)))].length;
@@ -1744,9 +1770,17 @@ async function parseXlsx(file){
     const staff=ci.staff>=0?cl(r[ci.staff]):"";
     // Deterministic identity: same across re-uploads of the same file, but distinguishes
     // identical same-day sales via an occurrence index. Uses ORIGINAL price (tax-correction-proof).
-    const idBase=jan+"|"+date+"|"+origPrice+"|"+staff+"|"+(r[ci.qty]||1);
-    occ[idBase]=(occ[idBase]||0)+1;
-    const uid=idBase+"#"+occ[idBase];
+    // 品番(JAN)は商品1点ごとに固有のため、これがあれば品番だけで一意とする。
+    // 同じ品番が複数行あるのは同一販売の重複登録なので、1件に統合される。
+    // 品番が無い行のみ、内容＋出現回数で識別する。
+    let uid;
+    if(jan){
+      uid="jan:"+jan;
+    }else{
+      const idBase=jan+"|"+date+"|"+origPrice+"|"+staff+"|"+(r[ci.qty]||1);
+      occ[idBase]=(occ[idBase]||0)+1;
+      uid=idBase+"#"+occ[idBase];
+    }
     recs.push({uid,date,pdate,store:cl(r[ci.store]),brand,brandEn:cl(r[ci.brandEn]),model:cl(r[ci.model]),name,cat:cl(r[ci.cat]),cat2:cl(r[ci.cat2]),size:cl(r[ci.size]),rank:cl(r[ci.rank]),color:ci.color>=0?cl(r[ci.color]):"",qty:Number(r[ci.qty])||1,price,cost,profit,taxfree:taxfree?1:0,listPrice:Number(r[ci.listPrice])||0,jan,staff,cust});
   }
   return recs;
