@@ -258,7 +258,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1130";
+const APP_VERSION="v2026.09.02.1200";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -307,23 +307,84 @@ function sbHeaders(){
   return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":sanitizePw(getAppPw()),"Content-Type":"application/json"};
 }
 // Load this tool's data blob from Supabase
-async function sbLoad(){
-  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+// ===== 大きなデータの保存 =====
+// 売れ履歴は件数が増えると数MB〜十数MBになり、そのままでは送信上限を超えて
+// 保存できない。そこで gzip 圧縮し、必要なら複数行に分割して保存する。
+// （売上データはブランド名や店舗名の繰り返しが多く、圧縮が非常によく効く）
+const CHUNK_BYTES = 2*1024*1024; // 1行あたりの最大サイズ
+
+async function gzipToBase64(str){
+  const data=new TextEncoder().encode(str);
+  if(typeof CompressionStream==="undefined")return null; // 非対応ブラウザ
+  const cs=new CompressionStream("gzip");
+  const blob=await new Response(new Blob([data]).stream().pipeThrough(cs)).blob();
+  const buf=new Uint8Array(await blob.arrayBuffer());
+  let bin="";
+  const CH=0x8000;
+  for(let i=0;i<buf.length;i+=CH)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+CH));
+  return btoa(bin);
+}
+async function base64ToUngzip(b64){
+  const bin=atob(b64);
+  const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+  const ds=new DecompressionStream("gzip");
+  const blob=await new Response(new Blob([buf]).stream().pipeThrough(ds)).blob();
+  return await blob.text();
+}
+// tool名 + 連番で分割保存する
+async function sbSaveRaw(toolName,payload){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    method:"POST",
+    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool:toolName,payload,updated_at:new Date().toISOString()})
+  });
+  if(r.status===401||r.status===403)throw new Error("PW");
+  if(!r.ok){const t=await r.text();throw new Error("save "+r.status+" "+t.slice(0,120));}
+}
+async function sbLoadRaw(toolName){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+encodeURIComponent(toolName)+"&select=payload",{headers:sbHeaders()});
   if(r.status===401||r.status===403)throw new Error("PW");
   if(!r.ok)throw new Error("load "+r.status);
   const rows=await r.json();
   return rows.length?rows[0].payload:null;
 }
-// Save this tool's data blob to Supabase (upsert on tool)
-async function sbSave(payload){
-  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-    method:"POST",
-    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
-  });
-  if(r.status===401||r.status===403)throw new Error("PW");
-  if(!r.ok){const t=await r.text();throw new Error("save "+r.status+" "+t.slice(0,120));}
+
+async function sbLoad(){
+  const head=await sbLoadRaw(TOOL);
+  if(!head)return null;
+  // 旧形式（非圧縮でそのまま入っている）はそのまま返す
+  if(!head.v||head.v<2)return head;
+  // 新形式：分割された圧縮データを結合して復元する
+  let b64="";
+  for(let i=0;i<head.chunks;i++){
+    const c=await sbLoadRaw(TOOL+":c"+i);
+    if(!c||typeof c.d!=="string")throw new Error("データの一部が読み込めませんでした（"+(i+1)+"/"+head.chunks+"）");
+    b64+=c.d;
+  }
+  const json=await base64ToUngzip(b64);
+  return JSON.parse(json);
 }
+async function sbSave(payload){
+  const json=JSON.stringify(payload);
+  const b64=await gzipToBase64(json);
+  if(b64===null){
+    // 圧縮に非対応のブラウザ：従来どおり丸ごと保存を試みる
+    return await sbSaveRaw(TOOL,payload);
+  }
+  const chunks=[];
+  for(let i=0;i<b64.length;i+=CHUNK_BYTES)chunks.push(b64.slice(i,i+CHUNK_BYTES));
+  // 本体（目次）より先に各チャンクを保存する
+  for(let i=0;i<chunks.length;i++){
+    await sbSaveRaw(TOOL+":c"+i,{d:chunks[i]});
+  }
+  await sbSaveRaw(TOOL,{v:2,gz:true,chunks:chunks.length,rows:(payload.rows||[]).length,updated:new Date().toISOString()});
+  // 以前より分割数が減った場合、余った古いチャンクを空にしておく
+  for(let i=chunks.length;i<chunks.length+5;i++){
+    try{ await sbSaveRaw(TOOL+":c"+i,{d:""}); }catch(e){ break; }
+  }
+}
+// Save this tool's data blob to Supabase (upsert on tool)
 
 let DATA=[]; // all sale records
 let charts={};
@@ -1679,18 +1740,7 @@ async function saveUploads(){
     return v;
   }));
   const payload={schema,rows,updated:new Date().toISOString()};
-  // 送信サイズを把握しておき、失敗時に原因が分かるようにする
-  let bytes=0;
-  try{ bytes=new Blob([JSON.stringify(payload)]).size; }catch(e){}
-  try{
-    await sbSave(payload);
-  }catch(e){
-    const mb=(bytes/1024/1024).toFixed(1);
-    if(bytes>4*1024*1024){
-      throw new Error(`データ量が大きすぎます（約${mb}MB / ${rows.length.toLocaleString()}件）。古い期間のデータを整理してください。`);
-    }
-    throw new Error((e&&e.message||e)+`（送信サイズ 約${mb}MB）`);
-  }
+  await sbSave(payload); // 圧縮＋分割保存されるため件数が多くても保存できる
 }
 
 // chart helper
