@@ -258,7 +258,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1200";
+const APP_VERSION="v2026.09.02.1230";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -1276,10 +1276,34 @@ function renderItemModal(){
     ${colorBars?`<div class="card" style="box-shadow:none;border:1px solid var(--line);"><div class="card-t">カラー別 平均価格</div>${colorBars}</div>`:""}
 
     <div class="card" style="box-shadow:none;border:1px solid var(--line);">
-      <div class="card-t">販売履歴（新しい順）${st.rank||st.color||st.mat?"・絞り込み中":""}</div>
-      <div style="max-height:260px;overflow-y:auto;">
-        <table><thead><tr><th>日付</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th></tr></thead>
-        <tbody>${sorted.slice().reverse().map(r=>{const c=detectColor(r);return `<tr style="cursor:default;"><td>${fmtD(r.date)}</td><td><b>${YEN(r.price)}</b></td><td>${rankNorm(r.rank)}</td><td>${c?`<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:${c.hex};border:1px solid rgba(0,0,0,.15);"></span>${esc(c.name)}</span>`:"-"}</td><td>${esc(r.size)||"-"}</td><td>${esc(r.store)}</td></tr>`;}).join("")}</tbody></table>
+      <div class="card-t">販売履歴（全${recs.length}件・新しい順）${st.rank||st.color||st.mat?"・絞り込み中":""}</div>
+      <div style="font-size:11.5px;color:var(--t3);margin-bottom:8px;line-height:1.6;">
+        同じ日・同じ価格・同じ担当が並ぶ場合は、同一の販売が重複登録されている可能性があります（⚠ 印）。
+      </div>
+      <div style="max-height:300px;overflow-y:auto;">
+        <table><thead><tr><th>日付</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th><th>担当</th><th>品番</th></tr></thead>
+        <tbody>${(()=>{
+          const all=recs.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+          // 同一の販売に見える組み合わせを数える
+          const sig=r=>[r.jan||"",r.date||"",r.price||"",r.staff||""].join("|");
+          const cnt={};all.forEach(r=>{const k=sig(r);cnt[k]=(cnt[k]||0)+1;});
+          const cleanSet=new Set(sorted.map(r=>r.uid));
+          return all.map(r=>{
+            const c=detectColor(r);
+            const dup=cnt[sig(r)]>1;
+            const excluded=r.uid&&!cleanSet.has(r.uid);
+            return `<tr style="cursor:default;${excluded?"opacity:.5;":""}">
+              <td style="white-space:nowrap;">${fmtD(r.date)}${dup?' <span title="同一内容が複数あります" style="color:var(--orange);font-weight:800;">⚠</span>':""}</td>
+              <td style="white-space:nowrap;"><b>${YEN(r.price)}</b>${excluded?'<div style="font-size:9.5px;color:var(--t3);">外れ値として除外</div>':""}</td>
+              <td>${rankNorm(r.rank)}</td>
+              <td style="white-space:nowrap;">${c?`<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:${c.hex};border:1px solid rgba(0,0,0,.15);"></span>${esc(c.name)}</span>`:"-"}</td>
+              <td>${esc(r.size)||"-"}</td>
+              <td style="white-space:nowrap;font-size:11px;">${esc(r.store)||"-"}</td>
+              <td style="white-space:nowrap;font-size:11px;">${esc(r.staff)||"-"}</td>
+              <td style="white-space:nowrap;font-size:10.5px;color:var(--t3);">${esc(r.jan)||"-"}</td>
+            </tr>`;
+          }).join("");
+        })()}</tbody></table>
       </div>
     </div>`;
   setTimeout(()=>{
