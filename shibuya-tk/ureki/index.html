@@ -134,8 +134,16 @@ tbody tr:active{background:#eaeaef;}
           <button class="btn" id="csvBtn" style="padding:8px 14px;font-size:13px;background:var(--green);">⬇ CSV</button>
         </div>
       </div>
-      <div style="margin-bottom:14px;"><input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名・品番で検索..."></div>
+      <div style="margin-bottom:6px;position:relative;">
+        <input type="text" id="itemSearch" placeholder="🔍 ブランド・アイテム名・品番で検索..." autocomplete="off">
+        <div id="itemSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;"></div>
+      </div>
       <div id="itemsInsight"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">カテゴリ</div>
+      <div style="margin-bottom:10px;" id="itemCatChips"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ランク</div>
+      <div style="margin-bottom:10px;" id="itemRankChips"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ブランド</div>
       <div style="margin-bottom:12px;" id="itemBrandChips"></div>
       <div style="overflow-x:auto;">
         <table id="itemsTable">
@@ -259,7 +267,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1430";
+const APP_VERSION="v2026.09.02.1700";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -1187,10 +1195,39 @@ function renderItems(){
   }
 }
 window.setItemBrand=function(b){itemBrandFilter=b;renderItems();};
+let itemCatFilter="", itemRankFilter="";
+// カテゴリ／ランク／ブランドのチップを、実データから件数付きで作る
+function renderItemFilterChips(allItems){
+  const mk=(elId,list,cur,setter)=>{
+    const el=document.getElementById(elId);
+    if(!el)return;
+    if(list.length<2){el.innerHTML="";return;}
+    el.innerHTML=`<span class="chip${cur?"":" on"}" data-v="">すべて</span>`
+      +list.map(([v,n])=>`<span class="chip${cur===v?" on":""}" data-v="${esc(v)}">${esc(v)} <span style="opacity:.55;">${n}</span></span>`).join("");
+    el.querySelectorAll(".chip").forEach(ch=>ch.addEventListener("click",()=>{setter(ch.dataset.v||"");drawItemsTable(buildItems());}));
+  };
+  const tally=(getter)=>{
+    const m={};allItems.forEach(i=>{const v=(getter(i)||"").trim();if(v)m[v]=(m[v]||0)+1;});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  };
+  mk("itemCatChips", tally(i=>i.cat2||i.cat).slice(0,16), itemCatFilter, v=>itemCatFilter=v);
+  // ランクはアイテム内で最も多いランクを代表とする
+  mk("itemRankChips", tally(i=>{
+    const m={};(i.recs||[]).forEach(r=>{const rk=rankNorm(r.rank);if(rk!=="—")m[rk]=(m[rk]||0)+1;});
+    const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:"";
+  }).sort((a,b)=>a[0].localeCompare(b[0])), itemRankFilter, v=>itemRankFilter=v);
+}
 function drawItemsTable(items){
   const q=document.getElementById("itemSearch").value.trim().toLowerCase();
+  renderItemFilterChips(items);
   let rows=items.filter(i=>i.count>=1);
   if(itemBrandFilter)rows=rows.filter(i=>i.brand===itemBrandFilter);
+  if(itemCatFilter)rows=rows.filter(i=>((i.cat2||i.cat||"").trim())===itemCatFilter);
+  if(itemRankFilter)rows=rows.filter(i=>{
+    const m={};(i.recs||[]).forEach(r=>{const rk=rankNorm(r.rank);if(rk!=="—")m[rk]=(m[rk]||0)+1;});
+    const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];
+    return top&&top[0]===itemRankFilter;
+  });
   if(q)rows=rows.filter(i=>{
     const codes=(i.recs||[]).map(r=>(r.hinban||"")+" "+(r.jan||"")).join(" ");
     return (i.brand+" "+i.item+" "+(i.rawItem||"")+" "+codes).toLowerCase().includes(q);
@@ -1242,7 +1279,52 @@ function gSearchBtn(brand,item){
   return `<a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Googleで検索" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:var(--card2);text-decoration:none;font-size:13px;">🔍</a>`;
 }
 function itemKeyStr(i){return i.key;}
-document.getElementById("itemSearch").addEventListener("input",()=>drawItemsTable(buildItems()));
+// ===== 検索の候補表示 =====
+// 入力に応じて、ブランド／アイテム名／カテゴリの候補を件数付きで出す。
+function renderItemSuggest(){
+  const box=document.getElementById("itemSuggest");
+  const q=document.getElementById("itemSearch").value.trim().toLowerCase();
+  if(!box)return;
+  if(q.length<1){box.style.display="none";box.innerHTML="";return;}
+  const items=buildItems();
+  const add=(map,label,type)=>{const k=type+"|"+label;map[k]=(map[k]||0)+1;};
+  const brands={},names={},cats={};
+  items.forEach(i=>{
+    if((i.brand||"").toLowerCase().includes(q))brands[i.brand]=(brands[i.brand]||0)+i.count;
+    if((i.item||"").toLowerCase().includes(q))names[i.item]=(names[i.item]||0)+i.count;
+    const ct=(i.cat2||i.cat||"").trim();
+    if(ct&&ct.toLowerCase().includes(q))cats[ct]=(cats[ct]||0)+i.count;
+  });
+  const top=(o,n)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  const groups=[
+    ["ブランド",top(brands,5),"#0071e3"],
+    ["アイテム",top(names,6),"#5b3fc4"],
+    ["カテゴリ",top(cats,4),"#0a8a3a"],
+  ].filter(g=>g[1].length);
+  if(!groups.length){box.style.display="none";return;}
+  box.innerHTML=groups.map(([label,list,col])=>`
+    <div style="padding:6px 12px 2px;font-size:10.5px;font-weight:800;color:${col};">${label}</div>
+    ${list.map(([v,n])=>`<div class="sugg" data-v="${esc(v)}" style="padding:9px 12px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:10px;">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(v)}</span>
+      <span style="color:var(--t3);font-size:11.5px;white-space:nowrap;">${n}点</span></div>`).join("")}
+  `).join("");
+  box.querySelectorAll(".sugg").forEach(el=>{
+    el.addEventListener("mouseenter",()=>el.style.background="var(--card2)");
+    el.addEventListener("mouseleave",()=>el.style.background="");
+    el.addEventListener("click",()=>{
+      document.getElementById("itemSearch").value=el.dataset.v;
+      box.style.display="none";
+      drawItemsTable(buildItems());
+    });
+  });
+  box.style.display="block";
+}
+document.getElementById("itemSearch").addEventListener("input",()=>{drawItemsTable(buildItems());renderItemSuggest();});
+document.getElementById("itemSearch").addEventListener("focus",renderItemSuggest);
+document.addEventListener("click",e=>{
+  const box=document.getElementById("itemSuggest");
+  if(box&&!box.contains(e.target)&&e.target.id!=="itemSearch")box.style.display="none";
+});
 document.querySelectorAll("#itemsTable thead th").forEach(th=>{
   th.addEventListener("click",()=>{
     const k=th.dataset.sort;
@@ -1318,6 +1400,15 @@ function renderItemModal(){
       <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(s.avg)}</div></div>
       <div class="kpi"><div class="lbl">価格帯</div><div class="val" style="font-size:16px;">${YEN(s.min)}〜${YEN(s.max)}</div></div>
       <div class="kpi"><div class="lbl">相場推移</div><div class="val" style="font-size:20px;">${trendHtml}</div></div>
+      ${(()=>{
+        // このアイテムの回転日数（仕入→販売）
+        const ds=recs.map(r=>daysBetween(r.pdate,r.date)).filter(d=>d!=null).sort((a,b)=>a-b);
+        if(!ds.length)return `<div class="kpi"><div class="lbl">回転日数</div><div class="val" style="font-size:16px;color:var(--t3);">データなし</div><div class="sub">仕入日が未取込</div></div>`;
+        const med=ds.length%2?ds[(ds.length-1)/2]:Math.round((ds[ds.length/2-1]+ds[ds.length/2])/2);
+        const col=med<=7?"var(--green)":med<=30?"var(--t1)":"#e5484d";
+        const label=med<=7?"かなり速い":med<=14?"速い":med<=30?"標準":med<=60?"やや遅い":"遅い";
+        return `<div class="kpi"><div class="lbl">回転日数（中央値）</div><div class="val" style="color:${col};">${med}<span style="font-size:13px;">日</span></div><div class="sub">${label}／最短${ds[0]}日・最長${ds[ds.length-1]}日（${ds.length}件）</div></div>`;
+      })()}
     </div>
     ${confNote(s)}
 
@@ -1332,7 +1423,7 @@ function renderItemModal(){
         同じ日・同じ価格・同じ担当が並ぶ場合は、同一の販売が重複登録されている可能性があります（⚠ 印）。
       </div>
       <div style="max-height:300px;overflow-y:auto;">
-        <table><thead><tr><th>日付</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th><th>担当</th><th>品番</th><th>JAN</th></tr></thead>
+        <table><thead><tr><th>仕入日</th><th>売れた日</th><th>回転</th><th>価格</th><th>ランク</th><th>カラー</th><th>サイズ</th><th>店舗</th><th>担当</th><th>品番</th><th>JAN</th></tr></thead>
         <tbody>${(()=>{
           const all=recs.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
           // 同一の販売に見える組み合わせを数える
@@ -1343,8 +1434,11 @@ function renderItemModal(){
             const c=detectColor(r);
             const dup=cnt[sig(r)]>1;
             const excluded=r.uid&&!cleanSet.has(r.uid);
+            const dys=daysBetween(r.pdate,r.date);
             return `<tr style="cursor:default;${excluded?"opacity:.5;":""}">
+              <td style="white-space:nowrap;color:var(--t2);">${r.pdate?fmtD(r.pdate):"-"}</td>
               <td style="white-space:nowrap;">${fmtD(r.date)}${dup?' <span title="同一内容が複数あります" style="color:var(--orange);font-weight:800;">⚠</span>':""}</td>
+              <td style="white-space:nowrap;">${dys!=null?`<b style="color:${dys<=7?'var(--green)':dys<=30?'var(--t1)':'#e5484d'};">${dys}日</b>`:"-"}</td>
               <td style="white-space:nowrap;"><b>${YEN(r.price)}</b>${excluded?'<div style="font-size:9.5px;color:var(--t3);">外れ値として除外</div>':""}</td>
               <td>${rankNorm(r.rank)}</td>
               <td style="white-space:nowrap;">${c?`<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:${c.hex};border:1px solid rgba(0,0,0,.15);"></span>${esc(c.name)}</span>`:"-"}</td>
