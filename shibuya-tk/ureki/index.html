@@ -267,7 +267,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1700";
+const APP_VERSION="v2026.09.02.1800";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -399,6 +399,7 @@ let DATA=[]; // all sale records
 let charts={};
 let SEED_KEYS=new Set();
 let lastBatchKeys=[]; // keys added in the most recent upload (for undo)
+let uploadLog=[];     // アップロード履歴（回ごとに削除できるようにする）
 
 async function boot(){
   // Load all data from Supabase (password-protected)
@@ -406,6 +407,7 @@ async function boot(){
     const payload=await sbLoad();
     if(payload&&payload.rows&&payload.schema){
       DATA=dedupeByJan(payload.rows.map(r=>rowToObj(r,payload.schema)).filter(r=>!EXCLUDED_BRAND_RE.test(r.brand||"")));
+      if(Array.isArray(payload.uploadLog))uploadLog=payload.uploadLog;
     }
   }catch(e){
     if(e.message==="PW"){
@@ -1777,8 +1779,58 @@ function renderDataStats(){
       ${lastBatchKeys.length?`<button class="btn" style="background:var(--orange);" onclick="undoLastUpload()">↩️ 直前のアップロードを取り消す（${lastBatchKeys.length}件）</button>`:""}
       <button class="btn" style="background:var(--red);" onclick="clearAllData()">🗑 全データを削除</button>
     </div>
-    <p class="muted" style="margin-top:10px;line-height:1.6;">間違えて入れた場合、直前のアップロードだけ取り消すか、全データを削除してやり直せます。</p>`;
+    <p class="muted" style="margin-top:10px;line-height:1.6;">間違えて入れた場合、下の履歴から回ごとに削除するか、全データを削除してやり直せます。</p>
+    ${renderUploadLog()}`;
 }
+
+// アップロード履歴（回ごとに削除できる）
+function renderUploadLog(){
+  if(!uploadLog.length)return "";
+  const counts={};
+  DATA.forEach(r=>{if(r.batch)counts[r.batch]=(counts[r.batch]||0)+1;});
+  return `<div style="margin-top:18px;">
+    <div class="card-t">🗂 アップロード履歴（回ごとに削除できます）</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${uploadLog.map(u=>{
+        const remain=counts[u.batch]||0;
+        const d=new Date(u.at);
+        const when=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card2);border-radius:12px;padding:12px 14px;">
+          <div style="min-width:0;">
+            <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(u.files||"（ファイル名なし）")}</div>
+            <div style="font-size:11.5px;color:var(--t3);margin-top:2px;">${when} ・ 追加 ${u.added.toLocaleString()}件${u.from?` ・ 期間 ${u.from.slice(0,4)}/${u.from.slice(4,6)}/${u.from.slice(6,8)}〜${u.to.slice(0,4)}/${u.to.slice(4,6)}/${u.to.slice(6,8)}`:""}</div>
+            <div style="font-size:11px;color:${remain?"var(--green)":"var(--t3)"};margin-top:2px;">${remain?`現在 ${remain.toLocaleString()}件が残っています`:"このデータは既に削除されています"}</div>
+          </div>
+          ${remain?`<button class="btn" style="background:var(--red);flex-shrink:0;padding:9px 14px;font-size:12.5px;" onclick="deleteBatch('${u.batch}')">🗑 この回を削除</button>`
+                  :`<button class="btn" style="background:var(--card);color:var(--t3);border:1px solid var(--line);flex-shrink:0;padding:9px 14px;font-size:12.5px;" onclick="removeLogEntry('${u.batch}')">履歴を消す</button>`}
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+// この回に追加したデータだけを削除する
+window.deleteBatch=async function(batch){
+  const target=DATA.filter(r=>r.batch===batch);
+  if(!target.length){alert("この回のデータは見つかりませんでした。");return;}
+  const u=uploadLog.find(x=>x.batch===batch);
+  if(!confirm(`${u?u.files:"この回"} で追加した ${target.length.toLocaleString()}件 を削除します。\n\nこの操作は取り消せません。よろしいですか？`))return;
+  DATA=DATA.filter(r=>r.batch!==batch);
+  uploadLog=uploadLog.filter(x=>x.batch!==batch);
+  const msg=document.getElementById("uploadMsg");
+  if(msg)msg.innerHTML='<span style="color:var(--blue);">💾 削除中...</span>';
+  try{
+    await saveUploads();
+    if(msg)msg.innerHTML=`<span style="color:var(--green);">✓ ${target.length.toLocaleString()}件を削除しました（残り ${DATA.length.toLocaleString()}件）</span>`;
+  }catch(e){
+    if(msg)msg.innerHTML='<span style="color:var(--red);">⚠ 保存失敗: '+esc(e.message)+'</span>';
+  }
+  renderAll();
+};
+window.removeLogEntry=async function(batch){
+  uploadLog=uploadLog.filter(x=>x.batch!==batch);
+  try{await saveUploads();}catch(e){}
+  renderAll();
+};
 
 // Undo the most recent upload batch
 window.undoLastUpload=async function(){
@@ -1825,6 +1877,8 @@ async function importFiles(files){
   let totalAdded=0,totalRows=0,errors=[];
   const seen=new Set(DATA.map(keyOf));
   lastBatchKeys=[]; // reset — this upload becomes the undoable batch
+  const batchId="b"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
+  const batchFiles=[];
   for(let fi=0;fi<files.length;fi++){
     const file=files[fi];
     msg.innerHTML=`<span style="color:var(--blue);">📥 読み込み中... (${fi+1}/${files.length}) ${esc(file.name)}</span>`;
@@ -1832,8 +1886,9 @@ async function importFiles(files){
       const recs=await parseXlsx(file);
       totalRows+=recs.length;
       let added=0;
-      for(const rec of recs){if(EXCLUDED_BRAND_RE.test(rec.brand||""))continue;const k=keyOf(rec);if(!seen.has(k)){seen.add(k);DATA.push(rec);lastBatchKeys.push(k);added++;}}
+      for(const rec of recs){if(EXCLUDED_BRAND_RE.test(rec.brand||""))continue;const k=keyOf(rec);if(!seen.has(k)){seen.add(k);rec.batch=batchId;DATA.push(rec);lastBatchKeys.push(k);added++;}}
       totalAdded+=added;
+      batchFiles.push(file.name);
     }catch(err){console.error(err);errors.push(file.name+": "+err.message);}
   }
   // Results
@@ -1842,6 +1897,12 @@ async function importFiles(files){
   const newMin=afterDates.reduce((a,b)=>a<b?a:b),newMax=afterDates.reduce((a,b)=>a>b?a:b);
   const periodChanged=(newMin!==beforeMin||newMax!==beforeMax);
 
+  if(totalAdded>0){
+    const ds=DATA.filter(r=>r.batch===batchId).map(r=>r.date).filter(Boolean).sort();
+    uploadLog.unshift({batch:batchId,at:new Date().toISOString(),files:batchFiles.join("、"),
+      added:totalAdded,from:ds[0]||"",to:ds[ds.length-1]||""});
+    if(uploadLog.length>50)uploadLog=uploadLog.slice(0,50);
+  }
   msg.innerHTML=`<span style="color:var(--blue);">💾 保存中...</span>`;
   renderAll(); // update UI immediately even before save completes
   let saveOk=true, saveErr="";
@@ -1928,7 +1989,7 @@ async function parseXlsx(file){
 
 // Save ALL data to Supabase (password-protected)
 async function saveUploads(){
-  const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","color","qty","price","cost","listPrice","jan","hinban","staff","cust","profit","taxfree","uid"];
+  const schema=["date","pdate","store","brand","brandEn","model","name","cat","cat2","size","rank","color","qty","price","cost","listPrice","jan","hinban","staff","cust","profit","taxfree","uid","batch"];
   // 値を詰める：null/undefined/空文字は 0 バイトの null に統一し、
   // 数値は文字列化しない。レコード数が多いと数MBになり、
   // 送信サイズの上限で保存に失敗するため。
@@ -1937,7 +1998,7 @@ async function saveUploads(){
     if(v===undefined||v===""||v===null)return null;
     return v;
   }));
-  const payload={schema,rows,updated:new Date().toISOString()};
+  const payload={schema,rows,uploadLog,updated:new Date().toISOString()};
   await sbSave(payload); // 圧縮＋分割保存されるため件数が多くても保存できる
 }
 
