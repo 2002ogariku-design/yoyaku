@@ -139,17 +139,45 @@ tbody tr:active{background:#eaeaef;}
         <div id="itemSuggest" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;"></div>
       </div>
       <div id="itemsInsight"></div>
-      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">カテゴリ</div>
+      <div id="activeFilters" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <select id="itemSortSel" style="flex:1;min-width:190px;font-size:12.5px;padding:9px 11px;">
+          <option value="count:-1">販売数が多い順</option>
+          <option value="count:1">販売数が少ない順</option>
+          <option value="turnDays:1">回転が速い順（日数が短い）</option>
+          <option value="turnDays:-1">回転が遅い順（日数が長い）</option>
+          <option value="avg:-1">平均単価が高い順</option>
+          <option value="avg:1">平均単価が安い順</option>
+          <option value="total:-1">売上計が多い順</option>
+          <option value="margin:-1">粗利率が高い順</option>
+          <option value="margin:1">粗利率が低い順</option>
+          <option value="trend:-1">相場が上昇している順</option>
+          <option value="trend:1">相場が下落している順</option>
+          <option value="lastSold:-1">最近売れた順</option>
+          <option value="lastSold:1">長く売れていない順</option>
+          <option value="brand:1">ブランド名順</option>
+        </select>
+        <button id="clearFilters" class="chip" style="padding:9px 13px;">絞り込みを解除</button>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ブランド</div>
+      <div style="margin-bottom:10px;" id="itemBrandChips"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">カテゴリ（ブランド選択中はその中身で絞り込み）</div>
       <div style="margin-bottom:10px;" id="itemCatChips"></div>
       <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ランク</div>
       <div style="margin-bottom:10px;" id="itemRankChips"></div>
-      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ブランド</div>
-      <div style="margin-bottom:12px;" id="itemBrandChips"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">カラー</div>
+      <div style="margin-bottom:10px;" id="itemColorChips"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="chip" id="fMulti" title="2回以上売れた実績のある商品だけ">🔁 リピート販売のみ</span>
+        <span class="chip" id="fFast" title="仕入から7日以内に売れた商品">⚡️ 回転が速い（7日以内）</span>
+        <span class="chip" id="fSlow" title="仕入から60日以上かかった商品">🐌 回転が遅い（60日超）</span>
+        <span class="chip" id="fHighMargin" title="粗利率50%以上">💰 高粗利（50%以上）</span>
+      </div>
       <div style="overflow-x:auto;">
         <table id="itemsTable">
           <thead><tr>
             <th>★</th><th data-sort="count">販売数</th><th data-sort="brand">ブランド</th><th data-sort="item">アイテム</th>
-            <th data-sort="avg">平均単価</th><th data-sort="trend">相場推移</th><th data-sort="total">売上計</th>
+            <th data-sort="avg">平均単価</th><th data-sort="turnDays">回転</th><th data-sort="margin">粗利率</th><th data-sort="trend">相場推移</th><th data-sort="total">売上計</th>
           </tr></thead>
           <tbody id="itemsBody"></tbody>
         </table>
@@ -267,7 +295,7 @@ tbody tr:active{background:#eaeaef;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1800";
+const APP_VERSION="v2026.09.02.1900";
 
 const YEN=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
 const YENk=n=>n>=1e8?"¥"+(n/1e8).toFixed(2)+"億":n>=1e4?"¥"+Math.round(n/1e4).toLocaleString()+"万":YEN(n);
@@ -599,7 +627,19 @@ function buildItems(){
     const ranks=new Set(it.recs.map(r=>rankNorm(r.rank)).filter(x=>x!=="—"));
     const colors=new Set(it.recs.map(r=>{const c=detectColor(r);return c?c.name:null;}).filter(Boolean));
     const mats=new Set(it.recs.map(r=>detectMaterial(r)).filter(Boolean));
-    return {...it,...st,ranks:[...ranks],colors:[...colors],mats:[...mats]};
+    // 回転日数（仕入→販売）の中央値
+    const ds=it.recs.map(r=>daysBetween(r.pdate,r.date)).filter(d=>d!=null).sort((a,b)=>a-b);
+    const turnDays=ds.length?(ds.length%2?ds[(ds.length-1)/2]:Math.round((ds[ds.length/2-1]+ds[ds.length/2])/2)):null;
+    // 粗利率（売価に対する利益の割合）
+    const sumP=it.recs.reduce((s,r)=>s+(r.price||0),0);
+    const sumC=it.recs.reduce((s,r)=>s+(r.cost||0),0);
+    const margin=sumP>0?Math.round((sumP-sumC)/sumP*100):null;
+    // 最終販売日と、そこからの経過日数
+    const dates=it.recs.map(r=>r.date).filter(Boolean).sort();
+    const lastSold=dates.length?dates[dates.length-1]:"";
+    const cats=[...new Set(it.recs.map(r=>(r.cat2||r.cat||"").trim()).filter(Boolean))];
+    return {...it,...st,ranks:[...ranks],colors:[...colors],mats:[...mats],
+            turnDays,turnCount:ds.length,margin,lastSold,cats};
   });
 }
 
@@ -1197,39 +1237,77 @@ function renderItems(){
   }
 }
 window.setItemBrand=function(b){itemBrandFilter=b;renderItems();};
-let itemCatFilter="", itemRankFilter="";
-// カテゴリ／ランク／ブランドのチップを、実データから件数付きで作る
+let itemCatFilter="", itemRankFilter="", itemColorFilter="";
+let quickFilters={multi:false,fast:false,slow:false,margin:false};
+
+// 選択済みの条件を除いた状態で候補を数える＝「バレンシアガ の中のカテゴリ」が出る
+function applyBase(items,skip){
+  return items.filter(i=>{
+    if(skip!=="brand" && itemBrandFilter && i.brand!==itemBrandFilter)return false;
+    if(skip!=="cat"   && itemCatFilter && !(i.cats||[]).includes(itemCatFilter))return false;
+    if(skip!=="rank"  && itemRankFilter && !(i.ranks||[]).includes(itemRankFilter))return false;
+    if(skip!=="color" && itemColorFilter && !(i.colors||[]).includes(itemColorFilter))return false;
+    return true;
+  });
+}
 function renderItemFilterChips(allItems){
   const mk=(elId,list,cur,setter)=>{
     const el=document.getElementById(elId);
     if(!el)return;
-    if(list.length<2){el.innerHTML="";return;}
+    if(!list.length){el.innerHTML='<span style="font-size:11.5px;color:var(--t3);">該当なし</span>';return;}
     el.innerHTML=`<span class="chip${cur?"":" on"}" data-v="">すべて</span>`
       +list.map(([v,n])=>`<span class="chip${cur===v?" on":""}" data-v="${esc(v)}">${esc(v)} <span style="opacity:.55;">${n}</span></span>`).join("");
     el.querySelectorAll(".chip").forEach(ch=>ch.addEventListener("click",()=>{setter(ch.dataset.v||"");drawItemsTable(buildItems());}));
   };
-  const tally=(getter)=>{
-    const m={};allItems.forEach(i=>{const v=(getter(i)||"").trim();if(v)m[v]=(m[v]||0)+1;});
+  const tally=(arr,getter)=>{
+    const m={};
+    arr.forEach(i=>{const vs=getter(i);(Array.isArray(vs)?vs:[vs]).forEach(v=>{v=(v||"").trim();if(v)m[v]=(m[v]||0)+1;});});
     return Object.entries(m).sort((a,b)=>b[1]-a[1]);
   };
-  mk("itemCatChips", tally(i=>i.cat2||i.cat).slice(0,16), itemCatFilter, v=>itemCatFilter=v);
-  // ランクはアイテム内で最も多いランクを代表とする
-  mk("itemRankChips", tally(i=>{
-    const m={};(i.recs||[]).forEach(r=>{const rk=rankNorm(r.rank);if(rk!=="—")m[rk]=(m[rk]||0)+1;});
-    const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:"";
-  }).sort((a,b)=>a[0].localeCompare(b[0])), itemRankFilter, v=>itemRankFilter=v);
+  mk("itemBrandChips", tally(applyBase(allItems,"brand"),i=>i.brand).slice(0,18), itemBrandFilter, v=>{itemBrandFilter=v;});
+  mk("itemCatChips",   tally(applyBase(allItems,"cat"),  i=>i.cats).slice(0,18),  itemCatFilter,   v=>itemCatFilter=v);
+  mk("itemRankChips",  tally(applyBase(allItems,"rank"), i=>i.ranks).sort((a,b)=>a[0].localeCompare(b[0])), itemRankFilter, v=>itemRankFilter=v);
+  mk("itemColorChips", tally(applyBase(allItems,"color"),i=>i.colors).slice(0,14), itemColorFilter, v=>itemColorFilter=v);
+
+  // 現在の絞り込みを見せる
+  const af=document.getElementById("activeFilters");
+  if(af){
+    const on=[
+      itemBrandFilter&&["ブランド",itemBrandFilter,()=>itemBrandFilter=""],
+      itemCatFilter&&["カテゴリ",itemCatFilter,()=>itemCatFilter=""],
+      itemRankFilter&&["ランク",itemRankFilter,()=>itemRankFilter=""],
+      itemColorFilter&&["カラー",itemColorFilter,()=>itemColorFilter=""],
+      quickFilters.multi&&["条件","リピート販売のみ",()=>quickFilters.multi=false],
+      quickFilters.fast&&["条件","回転7日以内",()=>quickFilters.fast=false],
+      quickFilters.slow&&["条件","回転60日超",()=>quickFilters.slow=false],
+      quickFilters.margin&&["条件","高粗利50%以上",()=>quickFilters.margin=false],
+    ].filter(Boolean);
+    af.innerHTML=on.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          <span style="font-size:11px;font-weight:700;color:var(--t3);">絞り込み中：</span>
+          ${on.map((o,idx)=>`<span class="chip on" data-i="${idx}" style="cursor:pointer;">${o[0]}：${esc(o[1])} ✕</span>`).join("")}
+         </div>` : "";
+    af.querySelectorAll(".chip").forEach(el=>el.addEventListener("click",()=>{on[Number(el.dataset.i)][2]();drawItemsTable(buildItems());}));
+  }
+  // クイック条件の見た目を同期
+  const qm={fMulti:"multi",fFast:"fast",fSlow:"slow",fHighMargin:"margin"};
+  Object.entries(qm).forEach(([id,key])=>{
+    const el=document.getElementById(id);
+    if(el)el.classList.toggle("on",quickFilters[key]);
+  });
 }
 function drawItemsTable(items){
   const q=document.getElementById("itemSearch").value.trim().toLowerCase();
   renderItemFilterChips(items);
   let rows=items.filter(i=>i.count>=1);
   if(itemBrandFilter)rows=rows.filter(i=>i.brand===itemBrandFilter);
-  if(itemCatFilter)rows=rows.filter(i=>((i.cat2||i.cat||"").trim())===itemCatFilter);
-  if(itemRankFilter)rows=rows.filter(i=>{
-    const m={};(i.recs||[]).forEach(r=>{const rk=rankNorm(r.rank);if(rk!=="—")m[rk]=(m[rk]||0)+1;});
-    const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];
-    return top&&top[0]===itemRankFilter;
-  });
+  if(itemCatFilter)rows=rows.filter(i=>(i.cats||[]).includes(itemCatFilter));
+  if(itemRankFilter)rows=rows.filter(i=>(i.ranks||[]).includes(itemRankFilter));
+  if(itemColorFilter)rows=rows.filter(i=>(i.colors||[]).includes(itemColorFilter));
+  if(quickFilters.multi)rows=rows.filter(i=>i.count>=2);
+  if(quickFilters.fast)rows=rows.filter(i=>i.turnDays!=null&&i.turnDays<=7);
+  if(quickFilters.slow)rows=rows.filter(i=>i.turnDays!=null&&i.turnDays>60);
+  if(quickFilters.margin)rows=rows.filter(i=>i.margin!=null&&i.margin>=50);
   if(q)rows=rows.filter(i=>{
     const codes=(i.recs||[]).map(r=>(r.hinban||"")+" "+(r.jan||"")).join(" ");
     return (i.brand+" "+i.item+" "+(i.rawItem||"")+" "+codes).toLowerCase().includes(q);
@@ -1237,10 +1315,18 @@ function drawItemsTable(items){
   if(favOnly)rows=rows.filter(i=>FAVS.has(i.key));
   const k=itemSort.key,dir=itemSort.dir;
   rows.sort((a,b)=>{
-    let va,vb;
-    if(k==="brand"){va=a.brand;vb=b.brand;return dir*va.localeCompare(vb);}
-    if(k==="item"){va=a.item;vb=b.item;return dir*va.localeCompare(vb);}
-    va=a[k==="avg"?"avg":k==="total"?"total":k==="trend"?"trend":"count"];vb=b[k==="avg"?"avg":k==="total"?"total":k==="trend"?"trend":"count"];
+    if(k==="brand")return dir*String(a.brand).localeCompare(String(b.brand),"ja");
+    if(k==="item")return dir*String(a.item).localeCompare(String(b.item),"ja");
+    if(k==="lastSold")return dir*String(a.lastSold||"").localeCompare(String(b.lastSold||""));
+    // 数値項目。null（データなし）は常に末尾へ送る
+    const get=x=>{
+      const v=x[k];
+      return (v===null||v===undefined||Number.isNaN(v))?null:Number(v);
+    };
+    const va=get(a),vb=get(b);
+    if(va===null&&vb===null)return 0;
+    if(va===null)return 1;
+    if(vb===null)return -1;
     return dir*(va-vb);
   });
   rows=rows.slice(0,200);
@@ -1253,10 +1339,12 @@ function drawItemsTable(items){
       <td>${esc(i.brand)}</td>
       <td style="max-width:240px;"><div style="display:flex;align-items:center;gap:6px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.item)}</span>${(i.ranks.length>1||i.colors.length>1)?`<span style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--blue);background:rgba(0,113,227,.1);padding:2px 6px;border-radius:6px;white-space:nowrap;">${[i.ranks.length>1?i.ranks.length+"ランク":"",i.colors.length>1?i.colors.length+"色":""].filter(Boolean).join(" ")}</span>`:""}${gSearchBtn(i.brand,i.item)}</div></td>
       <td><b>${YEN(i.avg)}</b></td>
+      <td>${i.turnDays!=null?`<b style="color:${i.turnDays<=7?'var(--green)':i.turnDays<=30?'var(--t1)':'#e5484d'};">${i.turnDays}日</b>`:'<span class="muted">-</span>'}</td>
+      <td>${i.margin!=null?`<span style="color:${i.margin>=50?'var(--green)':i.margin>=30?'var(--t1)':'#e5484d'};">${i.margin}%</span>`:'<span class="muted">-</span>'}</td>
       <td>${tr}</td>
       <td>${YENk(i.total)}</td>
     </tr>`;
-  }).join("")||'<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--t3);">該当なし</td></tr>';
+  }).join("")||'<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--t3);">条件に一致する商品がありません</td></tr>';
 }
 // ---- favorites ----
 let FAVS=new Set();let favOnly=false;
@@ -1321,6 +1409,24 @@ function renderItemSuggest(){
   });
   box.style.display="block";
 }
+// 並び替えセレクト
+document.getElementById("itemSortSel").addEventListener("change",e=>{
+  const [k,d]=e.target.value.split(":");
+  itemSort={key:k,dir:Number(d)};
+  drawItemsTable(buildItems());
+});
+// クイック条件
+[["fMulti","multi"],["fFast","fast"],["fSlow","slow"],["fHighMargin","margin"]].forEach(([id,key])=>{
+  const el=document.getElementById(id);
+  if(el)el.addEventListener("click",()=>{quickFilters[key]=!quickFilters[key];drawItemsTable(buildItems());});
+});
+// 絞り込み解除
+document.getElementById("clearFilters").addEventListener("click",()=>{
+  itemBrandFilter="";itemCatFilter="";itemRankFilter="";itemColorFilter="";
+  quickFilters={multi:false,fast:false,slow:false,margin:false};
+  document.getElementById("itemSearch").value="";
+  drawItemsTable(buildItems());
+});
 document.getElementById("itemSearch").addEventListener("input",()=>{drawItemsTable(buildItems());renderItemSuggest();});
 document.getElementById("itemSearch").addEventListener("focus",renderItemSuggest);
 document.addEventListener("click",e=>{
