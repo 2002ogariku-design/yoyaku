@@ -509,7 +509,7 @@
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0725";
+const APP_VERSION="v2026.09.02.1600";
 
 const STORAGE_WORKBOOK = "tk-workbook-b64";
 const STORAGE_FILENAME = "tk-filename";
@@ -1051,7 +1051,7 @@ function getFiltered(){
   return items.filter(it=>{
     const ed = edits[it.id] || {};
     if(hideDone && ed.done) return false;
-    if(onlyPending && ed.確認) return false;
+    if(onlyPending && !isPending(it)) return false;
     if(onlyMeigi && !isMeigi(it)) return false;
     if(brand && it.ブランド !== brand) return false;
     if(staff && it.現担当 !== staff && it.初回担当 !== staff) return false;
@@ -1106,6 +1106,16 @@ function renderStats(){
     <div class="stat danger" style="cursor:pointer;" onclick="document.getElementById('onlyMeigiBtn').click()" title="クリックで絞り込み"><div class="num">${meigi}</div><div class="lbl">名義違い</div></div>
   `;
 }
+// 未入力かどうかの判定。
+// ・確認欄が空 → 未入力
+// ・前回回答がある商品 → 前回からの持ち越しのため、今回このツールで
+//   確認欄を入力し直す（上書きする）まで未入力として扱う
+function isPending(it){
+  const ed = edits[it.id] || {};
+  if(!ed.確認) return true;
+  if(it.前回回答 && !ed.再入力済) return true;
+  return false;
+}
 function renderPendingPanel(){
   const panel = document.getElementById("pendingPanel");
   if(!items.length){ panel.style.display = "none"; return; }
@@ -1118,8 +1128,7 @@ function renderPendingPanel(){
     if(pending) byStaff[staff].pending++;
   };
   for(const it of items){
-    const ed = edits[it.id] || {};
-    const pending = !ed.確認;
+    const pending = isPending(it);
     const first = it.初回担当 || "";
     const current = it.現担当 || "";
     // Attribute to both the original holder and the current one (dedupe if same)
@@ -1131,12 +1140,12 @@ function renderPendingPanel(){
     }
   }
   const entries = Object.entries(byStaff).sort((a,b)=> b[1].pending - a[1].pending || a[0].localeCompare(b[0],"ja"));
-  const totalPending = items.filter(it => !(edits[it.id]||{}).確認).length;
+  const totalPending = items.filter(isPending).length;
 
   panel.style.display = "block";
   panel.innerHTML = `
     <div class="pending-title">担当者別の確認欄 未入力件数（${totalPending}件 / 全${items.length}件中）</div>
-    <div style="font-size:10.5px;color:var(--text-dim);margin-bottom:8px;">※名義違いの商品は「初回」「現在」両方の担当者にカウントされます</div>
+    <div style="font-size:10.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.6;">※名義違いの商品は「初回」「現在」両方の担当者にカウントされます<br>※前回回答が入っている商品は、今回あらためて確認欄を選び直すまで未入力として数えます（延長などで上書きする可能性があるため）</div>
     <div class="pending-chips">
       ${entries.map(([staff, v])=>{
         const isDone = v.pending===0;
@@ -1226,7 +1235,7 @@ function updateBulkBar(){
   document.getElementById("bulkCount").textContent = `${count}件選択中`;
 }
 
-const CODE_VERSION = (typeof APP_VERSION!=="undefined")?APP_VERSION:"v2026.08.04i";
+const CODE_VERSION = (typeof APP_VERSION!=="undefined")?APP_VERSION:"v2026.09.02";
 // Always-visible status so the user can see exactly what state the tool is in.
 function updateStatusBanner(){
   const el = document.getElementById("statusBanner");
@@ -1319,7 +1328,11 @@ function render(){
       </td>
       <td data-label="在庫・返送先">${renderLocationBlock(it)}</td>
       <td data-label="本部指示">${renderInstructionInput(it, ed)}</td>
-      <td data-label="確認">${renderKakuninSelect(it, ed)}${!ed.確認 ? `<div class="unfilled-badge">未入力</div>` : ""}</td>
+      <td data-label="確認">${renderKakuninSelect(it, ed)}${
+        !ed.確認 ? `<div class="unfilled-badge">未入力</div>`
+        : (it.前回回答 && !ed.再入力済) ? `<div class="unfilled-badge" style="background:var(--orange,#f59e0b);">要再確認（前回回答あり）</div>`
+        : ""
+      }</td>
       <td data-label="備考" class="${bikoMissing(ed) ? 'biko-required' : ''}">
         <input type="text" class="cell-input ${ed.備考?'touched':''} ${bikoMissing(ed)?'biko-error':''}" data-id="${it.id}" data-field="備考" placeholder="${bikoMissing(ed)?'⚠ 担当者/期限を必ず記載':'備考を入力'}" value="${(ed.備考||"").replace(/"/g,'&quot;')}">
         ${bikoMissing(ed) ? `<div class="biko-warn">⚠ この確認内容には<b>担当者/期限</b>の記載が必須です（例：山口キャンセル 8/6まで）。未記載は再出品対象です。</div>` : ""}
@@ -1413,6 +1426,9 @@ function render(){
     el.addEventListener("change", async (e)=>{
       edits[id][field] = e.target.value;
       el.classList.toggle("touched", !!e.target.value);
+      // 前回回答がある商品は「今回入力し直したか」で未入力を判定するため、
+      // 実際に選び直した操作をここで記録する。
+      if(field === "確認") edits[id].再入力済 = !!e.target.value;
       stampEdit(id);
       // Update just this row's 備考 required-flag instead of re-rendering the whole table,
       // so any text the user is entering elsewhere isn't disturbed.
