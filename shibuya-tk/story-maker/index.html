@@ -384,7 +384,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1530";
+const APP_VERSION="v2026.09.03.1000";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -1595,29 +1595,47 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   if(data.size){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("size:"+data.size,ax,y);y+=74*sc;}
   if(data.rank){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("RANK:"+data.rank,ax,y);}
   const buyCost=(STORY_KIND==="buy"&&window._buyCost)?Number(window._buyCost):0;
-  if(data.price){
-    const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
-    const ps=fit(ptxt,T.priceSize,44);
-    ctx.font=`${wt} ${ps}px ${serif}`;ctx.fillText(ptxt,ax,T.priceY(H));
-  }
-  if(buyCost){
-    // 販売価格が出ているときはその上に、無ければ同じ位置に描く
-    const ctxt="買取金額 ¥"+buyCost.toLocaleString("ja-JP");
-    const cs=fit(ctxt,data.price?Math.round(T.priceSize*0.72):T.priceSize,40);
-    ctx.save();
-    ctx.fillStyle="#d4af37"; // ゴールドで買取金額を強調
-    ctx.font=`${wt} ${cs}px ${serif}`;
-    const cy=data.price?(T.priceY(H)-Math.round(T.priceSize*sc*1.05)):T.priceY(H);
-    ctx.fillText(ctxt,ax,cy);
-    // クレーム防止の注意書き（小さく米印で添える）
-    const noteEl=document.getElementById("buyNote");
-    const note=(noteEl&&noteEl.value.trim())?noteEl.value.trim():"※状態・付属品・時期により金額は変動します";
-    const ns=Math.max(22,Math.round(26*sc));
-    ctx.font=`400 ${ns}px ${serif}`;
-    ctx.fillStyle="rgba(255,255,255,.85)";
-    ctx.fillText(note,ax,cy+Math.round(ns*1.5));
-    ctx.restore();
-    ctx.fillStyle="#fff";
+  // 買取金額・注意書き・販売価格は、行の高さを積み上げて配置する。
+  // 個別に座標を決めると文字同士が重なるため、必ずまとめて計算する。
+  {
+    const both = !!(buyCost && data.price);
+    const lines=[];
+    if(buyCost){
+      const ctxt="買取金額 ¥"+buyCost.toLocaleString("ja-JP");
+      // 両方載せるときは少し小さくして収める
+      const cs=fit(ctxt, both?Math.round(T.priceSize*0.78):T.priceSize, 40);
+      lines.push({t:ctxt,size:cs,color:"#d4af37",weight:wt});
+      const noteEl=document.getElementById("buyNote");
+      const note=(noteEl&&noteEl.value.trim())?noteEl.value.trim():"※状態・付属品・時期により金額は変動します";
+      const ns=Math.max(20,Math.round((both?23:26)*sc));
+      lines.push({t:note,size:ns,color:"rgba(255,255,255,.85)",weight:400,gapAfter:0.5});
+    }
+    if(data.price){
+      const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
+      const ps=fit(ptxt, both?Math.round(T.priceSize*0.9):T.priceSize, 40);
+      lines.push({t:ptxt,size:ps,color:"#fff",weight:wt});
+    }
+    if(lines.length){
+      // 行間は「次の行の文字の高さ」で決める。
+      // 自分の大きさで決めると、次が大きい文字のときに食い込んで重なる。
+      const step=lines.map((l,idx)=>{
+        const next=lines[idx+1];
+        if(!next)return 0;
+        return Math.round(next.size*1.18 + (l.gapAfter||0)*l.size);
+      });
+      const baseY=T.priceY(H);
+      let y0=baseY;
+      for(let i=0;i<lines.length-1;i++) y0-=step[i];
+      ctx.save();
+      lines.forEach((l,idx)=>{
+        ctx.fillStyle=l.color;
+        ctx.font=`${l.weight} ${l.size}px ${serif}`;
+        ctx.fillText(l.t,ax,y0);
+        y0+=step[idx];
+      });
+      ctx.restore();
+      ctx.fillStyle="#fff";
+    }
   }
   if(data.tag){
     ctx.fillStyle=data.tagColor||"#fff";
