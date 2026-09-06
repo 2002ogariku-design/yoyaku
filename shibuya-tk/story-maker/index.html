@@ -256,8 +256,8 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
       <div>
         <div class="f"><label>商品写真</label></div>
-        <div id="photoDrop" class="drop">📷 タップして選択</div>
-        <input type="file" id="photoIn" accept="image/*" style="display:none;">
+        <div id="photoDrop" class="drop">📷 タップして選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">複数枚まとめて選べます</span></div>
+        <input type="file" id="photoIn" accept="image/*" multiple style="display:none;">
       </div>
       <div id="tagScanCol">
         <div class="f"><label>🏷️ 値札スキャン</label></div>
@@ -310,6 +310,20 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 
   <div class="c" style="text-align:center;">
     <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);touch-action:none;cursor:grab;"></canvas>
+    <div id="photoQueueBar" style="display:none;margin-top:12px;background:linear-gradient(135deg,#eef5ff,#fff);border:1px solid #b8d4f5;border-radius:14px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:800;color:#0055aa;" id="pqLabel"></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" id="pqPrev" class="pill" style="padding:7px 12px;font-size:12.5px;">◀ 前</button>
+          <button type="button" id="pqNext" class="pill" style="padding:7px 12px;font-size:12.5px;">次 ▶</button>
+          <button type="button" id="pqClear" class="pill" style="padding:7px 12px;font-size:12.5px;">✕ 解除</button>
+        </div>
+      </div>
+      <div id="pqThumbs" style="display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px;"></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5;">
+        保存・共有すると自動で次の写真に進みます。サムネイルをタップして直接移動もできます。
+      </div>
+    </div>
     <div id="photoControls" style="display:none;margin-top:12px;">
       <div style="font-size:11.5px;color:var(--t3);font-weight:600;margin-bottom:8px;">📷 写真をドラッグで位置調整・スライダーで拡大</div>
       <div style="display:flex;align-items:center;gap:10px;justify-content:center;">
@@ -384,7 +398,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.03.1000";
+const APP_VERSION="v2026.09.03.1100";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -574,10 +588,134 @@ window.pickColor=function(el,hex){
 // photo drop
 const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
 pd.addEventListener("click",()=>pi.click());
-pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0]);pi.value="";});
+pi.addEventListener("change",e=>{
+  const fs=e.target.files;
+  if(fs&&fs.length>1)loadPhotoQueue(fs);
+  else if(fs&&fs[0]){photoQueue=[];renderPhotoQueue();loadPhoto(fs[0]);}
+  pi.value="";
+});
 ["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
 ["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
-pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
+pd.addEventListener("drop",e=>{
+  const fs=e.dataTransfer.files;
+  if(fs&&fs.length>1)loadPhotoQueue(fs);
+  else if(fs&&fs[0]){photoQueue=[];renderPhotoQueue();loadPhoto(fs[0]);}
+});
+// ===== 複数写真の一括処理 =====
+// 選んだ写真をキューに入れ、1枚ずつ仕上げていく。
+// 各写真ごとに入力内容（ブランド・価格など）と位置調整を保持するので、
+// 前後に移動しても作業内容が消えない。
+let photoQueue=[];   // [{file, dataUrl, img, done, state}]
+let pqIndex=0;
+
+function pqCurrentState(){
+  return {
+    brand:document.getElementById("sBrand").value,
+    size:document.getElementById("sSize").value,
+    rank:document.getElementById("sRank").value,
+    price:document.getElementById("sPrice").value,
+    tag:document.getElementById("sTag").value,
+    tagColor:tagColor,
+    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,
+  };
+}
+function pqApplyState(s){
+  if(!s)return;
+  document.getElementById("sBrand").value=s.brand||"";
+  document.getElementById("sSize").value=s.size||"";
+  document.getElementById("sPrice").value=s.price||"";
+  document.getElementById("sTag").value=s.tag||"📩DMにて割引可能";
+  setRank(s.rank||"");
+  tagColor=s.tagColor||"#ffffff";
+  photoOffX=s.offX||0;photoOffY=s.offY||0;photoZoom=s.zoom||1;
+  PHOTO_FX=s.fx||"none";
+  document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx===PHOTO_FX));
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
+}
+function renderPhotoQueue(){
+  const bar=document.getElementById("photoQueueBar");
+  if(!bar)return;
+  if(photoQueue.length<2){bar.style.display="none";return;}
+  bar.style.display="block";
+  const doneN=photoQueue.filter(p=>p.done).length;
+  document.getElementById("pqLabel").innerHTML=
+    `📸 ${pqIndex+1} / ${photoQueue.length} 枚目　<span style="font-weight:600;color:var(--t3);">保存済み ${doneN}枚</span>`;
+  const th=document.getElementById("pqThumbs");
+  th.innerHTML=photoQueue.map((p,i)=>`
+    <div class="pqThumb" data-i="${i}" style="flex-shrink:0;width:52px;height:52px;border-radius:9px;overflow:hidden;position:relative;cursor:pointer;
+      border:2px solid ${i===pqIndex?'var(--blue)':'transparent'};opacity:${p.done?0.55:1};">
+      <img src="${p.dataUrl}" style="width:100%;height:100%;object-fit:cover;">
+      ${p.done?'<div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">✓</div>':""}
+    </div>`).join("");
+  th.querySelectorAll(".pqThumb").forEach(el=>el.addEventListener("click",()=>pqGoto(Number(el.dataset.i))));
+  const cur=th.querySelector(`.pqThumb[data-i="${pqIndex}"]`);
+  if(cur)cur.scrollIntoView({block:"nearest",inline:"nearest"});
+}
+function pqGoto(i){
+  if(!photoQueue.length)return;
+  // 今の作業内容を保存してから移動する
+  if(photoQueue[pqIndex])photoQueue[pqIndex].state=pqCurrentState();
+  pqIndex=Math.max(0,Math.min(photoQueue.length-1,i));
+  const p=photoQueue[pqIndex];
+  photoImg=p.img;
+  pqApplyState(p.state);
+  document.getElementById("photoControls").style.display="block";
+  document.getElementById("photoDrop").innerHTML=`📷 ${pqIndex+1}/${photoQueue.length} 枚目 ✓`;
+  renderPhotoQueue();
+  drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+}
+function pqNext(){
+  if(photoQueue.length<2)return false;
+  // 未保存の写真を優先して次に進む
+  let n=-1;
+  for(let k=pqIndex+1;k<photoQueue.length;k++){if(!photoQueue[k].done){n=k;break;}}
+  if(n<0)for(let k=0;k<photoQueue.length;k++){if(!photoQueue[k].done){n=k;break;}}
+  if(n<0){ // 全部保存済み
+    renderPhotoQueue();
+    flashSyncIndicator("🎉 選択した写真をすべて作成しました");
+    return false;
+  }
+  pqGoto(n);
+  return true;
+}
+function loadPhotoQueue(files){
+  const list=Array.from(files).filter(f=>/^image\//.test(f.type));
+  if(!list.length)return;
+  photoQueue=[];pqIndex=0;
+  let loaded=0;
+  list.forEach((file,idx)=>{
+    const fr=new FileReader();
+    fr.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        photoQueue[idx]={file,dataUrl:e.target.result,img,done:false,state:null};
+        loaded++;
+        if(loaded===list.length){
+          photoQueue=photoQueue.filter(Boolean);
+          pqIndex=0;
+          const p=photoQueue[0];
+          photoImg=p.img;photoOffX=0;photoOffY=0;photoZoom=1;
+          document.getElementById("photoControls").style.display="block";
+          const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+          document.getElementById("photoDrop").innerHTML=
+            photoQueue.length>1?`📷 1/${photoQueue.length} 枚目 ✓`:"📷 選択済み ✓";
+          renderPhotoQueue();
+          drawStory();
+        }
+      };
+      img.src=e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+document.getElementById("pqPrev").addEventListener("click",()=>pqGoto(pqIndex-1));
+document.getElementById("pqNext").addEventListener("click",()=>pqGoto(pqIndex+1));
+document.getElementById("pqClear").addEventListener("click",()=>{
+  photoQueue=[];pqIndex=0;renderPhotoQueue();
+  document.getElementById("photoDrop").innerHTML='📷 タップして選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">複数枚まとめて選べます</span>';
+});
+
 function loadPhoto(file){
   const fr=new FileReader();
   fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
@@ -1672,6 +1810,7 @@ function clearForNext(){
   setRank("");
   // photo reset
   photoImg=null;photoOffX=0;photoOffY=0;photoZoom=1;
+  photoQueue=[];pqIndex=0;renderPhotoQueue();
   document.getElementById("photoControls").style.display="none";
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
   const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
@@ -1694,7 +1833,17 @@ function clearForNext(){
   tick.textContent="✅ クリアしました。次の商品をどうぞ";tick.style.opacity="1";
   setTimeout(()=>tick.style.opacity="0",2500);
 }
-document.getElementById("nextItemBtn").addEventListener("click",clearForNext);
+document.getElementById("nextItemBtn").addEventListener("click",()=>{
+  if(photoQueue.length>1){
+    // 一括処理中は、入力だけ消して次の写真へ進む
+    ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+    setRank("");
+    if(photoQueue[pqIndex])photoQueue[pqIndex].state=null;
+    if(!pqNext())drawStory();
+    return;
+  }
+  clearForNext();
+});
 
 // ブランド辞書：正式表記 → よみ・関連ハッシュタグ・雰囲気。部分一致で拾う。
 const BRAND_DB=[
@@ -1899,17 +2048,30 @@ document.getElementById("shareBtn").addEventListener("click",async()=>{
       await navigator.share({files:[file],title:fname});
       archiveStory(brand);
       tick("✓ 共有しました");
+      pqMarkDoneAndNext();
     }else{
       const a=document.createElement("a");a.download=fname;a.href=cv.toDataURL("image/png");a.click();
       archiveStory(brand);tick("✓ ダウンロードしました");
+      pqMarkDoneAndNext();
     }
   }catch(e){if(e.name!=="AbortError")console.error(e);}
 });
+// 保存できた写真を「済」にして、次の未処理の写真へ自動で進む
+function pqMarkDoneAndNext(){
+  if(photoQueue.length<2)return;
+  if(photoQueue[pqIndex]){
+    photoQueue[pqIndex].done=true;
+    photoQueue[pqIndex].state=pqCurrentState();
+  }
+  renderPhotoQueue();
+  setTimeout(()=>pqNext(),400);
+}
 document.getElementById("dlBtn").addEventListener("click",()=>{
   drawStory();
   const brand=document.getElementById("sBrand").value.trim()||"story";
   const a=document.createElement("a");a.download=`story_${brand}_${Date.now()}.png`;a.href=cv.toDataURL("image/png");a.click();
   archiveStory(brand);
+  pqMarkDoneAndNext();
 });
 function tick(msg){const t=document.getElementById("shareTick");t.textContent=msg;t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);}
 
