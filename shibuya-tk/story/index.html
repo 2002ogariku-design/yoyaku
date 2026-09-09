@@ -139,6 +139,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
     <div class="num" id="pNum">—</div>
     <div class="date" id="pDate">データを記録するとここに表示されます</div>
   </div>
+  <div class="c" id="paceCard" style="display:none;">
+    <div class="c-title">📊 今月のペース</div>
+    <div id="paceBody"></div>
+  </div>
   <div class="kgrid" id="kpiGrid"></div>
   <div class="c"><div class="c-title">フォロワー推移</div>
     <div class="tbar"><select id="folR"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select></div>
@@ -318,7 +322,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px
 </div>
 
 <script>
-const APP_VERSION="v2026.08.28.0725";
+const APP_VERSION="v2026.09.03.1500";
 
 const GH_O="2002ogariku-design",GH_R="yoyaku",GH_P="shibuya-tk/story-data.json";
 const GH_API=`https://api.github.com/repos/${GH_O}/${GH_R}/contents/${GH_P}`;
@@ -388,6 +392,96 @@ function renderPulse(){
   document.getElementById("pNum").innerHTML=nf(last.followers)+(prev?`<span class="delta ${last.followers>prev.followers?"up":last.followers<prev.followers?"dn":"fl"}">${last.followers>=prev.followers?"+":""}${nf(last.followers-prev.followers)}</span>`:"");
   document.getElementById("pDate").textContent=`${(last.insightFrom&&last.insightTo)?`${last.insightFrom} 〜 ${last.insightTo}`:last.date}${prev?` (前回比)`:""}`; 
 }
+// ===== 今月のペース =====
+// 記録済みの実績から、月末時点の着地見込みを推計する。
+// 「今日までの実績 ÷ 経過日数 × その月の日数」で算出し、
+// 記録が飛んでいる日があっても実績のある日数で割って偏りを抑える。
+function renderPace(){
+  const card=document.getElementById("paceCard");
+  const body=document.getElementById("paceBody");
+  if(!card||!body)return;
+  const now=new Date();
+  const y=now.getFullYear(), m=now.getMonth()+1;
+  const ym=`${y}-${String(m).padStart(2,"0")}`;
+  const daysInMonth=new Date(y,m,0).getDate();
+  const dayNow=now.getDate();
+
+  const cur=DB.insights.filter(i=>String(i.date||"").startsWith(ym));
+  if(!cur.length){card.style.display="none";return;}
+  card.style.display="block";
+
+  // 前月の実績（比較用）
+  const pm=new Date(y,m-2,1);
+  const pym=`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,"0")}`;
+  const prev=DB.insights.filter(i=>String(i.date||"").startsWith(pym));
+  const sum=(arr,k)=>arr.reduce((s,i)=>s+(Number(i[k])||0),0);
+
+  // フォロワーは累積値なので、増加数で見る
+  const sorted=[...cur].sort((a,b)=>a.date<b.date?-1:1);
+  const folGain=sorted.length>1?(sorted[sorted.length-1].followers-sorted[0].followers):0;
+
+  const metrics=[
+    {k:"saleAmount",label:"販売金額",yen:true,color:"var(--green)"},
+    {k:"buyAmount", label:"買取金額",yen:true,color:"var(--blue)"},
+    {k:"saleItems", label:"販売点数",color:"var(--green)"},
+    {k:"buyItems",  label:"買取点数",color:"var(--blue)"},
+    {k:"dm",        label:"DM件数"},
+    {k:"profileVisits",label:"プロフ訪問"},
+  ];
+  const fmt=(v,yen)=>yen?("¥"+nf(Math.round(v))):nf(Math.round(v));
+  // 記録がある日数で割る（未記録日で薄まらないようにする）
+  const recDays=new Set(cur.map(i=>i.date)).size;
+  const基準日数=Math.max(recDays,1);
+
+  const rows=metrics.map(mt=>{
+    const actual=sum(cur,mt.k);
+    if(!actual&&!sum(prev,mt.k))return "";
+    const perDay=actual/基準日数;
+    const projected=perDay*daysInMonth;
+    const prevTotal=sum(prev,mt.k);
+    const vsPrev=prevTotal>0?Math.round((projected-prevTotal)/prevTotal*100):null;
+    const pct=prevTotal>0?Math.min(100,Math.round(projected/prevTotal*100)):null;
+    return `<div style="padding:11px 0;border-top:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+        <span style="font-size:12.5px;font-weight:700;">${mt.label}</span>
+        <span style="font-size:11.5px;color:var(--t3);">現在 <b style="color:${mt.color||"var(--t1)"};">${fmt(actual,mt.yen)}</b></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:4px;">
+        <span style="font-size:11.5px;color:var(--t3);">月末見込み</span>
+        <span style="font-size:16px;font-weight:800;color:${mt.color||"var(--t1)"};">${fmt(projected,mt.yen)}</span>
+      </div>
+      ${prevTotal>0?`<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="flex:1;height:6px;background:var(--card2);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${vsPrev>=0?"var(--green)":"var(--orange)"};"></div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${vsPrev>=0?"var(--green)":"var(--orange)"};white-space:nowrap;">
+          前月比 ${vsPrev>=0?"+":""}${vsPrev}%</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--t3);margin-top:3px;">前月実績 ${fmt(prevTotal,mt.yen)}</div>`:""}
+    </div>`;
+  }).filter(Boolean).join("");
+
+  body.innerHTML=`
+    <div style="font-size:11.5px;color:var(--t2);line-height:1.6;margin-bottom:6px;">
+      ${y}年${m}月 ${dayNow}日時点 ／ 記録 ${recDays}日分から月末（${daysInMonth}日）を推計
+    </div>
+    ${folGain?`<div style="background:var(--card2);border-radius:10px;padding:11px 13px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span style="font-size:12.5px;font-weight:700;">フォロワー増加</span>
+        <span style="font-size:11.5px;color:var(--t3);">現在 <b>${folGain>=0?"+":""}${nf(folGain)}</b></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;">
+        <span style="font-size:11.5px;color:var(--t3);">月末見込み</span>
+        <span style="font-size:16px;font-weight:800;color:${folGain>=0?"var(--green)":"var(--orange)"};">
+          ${folGain>=0?"+":""}${nf(Math.round(folGain/基準日数*daysInMonth))}</span>
+      </div>
+    </div>`:""}
+    ${rows||'<div class="muted" style="padding:10px 0;">まだ推計できる実績がありません。</div>'}
+    <div style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.6;">
+      ※ 記録済みの日数から1日あたりを出し、月末までを推計しています。記録日数が少ないうちは振れ幅が大きくなります。
+    </div>`;
+}
+
 function renderKpis(){
   const days=dl(7),ins7=DB.insights.filter(i=>days.includes(i.date)),posts7=DB.posts.filter(p=>days.includes(p.date));
   const reachAvg=ins7.length?Math.round(ins7.reduce((s,i)=>s+i.reach,0)/ins7.length):0;
@@ -413,7 +507,7 @@ function renderBrand(){kill("chBrand");const m={};DB.posts.forEach(p=>{if(!m[p.b
 function renderCat(){kill("chCat");const m={};DB.posts.forEach(p=>{const c=p.category||"不明";if(!m[c])m[c]={n:0,inq:0,conv:0};m[c].n++;if(p.inquiry&&p.inquiry!=="なし")m[c].inq++;if(p.conversion&&p.conversion!=="なし")m[c].conv++;});const ks=Object.keys(m);CH["chCat"]=new Chart(document.getElementById("chCat"),{type:"bar",data:{labels:ks,datasets:[{label:"投稿",data:ks.map(k=>m[k].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:ks.map(k=>m[k].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4},{label:"成果",data:ks.map(k=>m[k].conv),backgroundColor:"rgba(52,199,89,.25)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
 function renderPrice(){kill("chPrice");const O=["〜3万","3〜5万","5〜10万","10〜30万","30〜50万","50万〜"],m={};O.forEach(o=>m[o]={n:0,inq:0});DB.posts.forEach(p=>{if(p.priceRange&&m[p.priceRange]){m[p.priceRange].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.priceRange].inq++;}});CH["chPrice"]=new Chart(document.getElementById("chPrice"),{type:"bar",data:{labels:O,datasets:[{label:"投稿",data:O.map(o=>m[o].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:O.map(o=>m[o].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
 function renderBest(){const scored=[...DB.posts].map(p=>({...p,score:eng(p)+(p.inquiry!=="なし"?10:0)+(p.conversion!=="なし"?20:0)})).sort((a,b)=>b.score-a.score).slice(0,8);const el=document.getElementById("bestList");if(!scored.length){el.innerHTML='<div class="empty">投稿を記録するとランキング表示</div>';return;}el.innerHTML=scored.map((p,i)=>`<div class="pi"><div class="top"><div><span style="color:var(--orange);font-weight:800;margin-right:6px;">${i+1}</span><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div></div><div class="chips"><span class="chip">${p.date}</span>${p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div><div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span></div></div>`).join("");}
-function renderDash(){renderPulse();renderKpis();renderFolChart();renderReachChart();renderSalesChart();renderBrand();renderCat();renderPrice();renderBest();}
+function renderDash(){renderPulse();renderPace();renderKpis();renderFolChart();renderReachChart();renderSalesChart();renderBrand();renderCat();renderPrice();renderBest();}
 
 // list
 function renderPosts(){const q=(document.getElementById("qS").value||"").toLowerCase(),cat=document.getElementById("qC").value;let list=[...DB.posts].reverse();if(q)list=list.filter(p=>[p.brand,p.itemName,p.note].join(" ").toLowerCase().includes(q));if(cat)list=list.filter(p=>p.category===cat);const el=document.getElementById("postList");if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.slice(0,50).map(p=>`<div class="pi"><div class="top"><div><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><button class="del" onclick="delPost('${p.id}')">✕</button></div><div class="chips"><span class="chip">${p.date}</span><span class="chip">${esc(p.type)}</span>${p.priceRange?`<span class="chip">${esc(p.priceRange)}</span>`:""}${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div>${(p.views||p.likes)?`<div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span></div>`:""}</div>`).join("");}
