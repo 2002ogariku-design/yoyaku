@@ -310,11 +310,15 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
     </div>
     <div style="margin-top:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="font-size:11.5px;font-weight:700;color:var(--t3);">💬 よく使う文言（タップで選択）</span>
-        <button type="button" id="addPhraseBtn" class="pill" style="padding:6px 12px;font-size:12px;">＋ 文言を追加</button>
+        <button type="button" id="phraseToggle" style="border:none;background:none;font-family:inherit;font-size:11.5px;font-weight:700;color:var(--t3);padding:0;cursor:pointer;display:flex;align-items:center;gap:5px;">
+          <span id="phraseCaret">▸</span> 💬 よく使う文言 <span id="phraseCount" style="opacity:.6;"></span>
+        </button>
+        <button type="button" id="addPhraseBtn" class="pill" style="padding:6px 12px;font-size:12px;">＋ 追加</button>
       </div>
-      <div id="phraseChips"></div>
-      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.6;">タップで下部テキストに入ります。長押し（またはチップの×）で削除できます。追加した文言はこの端末に保存されます。</div>
+      <div id="phraseWrap" style="display:none;">
+        <div id="phraseChips" style="max-height:132px;overflow-y:auto;padding-right:2px;"></div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:6px;line-height:1.5;">タップで下部テキストに入ります。×で削除できます。</div>
+      </div>
       <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
           <input type="checkbox" id="loanOn" style="width:auto;"> 💳 ローン訴求を表示する（最大42回 無金利）
@@ -417,7 +421,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.03.1700";
+const APP_VERSION="v2026.09.03.1830";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -562,7 +566,9 @@ function savePhrases(){try{localStorage.setItem(PHRASE_KEY,JSON.stringify(phrase
 const pc=document.getElementById("phraseChips");
 function renderPhrases(){
   const cur=document.getElementById("sTag").value;
-  pc.innerHTML=phrases.map((p,i)=>`<span class="chip${p===cur?" on":""}" data-i="${i}" onclick="pickPhrase(this)" style="display:inline-flex;align-items:center;gap:6px;">${esc(p)}<span onclick="event.stopPropagation();delPhrase(${i})" title="削除" style="color:var(--t3);font-weight:800;padding:0 2px;">×</span></span>`).join("");
+  const cnt=document.getElementById("phraseCount");
+  if(cnt)cnt.textContent=`(${phrases.length})`;
+  pc.innerHTML=phrases.map((p,i)=>`<span class="chip${p===cur?" on":""}" data-i="${i}" onclick="pickPhrase(this)" style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:5px 9px;margin:2px;">${esc(p)}<span onclick="event.stopPropagation();delPhrase(${i})" title="削除" style="color:var(--t3);font-weight:800;padding:0 2px;">×</span></span>`).join("");
 }
 window.pickPhrase=function(el){
   const i=Number(el.dataset.i);
@@ -575,7 +581,21 @@ window.delPhrase=function(i){
   if(!confirm(`「${phrases[i]}」を削除しますか？`))return;
   phrases.splice(i,1);
   if(!phrases.length)phrases=PHRASES.slice(); // 全部消したら初期文言に戻す
-  savePhrases();renderPhrases();
+  savePhrases();// 開閉できるようにして、普段は畳んでおく（画面を圧迫しないため）
+document.getElementById("phraseToggle").addEventListener("click",()=>{
+  const w=document.getElementById("phraseWrap");
+  const open=w.style.display==="none";
+  w.style.display=open?"block":"none";
+  document.getElementById("phraseCaret").textContent=open?"▾":"▸";
+  try{localStorage.setItem("story-phrase-open",open?"1":"0");}catch(e){}
+});
+try{
+  if(localStorage.getItem("story-phrase-open")==="1"){
+    document.getElementById("phraseWrap").style.display="block";
+    document.getElementById("phraseCaret").textContent="▾";
+  }
+}catch(e){}
+renderPhrases();
 };
 document.getElementById("addPhraseBtn").addEventListener("click",()=>{
   const cur=document.getElementById("sTag").value.trim();
@@ -746,7 +766,7 @@ function loanEligible(price){ return Number(price)>=LOAN_MIN; }
 function loanMonthly(price){
   const p=Number(price)||0;
   if(!p)return 0;
-  return Math.ceil(p/LOAN_TIMES/100)*100; // 100円単位に切り上げ
+  return Math.ceil(p/LOAN_TIMES); // 小数点以下のみ切り上げた正確な金額
 }
 function loanActive(price){
   const el=document.getElementById("loanOn");
@@ -1979,16 +1999,17 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     const loan = (STORY_KIND!=="buy") && loanActive(data.price);
     if(data.price){
       const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
-      const ps=fit(ptxt, (both||loan)?Math.round(T.priceSize*0.78):T.priceSize, 38);
+      const ps=fit(ptxt, both?Math.round(T.priceSize*0.78):(loan?Math.round(T.priceSize*0.86):T.priceSize), 38);
       lines.push({t:ptxt,size:ps,color:"#fff",weight:wt,gapAfter:loan?0.12:0});
     }
     if(loan){
       const monthly=loanMonthly(data.price);
-      const ls=Math.max(26,Math.round(T.priceSize*0.42));
-      lines.push({t:"↓ 最大"+LOAN_TIMES+"回 無金利なら",size:ls,color:"#d4af37",weight:wt,gapAfter:0.1});
-      const ms=fit("月々 ¥"+monthly.toLocaleString("ja-JP"), Math.round(T.priceSize*0.92), 44);
-      lines.push({t:"月々 ¥"+monthly.toLocaleString("ja-JP"),size:ms,color:"#fff",weight:wt,accent:true});
-      lines.push({t:LOAN_TIMES+"回払いの場合",size:Math.max(20,Math.round(T.priceSize*0.28)),color:"rgba(255,255,255,.65)",weight:400,accent:true});
+      const ls=Math.max(32,Math.round(T.priceSize*0.56));
+      lines.push({t:"↓ 最大"+LOAN_TIMES+"回 無金利なら",size:ls,color:"#d4af37",weight:wt,gapAfter:0.14});
+      const mtxt="月々 ¥"+monthly.toLocaleString("ja-JP");
+      const ms=fit(mtxt, Math.round(T.priceSize*1.35), 56);
+      lines.push({t:mtxt,size:ms,color:"#fff",weight:wt,accent:true});
+      lines.push({t:LOAN_TIMES+"回払いの場合",size:Math.max(24,Math.round(T.priceSize*0.36)),color:"rgba(255,255,255,.7)",weight:400,accent:true});
     }
     if(lines.length){
       // 行間は「次の行の文字の高さ」で決める。
