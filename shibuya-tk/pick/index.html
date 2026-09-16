@@ -62,8 +62,8 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 .i-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
 .i-no{font-size:11px;font-weight:800;color:var(--t3);}
 .i-price{font-size:14px;font-weight:800;white-space:nowrap;}
-.i-key{font-size:27px;font-weight:800;letter-spacing:.05em;font-variant-numeric:tabular-nums;
-  line-height:1.15;margin:3px 0 1px;}
+.i-key{font-size:21px;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  line-height:1.2;margin:3px 0 1px;}
 .i-hin{font-size:11.5px;color:var(--t3);font-variant-numeric:tabular-nums;}
 .i-name{font-size:13px;color:var(--t2);margin-top:5px;line-height:1.45;
   word-break:break-word;}
@@ -136,14 +136,14 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 <div class="c noprint" id="setCard" style="display:none;">
   <div class="c-title">⚙️ 検索リンクの設定</div>
   <div class="note" style="margin-bottom:9px;">
-    タップで開く楽天の検索URLです。<code>{KEY}</code> の位置に末尾7桁が入ります。<br>
+    「商品ページを開く」で開くURLです。<code>{HINBAN}</code> の位置に品番が入ります。<br>
     楽天の仕様が変わって開けなくなったら、実際に使えたURLを貼り替えてください。
   </div>
   <input type="text" id="tpl" placeholder="https://...{KEY}...">
   <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;">
     <button class="btn sub2" id="tplSave" style="font-size:12.5px;">保存</button>
-    <button class="btn sub2" id="tplA" style="font-size:12.5px;">候補A（ショップ内・売切含む）</button>
-    <button class="btn sub2" id="tplB" style="font-size:12.5px;">候補B（全体・売切含む）</button>
+    <button class="btn sub2" id="tplA" style="font-size:12.5px;">商品ページ直リンク（推奨）</button>
+    <button class="btn sub2" id="tplB" style="font-size:12.5px;">ショップ内検索</button>
   </div>
 </div>
 </div>
@@ -156,19 +156,31 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.16.1200";
+const APP_VERSION="v2026.09.16.1400";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
 // 仕様変更に備えて、画面から差し替えられるようにしている。
 const TPL_KEY="pick-url-tpl";
-const TPL_A="https://search.rakuten.co.jp/search/mall/{KEY}/?sid=203423&f=0";
-const TPL_B="https://search.rakuten.co.jp/search/mall/{KEY}/?f=0";
+// 商品ページへ直リンク。RINKANの楽天は品番がそのまま商品URLになっているため、
+// 検索も絞り込みも不要で一発で開ける（売り切れ商品でも開ける）。
+const TPL_A="https://item.rakuten.co.jp/gsc-rinkan/{HINBAN}/";
+// 予備：ショップ内を品番で検索（売り切れを含む）
+const TPL_B="https://search.rakuten.co.jp/search/inshop-mall/{HINBAN}/-/f.0-sid.gsc-rinkan";
 function getTpl(){
   try{return localStorage.getItem(TPL_KEY)||TPL_A;}catch(e){return TPL_A;}
 }
 function setTpl(v){try{localStorage.setItem(TPL_KEY,v);}catch(e){}}
-function searchUrl(key){return getTpl().replace("{KEY}",encodeURIComponent(key));}
+// {HINBAN}=品番そのまま / {KEY}=末尾7桁（旧テンプレ互換）
+function searchUrl(item){
+  return getTpl()
+    .replace("{HINBAN}",encodeURIComponent(item.hinban))
+    .replace("{KEY}",encodeURIComponent(item.key));
+}
+// 予備リンク：ショップ全体を品番で検索
+function fallbackUrl(item){
+  return "https://search.rakuten.co.jp/search/mall/"+encodeURIComponent(item.hinban)+"/?f=0";
+}
 
 /* ========= 状態 ========= */
 let SHEETS={};        // {店舗名:[item,...]}
@@ -338,13 +350,13 @@ function itemHtml(i,no){
         <span class="i-no">${no}</span>
         <span class="i-price">${i.price?yen(i.price):""}</span>
       </div>
-      <div class="i-key">${esc(i.key)}</div>
-      <div class="i-hin">${esc(i.hinban)}</div>
+      <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
       ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
       <div class="i-acts">
-        <a class="go" href="${searchUrl(i.key)}" target="_blank" rel="noopener">🔍 楽天で開く</a>
-        <button data-copy="${esc(i.key)}">末尾7桁をコピー</button>
+        <a class="go" href="${searchUrl(i)}" target="_blank" rel="noopener">▶ 商品ページを開く</a>
+        <a href="${fallbackUrl(i)}" target="_blank" rel="noopener">🔍 検索で探す</a>
+        <button data-copy="${esc(i.hinban)}">品番をコピー</button>
       </div>
     </div>
   </div>`;
@@ -391,7 +403,7 @@ document.getElementById("toggleSet").addEventListener("click",()=>{
 });
 document.getElementById("tplSave").addEventListener("click",()=>{
   const v=document.getElementById("tpl").value.trim();
-  if(!v.includes("{KEY}")){alert("URLに {KEY} を含めてください（そこに末尾7桁が入ります）。");return;}
+  if(!v.includes("{HINBAN}")&&!v.includes("{KEY}")){alert("URLに {HINBAN} を含めてください（そこに品番が入ります）。");return;}
   setTpl(v);render();alert("保存しました。");
 });
 document.getElementById("tplA").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_A;});
