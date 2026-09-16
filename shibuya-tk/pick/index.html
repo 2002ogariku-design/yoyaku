@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>撤収ピッキング | RINKAN渋谷</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  --bg:#f5f5f7; --card:#fff; --card2:#f0f0f3; --line:#e3e3e8;
+  --t1:#1d1d1f; --t2:#4a4a4f; --t3:#8e8e93;
+  --blue:#0071e3; --green:#34c759; --orange:#ff9500; --red:#e5484d; --gold:#b8860b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);font-family:var(--font);color:var(--t1);
+  font-size:15px;line-height:1.5;padding-bottom:90px;}
+.wrap{max-width:820px;margin:0 auto;padding:16px 14px 0;}
+header{margin-bottom:14px;}
+.eyebrow{font-size:11px;font-weight:800;color:var(--blue);letter-spacing:.09em;}
+h1{font-size:25px;font-weight:800;margin:2px 0 3px;letter-spacing:-.02em;}
+.sub{font-size:12.5px;color:var(--t3);}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.c-title{font-size:13px;font-weight:800;color:var(--t2);margin-bottom:11px;}
+.drop{border:2px dashed #c7c7cc;border-radius:14px;padding:26px 14px;text-align:center;
+  color:var(--t3);cursor:pointer;font-weight:700;font-size:14px;background:var(--card2);}
+.drop:active{border-color:var(--blue);color:var(--blue);}
+select,input[type=text]{width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--line);
+  background:var(--card2);font-size:15px;font-family:var(--font);color:var(--t1);}
+select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
+.btn{border:none;border-radius:11px;padding:11px 17px;font-family:var(--font);
+  font-size:14px;font-weight:700;cursor:pointer;background:var(--t1);color:#fff;}
+.btn.sub2{background:var(--card2);color:var(--t1);}
+.btn.blue{background:var(--blue);color:#fff;}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:8px 14px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;font-family:var(--font);}
+.pill.on{background:var(--t1);color:#fff;border-color:var(--t1);}
+
+/* progress */
+.prog{display:flex;align-items:center;gap:11px;}
+.prog-bar{flex:1;height:9px;background:var(--card2);border-radius:5px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--green);transition:width .25s;}
+.prog-n{font-size:15px;font-weight:800;white-space:nowrap;}
+
+/* item card */
+.cat-head{font-size:12.5px;font-weight:800;color:var(--t2);margin:16px 0 8px;
+  display:flex;align-items:center;gap:8px;}
+.cat-head .n{font-size:11px;font-weight:700;color:var(--t3);}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:13px 14px;margin-bottom:9px;display:flex;gap:12px;align-items:flex-start;
+  transition:background .15s,opacity .15s;}
+.item.done{opacity:.5;background:#f7fbf8;border-color:#cfe9d6;}
+.chk{width:30px;height:30px;border-radius:9px;border:2px solid var(--line);background:#fff;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:17px;color:#fff;font-weight:900;margin-top:2px;}
+.chk.on{background:var(--green);border-color:var(--green);}
+.i-body{flex:1;min-width:0;}
+.i-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
+.i-no{font-size:11px;font-weight:800;color:var(--t3);}
+.i-price{font-size:14px;font-weight:800;white-space:nowrap;}
+.i-key{font-size:27px;font-weight:800;letter-spacing:.05em;font-variant-numeric:tabular-nums;
+  line-height:1.15;margin:3px 0 1px;}
+.i-hin{font-size:11.5px;color:var(--t3);font-variant-numeric:tabular-nums;}
+.i-name{font-size:13px;color:var(--t2);margin-top:5px;line-height:1.45;
+  word-break:break-word;}
+.i-acc{display:inline-block;font-size:11px;font-weight:800;color:#8a5a00;
+  background:#fff3d6;border-radius:6px;padding:3px 8px;margin-top:6px;}
+.i-acts{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;}
+.i-acts button,.i-acts a{border:1px solid var(--line);background:#fff;color:var(--t1);
+  border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:700;
+  font-family:var(--font);cursor:pointer;text-decoration:none;display:inline-block;}
+.i-acts .go{background:var(--blue);color:#fff;border-color:var(--blue);}
+.empty{text-align:center;color:var(--t3);padding:30px 10px;font-size:14px;}
+
+/* sticky footer */
+.foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:11px 14px;z-index:50;}
+.foot-in{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:12px;}
+#verBadge{position:fixed;right:8px;bottom:78px;z-index:60;background:rgba(0,0,0,.62);
+  color:#fff;font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;cursor:pointer;}
+.note{font-size:11.5px;color:var(--t3);line-height:1.6;}
+@media print{
+  .foot,#verBadge,.drop,.i-acts,.c.noprint{display:none!important;}
+  body{background:#fff;padding:0;}
+  .item{break-inside:avoid;page-break-inside:avoid;border:1px solid #ccc;}
+  .i-key{font-size:22px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">RINKAN SHIBUYA</div>
+  <h1>撤収ピッキング</h1>
+  <div class="sub">ピッキングリストを読み込んで、タップで楽天検索・チェック</div>
+</header>
+
+<div class="c noprint" id="loadCard">
+  <div class="c-title">📥 ピッキングリストを読み込む</div>
+  <div class="drop" id="drop">📄 エクセルファイルを選択<br>
+    <span style="font-size:11px;font-weight:500;">店舗ピッキングリスト（チャットワークで届くファイル）</span></div>
+  <input type="file" id="fileIn" accept=".xlsx,.xls" style="display:none;">
+  <div id="loadMsg" class="note" style="margin-top:10px;"></div>
+</div>
+
+<div class="c noprint" id="storeCard" style="display:none;">
+  <div class="c-title">🏬 店舗を選ぶ</div>
+  <select id="storeSel"></select>
+</div>
+
+<div class="c" id="progCard" style="display:none;">
+  <div class="prog">
+    <div class="prog-n" id="progN">0 / 0</div>
+    <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    <button class="btn sub2 noprint" id="resetChk" style="padding:8px 12px;font-size:12.5px;">リセット</button>
+  </div>
+  <div class="note" id="progNote" style="margin-top:9px;"></div>
+</div>
+
+<div class="c noprint" id="filterCard" style="display:none;">
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+    <button class="pill on" id="fAll">すべて</button>
+    <button class="pill" id="fTodo">未ピックのみ</button>
+    <button class="pill" id="fDone">ピック済み</button>
+    <button class="pill" id="printBtn" style="margin-left:auto;">🖨 印刷</button>
+  </div>
+  <input type="text" id="q" placeholder="🔍 品番・商品名で絞り込み" style="margin-top:10px;">
+</div>
+
+<div id="list"></div>
+
+<div class="c noprint" id="setCard" style="display:none;">
+  <div class="c-title">⚙️ 検索リンクの設定</div>
+  <div class="note" style="margin-bottom:9px;">
+    タップで開く楽天の検索URLです。<code>{KEY}</code> の位置に末尾7桁が入ります。<br>
+    楽天の仕様が変わって開けなくなったら、実際に使えたURLを貼り替えてください。
+  </div>
+  <input type="text" id="tpl" placeholder="https://...{KEY}...">
+  <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;">
+    <button class="btn sub2" id="tplSave" style="font-size:12.5px;">保存</button>
+    <button class="btn sub2" id="tplA" style="font-size:12.5px;">候補A（ショップ内・売切含む）</button>
+    <button class="btn sub2" id="tplB" style="font-size:12.5px;">候補B（全体・売切含む）</button>
+  </div>
+</div>
+</div>
+
+<div class="foot noprint" id="foot" style="display:none;">
+  <div class="foot-in">
+    <button class="btn blue" id="nextTodo" style="flex:1;">▶ 次の未ピックへ</button>
+    <button class="btn sub2" id="toggleSet" style="padding:11px 14px;">⚙️</button>
+  </div>
+</div>
+
+<script>
+const APP_VERSION="v2026.09.16.1200";
+
+/* ========= 設定 ========= */
+// 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
+// 仕様変更に備えて、画面から差し替えられるようにしている。
+const TPL_KEY="pick-url-tpl";
+const TPL_A="https://search.rakuten.co.jp/search/mall/{KEY}/?sid=203423&f=0";
+const TPL_B="https://search.rakuten.co.jp/search/mall/{KEY}/?f=0";
+function getTpl(){
+  try{return localStorage.getItem(TPL_KEY)||TPL_A;}catch(e){return TPL_A;}
+}
+function setTpl(v){try{localStorage.setItem(TPL_KEY,v);}catch(e){}}
+function searchUrl(key){return getTpl().replace("{KEY}",encodeURIComponent(key));}
+
+/* ========= 状態 ========= */
+let SHEETS={};        // {店舗名:[item,...]}
+let store="";
+let listId="";        // ファイル内容から作る識別子（チェック状態の保存キー）
+let checked=new Set();
+let filter="all";
+
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const yen=n=>"¥"+Number(n||0).toLocaleString("ja-JP");
+
+// 品番 10831-260801-0038 → 末尾7桁 8010038
+function keyOf(hinban){
+  const d=String(hinban||"").replace(/[^0-9]/g,"");
+  return d.length>=7?d.slice(-7):d;
+}
+
+/* ========= 読み込み ========= */
+const drop=document.getElementById("drop"), fileIn=document.getElementById("fileIn");
+drop.addEventListener("click",()=>fileIn.click());
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="#c7c7cc";}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)readFile(f);});
+fileIn.addEventListener("change",e=>{const f=e.target.files[0];if(f)readFile(f);fileIn.value="";});
+
+async function readFile(file){
+  const msg=document.getElementById("loadMsg");
+  msg.textContent="読み込み中...";
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    SHEETS={};
+    for(const sn of wb.SheetNames){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
+      const items=parseSheet(rows);
+      if(items.length)SHEETS[sn]=items;
+    }
+    const names=Object.keys(SHEETS);
+    if(!names.length){msg.innerHTML='<span style="color:var(--red);">品番が見つかりませんでした。ファイルを確認してください。</span>';return;}
+    // チェック状態の保存キー（ファイル名＋総点数）
+    const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
+    listId="pick:"+file.name.replace(/\s/g,"")+":"+total;
+    loadChecked();
+
+    const sel=document.getElementById("storeSel");
+    sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
+    // 前回選んだ店舗を復元（なければ渋谷）
+    let pref="";
+    try{pref=localStorage.getItem("pick-store")||"";}catch(e){}
+    store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
+    sel.value=store;
+
+    document.getElementById("storeCard").style.display="block";
+    document.getElementById("progCard").style.display="block";
+    document.getElementById("filterCard").style.display="block";
+    document.getElementById("foot").style.display="block";
+    msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗`;
+    render();
+  }catch(e){
+    console.error(e);
+    msg.innerHTML='<span style="color:var(--red);">読み込みに失敗しました：'+esc(e.message)+'</span>';
+  }
+}
+
+// 1シートを商品リストに変換する。
+// 「◆アパレル」などの見出しでカテゴリが変わり、品番の行だけを拾う。
+function parseSheet(rows){
+  const items=[];
+  let cat="";
+  for(const r of rows){
+    const cells=r.map(v=>String(v==null?"":v).trim());
+    const joined=cells.join("");
+    if(!joined)continue;
+    const head=cells.find(v=>v.startsWith("◆"));
+    if(head){cat=head.replace(/^◆/,"");continue;}
+    // 品番（00000-000000-0000 形式）を含む列を探す
+    let hi=-1,hinban="";
+    for(let i=0;i<cells.length;i++){
+      const m=cells[i].match(/\d{5}-\d{6}-\d{4}/);
+      if(m){hi=i;hinban=m[0];break;}
+    }
+    if(hi<0)continue;
+    // 品番より後ろの列から 付属品 / 商品名 / 価格 を拾う
+    const after=cells.slice(hi+1);
+    const nums=after.map(v=>Number(String(v).replace(/[^\d]/g,""))).map((n,i)=>({n,i}))
+      .filter(x=>x.n>=1000);
+    const price=nums.length?nums[nums.length-1].n:0;
+    const texts=after.filter(v=>v&&!/^[\d,]+$/.test(v));
+    // 商品名は一番長いテキスト、付属品は短いテキスト
+    let name="",acc="";
+    if(texts.length){
+      const sorted=[...texts].sort((a,b)=>b.length-a.length);
+      name=sorted[0]||"";
+      acc=texts.filter(t=>t!==name&&t.length<=12).join(" ");
+    }
+    items.push({hinban,key:keyOf(hinban),cat,acc,name,price});
+  }
+  return items;
+}
+
+/* ========= チェック状態 ========= */
+function ckKey(){return listId+":"+store;}
+function loadChecked(){
+  checked=new Set();
+  try{
+    const raw=localStorage.getItem(ckKey());
+    if(raw)checked=new Set(JSON.parse(raw));
+  }catch(e){}
+}
+function saveChecked(){
+  try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+}
+
+/* ========= 描画 ========= */
+function render(){
+  const items=SHEETS[store]||[];
+  const q=(document.getElementById("q").value||"").trim().toLowerCase();
+  const el=document.getElementById("list");
+
+  // 進捗
+  const doneN=items.filter(i=>checked.has(i.hinban)).length;
+  document.getElementById("progN").textContent=`${doneN} / ${items.length}`;
+  document.getElementById("progFill").style.width=items.length?(doneN/items.length*100)+"%":"0%";
+  const rest=items.length-doneN;
+  document.getElementById("progNote").innerHTML=
+    rest===0&&items.length?'<span style="color:var(--green);font-weight:700;">🎉 この店舗はすべてピック完了です</span>'
+    :`${esc(store)}　残り <b>${rest}</b>点`;
+
+  let show=items.filter(i=>{
+    if(filter==="todo"&&checked.has(i.hinban))return false;
+    if(filter==="done"&&!checked.has(i.hinban))return false;
+    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc).toLowerCase().includes(q)))return false;
+    return true;
+  });
+
+  if(!show.length){
+    el.innerHTML=`<div class="c"><div class="empty">${items.length?"該当する商品がありません":"この店舗の商品はありません"}</div></div>`;
+    return;
+  }
+  // カテゴリごとにまとめる
+  const cats=[...new Set(show.map(i=>i.cat||"その他"))];
+  el.innerHTML=cats.map(c=>{
+    const list=show.filter(i=>(i.cat||"その他")===c);
+    const cd=list.filter(i=>checked.has(i.hinban)).length;
+    return `<div class="cat-head">◆ ${esc(c)} <span class="n">${cd}/${list.length}</span></div>`
+      +list.map(i=>itemHtml(i,items.indexOf(i)+1)).join("");
+  }).join("");
+
+  el.querySelectorAll("[data-ck]").forEach(b=>b.addEventListener("click",()=>{
+    const h=b.getAttribute("data-ck");
+    if(checked.has(h))checked.delete(h); else checked.add(h);
+    saveChecked();render();
+  }));
+  el.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",async()=>{
+    const v=b.getAttribute("data-copy");
+    try{await navigator.clipboard.writeText(v);}catch(e){}
+    const o=b.textContent;b.textContent="✓ コピー";setTimeout(()=>b.textContent=o,1200);
+  }));
+}
+
+function itemHtml(i,no){
+  const on=checked.has(i.hinban);
+  return `<div class="item ${on?"done":""}" id="it-${esc(i.hinban)}">
+    <div class="chk ${on?"on":""}" data-ck="${esc(i.hinban)}">${on?"✓":""}</div>
+    <div class="i-body">
+      <div class="i-top">
+        <span class="i-no">${no}</span>
+        <span class="i-price">${i.price?yen(i.price):""}</span>
+      </div>
+      <div class="i-key">${esc(i.key)}</div>
+      <div class="i-hin">${esc(i.hinban)}</div>
+      ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
+      ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
+      <div class="i-acts">
+        <a class="go" href="${searchUrl(i.key)}" target="_blank" rel="noopener">🔍 楽天で開く</a>
+        <button data-copy="${esc(i.key)}">末尾7桁をコピー</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ========= 操作 ========= */
+document.getElementById("storeSel").addEventListener("change",e=>{
+  store=e.target.value;
+  try{localStorage.setItem("pick-store",store);}catch(err){}
+  loadChecked();render();
+});
+document.getElementById("q").addEventListener("input",render);
+[["fAll","all"],["fTodo","todo"],["fDone","done"]].forEach(([id,v])=>{
+  document.getElementById(id).addEventListener("click",()=>{
+    filter=v;
+    ["fAll","fTodo","fDone"].forEach(x=>document.getElementById(x).classList.toggle("on",x===id));
+    render();
+  });
+});
+document.getElementById("resetChk").addEventListener("click",()=>{
+  if(!confirm(`${store} のチェックをすべて外しますか？`))return;
+  checked=new Set();saveChecked();render();
+});
+document.getElementById("printBtn").addEventListener("click",()=>window.print());
+document.getElementById("nextTodo").addEventListener("click",()=>{
+  const items=SHEETS[store]||[];
+  const next=items.find(i=>!checked.has(i.hinban));
+  if(!next){alert("未ピックの商品はありません。");return;}
+  filter="all";
+  ["fAll","fTodo","fDone"].forEach(x=>document.getElementById(x).classList.toggle("on",x==="fAll"));
+  render();
+  const el=document.getElementById("it-"+next.hinban);
+  if(el){
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.style.boxShadow="0 0 0 3px var(--blue)";
+    setTimeout(()=>el.style.boxShadow="",1400);
+  }
+});
+document.getElementById("toggleSet").addEventListener("click",()=>{
+  const c=document.getElementById("setCard");
+  const open=c.style.display==="none"||!c.style.display;
+  c.style.display=open?"block":"none";
+  if(open){document.getElementById("tpl").value=getTpl();c.scrollIntoView({behavior:"smooth"});}
+});
+document.getElementById("tplSave").addEventListener("click",()=>{
+  const v=document.getElementById("tpl").value.trim();
+  if(!v.includes("{KEY}")){alert("URLに {KEY} を含めてください（そこに末尾7桁が入ります）。");return;}
+  setTpl(v);render();alert("保存しました。");
+});
+document.getElementById("tplA").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_A;});
+document.getElementById("tplB").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_B;});
+
+/* バージョン表示（タップで強制更新） */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";b.textContent=APP_VERSION;b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{const u=new URL(location.href);u.searchParams.set("v",Date.now());location.replace(u.toString());});
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>
