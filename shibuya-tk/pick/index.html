@@ -59,6 +59,9 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   font-size:17px;color:#fff;font-weight:900;margin-top:2px;}
 .chk.on{background:var(--green);border-color:var(--green);}
 .i-body{flex:1;min-width:0;}
+.i-thumb{width:74px;height:74px;border-radius:10px;background:var(--card2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;margin-top:2px;}
+@media(max-width:400px){.i-thumb{width:60px;height:60px;}}
 .i-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
 .i-no{font-size:11px;font-weight:800;color:var(--t3);}
 .i-price{font-size:14px;font-weight:800;white-space:nowrap;}
@@ -119,6 +122,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
     <button class="btn sub2 noprint" id="resetChk" style="padding:8px 12px;font-size:12.5px;">リセット</button>
   </div>
   <div class="note" id="progNote" style="margin-top:9px;"></div>
+  <div class="note noprint" id="imgStatus" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
 </div>
 
 <div class="c noprint" id="filterCard" style="display:none;">
@@ -156,7 +160,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.16.1400";
+const APP_VERSION="v2026.09.16.1600";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -180,6 +184,101 @@ function searchUrl(item){
 // 予備リンク：ショップ全体を品番で検索
 function fallbackUrl(item){
   return "https://search.rakuten.co.jp/search/mall/"+encodeURIComponent(item.hinban)+"/?f=0";
+}
+
+
+/* ========= 楽天公式APIで商品画像を取得 ========= */
+// 中継サービスは停止しやすいので、公式APIのみを使う。
+// アプリIDとアクセスキーは他のツールと共通の保存先を使う（一度設定すれば共用）。
+const RK_APPID_KEY="rakuten-appid", RK_KEY_KEY="rakuten-accesskey";
+const RK_VERSIONS=["20260401","20220601"];
+function rkAppId(){try{return localStorage.getItem(RK_APPID_KEY)||"";}catch(e){return "";}}
+function rkAccessKey(){try{return localStorage.getItem(RK_KEY_KEY)||"";}catch(e){return "";}}
+function rkReady(){return !!(rkAppId()&&rkAccessKey());}
+function rkUrl(keyword,ver){
+  return "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+(ver||RK_VERSIONS[0])
+    +"?applicationId="+encodeURIComponent(rkAppId())
+    +"&accessKey="+encodeURIComponent(rkAccessKey())
+    +"&keyword="+encodeURIComponent(keyword)
+    +"&shopCode=gsc-rinkan&hits=1&format=json";
+}
+// 取得済み画像はブラウザに保存して、翌日以降の再読み込みを省く
+const IMG_CACHE="pick-img-cache-v1";
+let imgCache={};
+try{imgCache=JSON.parse(localStorage.getItem(IMG_CACHE)||"{}");}catch(e){imgCache={};}
+function saveImgCache(){
+  try{
+    // 古い分が溜まらないよう直近800件に抑える
+    const ks=Object.keys(imgCache);
+    if(ks.length>800){const keep={};ks.slice(-800).forEach(k=>keep[k]=imgCache[k]);imgCache=keep;}
+    localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
+  }catch(e){}
+}
+async function fetchItemImage(hinban){
+  if(imgCache[hinban]!==undefined)return imgCache[hinban];
+  if(!rkReady())return null;
+  for(const ver of RK_VERSIONS){
+    try{
+      const r=await fetch(rkUrl(hinban,ver),{signal:AbortSignal.timeout(9000)});
+      if(!r.ok)continue;
+      const j=await r.json();
+      if(!j.Items||!j.Items.length){imgCache[hinban]=null;saveImgCache();return null;}
+      const it=j.Items[0].Item||j.Items[0];
+      let img="";
+      const pick=a=>Array.isArray(a)&&a.length?(a[0].imageUrl||""):"";
+      img=pick(it.mediumImageUrls)||pick(it.smallImageUrls)||"";
+      if(img)img=img.replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
+      imgCache[hinban]=img||null;
+      saveImgCache();
+      return img||null;
+    }catch(e){ console.log("img fetch fail",hinban,e.message); }
+  }
+  return null;
+}
+// 一覧に出ている商品の画像を順に読み込む（同時に叩きすぎない）
+let imgLoading=false;
+async function loadVisibleImages(){
+  if(imgLoading)return;
+  imgLoading=true;
+  const boxes=[...document.querySelectorAll("[data-img]")];
+  for(const box of boxes){
+    const h=box.getAttribute("data-img");
+    if(box.dataset.loaded)continue;
+    const url=await fetchItemImage(h);
+    box.dataset.loaded="1";
+    if(url){
+      box.innerHTML=`<img src="${url}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`;
+      box.style.background="#fff";
+    }else{
+      box.innerHTML=`<span style="font-size:9.5px;color:var(--t3);text-align:center;line-height:1.3;">画像<br>なし</span>`;
+    }
+  }
+  imgLoading=false;
+  updateImgStatus();
+}
+function updateImgStatus(){
+  const el=document.getElementById("imgStatus");
+  if(!el)return;
+  if(!rkReady()){
+    el.innerHTML='<span style="color:var(--orange);font-weight:700;">⚠️ 楽天APIが未設定のため写真が出ません</span>　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">設定する</button>';
+    const b=document.getElementById("setApi");
+    if(b)b.addEventListener("click",setRakutenKeys);
+  }else{
+    el.innerHTML='<span style="color:var(--green);font-weight:700;">✓ 楽天APIから写真を取得しています</span>　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
+    const b=document.getElementById("setApi");
+    if(b)b.addEventListener("click",setRakutenKeys);
+  }
+}
+function setRakutenKeys(){
+  const id=prompt("① 楽天アプリID（applicationId）\n\nUUID形式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",rkAppId()||"");
+  if(id==null)return;
+  const t=id.trim();
+  if(!t){try{localStorage.removeItem(RK_APPID_KEY);localStorage.removeItem(RK_KEY_KEY);}catch(e){}updateImgStatus();return;}
+  const k=prompt("② アクセスキー（accessKey）\n\n「pk_」から始まる文字列です。",rkAccessKey()||"");
+  if(k==null)return;
+  try{localStorage.setItem(RK_APPID_KEY,t);if(k.trim())localStorage.setItem(RK_KEY_KEY,k.trim());}catch(e){}
+  imgCache={};saveImgCache();
+  updateImgStatus();render();
 }
 
 /* ========= 状態 ========= */
@@ -238,6 +337,7 @@ async function readFile(file){
     document.getElementById("filterCard").style.display="block";
     document.getElementById("foot").style.display="block";
     msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗`;
+    updateImgStatus();
     render();
   }catch(e){
     console.error(e);
@@ -334,6 +434,7 @@ function render(){
     if(checked.has(h))checked.delete(h); else checked.add(h);
     saveChecked();render();
   }));
+  loadVisibleImages();
   el.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",async()=>{
     const v=b.getAttribute("data-copy");
     try{await navigator.clipboard.writeText(v);}catch(e){}
@@ -345,6 +446,7 @@ function itemHtml(i,no){
   const on=checked.has(i.hinban);
   return `<div class="item ${on?"done":""}" id="it-${esc(i.hinban)}">
     <div class="chk ${on?"on":""}" data-ck="${esc(i.hinban)}">${on?"✓":""}</div>
+    <div class="i-thumb" data-img="${esc(i.hinban)}"><span style="font-size:9.5px;color:var(--t3);">…</span></div>
     <div class="i-body">
       <div class="i-top">
         <span class="i-no">${no}</span>
