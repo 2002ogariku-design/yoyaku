@@ -160,7 +160,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.16.1600";
+const APP_VERSION="v2026.09.16.1800";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -195,12 +195,19 @@ const RK_VERSIONS=["20260401","20220601"];
 function rkAppId(){try{return localStorage.getItem(RK_APPID_KEY)||"";}catch(e){return "";}}
 function rkAccessKey(){try{return localStorage.getItem(RK_KEY_KEY)||"";}catch(e){return "";}}
 function rkReady(){return !!(rkAppId()&&rkAccessKey());}
-function rkUrl(keyword,ver){
-  return "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+(ver||RK_VERSIONS[0])
+// 売り切れ商品を含めるため availability=0 を必ず付ける。
+// 撤収対象は「売れた商品」なので、これが無いと全件ヒットしない。
+function rkUrl(hinban,ver,mode){
+  const base="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+(ver||RK_VERSIONS[0])
     +"?applicationId="+encodeURIComponent(rkAppId())
     +"&accessKey="+encodeURIComponent(rkAccessKey())
-    +"&keyword="+encodeURIComponent(keyword)
-    +"&shopCode=gsc-rinkan&hits=1&format=json";
+    +"&availability=0&hits=1&format=json";
+  if(mode==="code"){
+    // 商品コードで直接指定（最も正確）
+    return base+"&itemCode="+encodeURIComponent("gsc-rinkan:"+hinban);
+  }
+  // 予備：ショップ内をキーワード検索
+  return base+"&shopCode=gsc-rinkan&keyword="+encodeURIComponent(hinban);
 }
 // 取得済み画像はブラウザに保存して、翌日以降の再読み込みを省く
 const IMG_CACHE="pick-img-cache-v1";
@@ -214,25 +221,36 @@ function saveImgCache(){
     localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
   }catch(e){}
 }
+let lastImgError="";
 async function fetchItemImage(hinban){
   if(imgCache[hinban]!==undefined)return imgCache[hinban];
   if(!rkReady())return null;
-  for(const ver of RK_VERSIONS){
-    try{
-      const r=await fetch(rkUrl(hinban,ver),{signal:AbortSignal.timeout(9000)});
-      if(!r.ok)continue;
-      const j=await r.json();
-      if(!j.Items||!j.Items.length){imgCache[hinban]=null;saveImgCache();return null;}
-      const it=j.Items[0].Item||j.Items[0];
-      let img="";
-      const pick=a=>Array.isArray(a)&&a.length?(a[0].imageUrl||""):"";
-      img=pick(it.mediumImageUrls)||pick(it.smallImageUrls)||"";
-      if(img)img=img.replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
-      imgCache[hinban]=img||null;
-      saveImgCache();
-      return img||null;
-    }catch(e){ console.log("img fetch fail",hinban,e.message); }
+  // 商品コード指定 → キーワード検索 の順に試す
+  for(const mode of ["code","keyword"]){
+    for(const ver of RK_VERSIONS){
+      try{
+        const r=await fetch(rkUrl(hinban,ver,mode),{signal:AbortSignal.timeout(9000)});
+        const txt=await r.text();
+        if(!r.ok){
+          try{const j=JSON.parse(txt);lastImgError=`HTTP ${r.status} ${j.error||""} ${j.error_description||""}`;}
+          catch(e){lastImgError="HTTP "+r.status;}
+          continue;
+        }
+        const j=JSON.parse(txt);
+        if(!j.Items||!j.Items.length){ lastImgError="該当0件"; continue; }
+        const it=j.Items[0].Item||j.Items[0];
+        const pick=a=>Array.isArray(a)&&a.length?(a[0].imageUrl||""):"";
+        let img=pick(it.mediumImageUrls)||pick(it.smallImageUrls)||"";
+        if(img)img=img.replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
+        if(img){
+          imgCache[hinban]=img;saveImgCache();lastImgError="";
+          return img;
+        }
+        lastImgError="画像URLなし";
+      }catch(e){ lastImgError=(e.name==="TimeoutError"?"タイムアウト":(e.message||"通信失敗")); }
+    }
   }
+  imgCache[hinban]=null;saveImgCache();
   return null;
 }
 // 一覧に出ている商品の画像を順に読み込む（同時に叩きすぎない）
@@ -264,7 +282,12 @@ function updateImgStatus(){
     const b=document.getElementById("setApi");
     if(b)b.addEventListener("click",setRakutenKeys);
   }else{
-    el.innerHTML='<span style="color:var(--green);font-weight:700;">✓ 楽天APIから写真を取得しています</span>　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
+    const errNote=lastImgError?` <span style="color:var(--orange);">（直近の取得エラー：${esc(lastImgError)}）</span>`:"";
+    el.innerHTML='<span style="color:var(--green);font-weight:700;">✓ 楽天APIから写真を取得</span>'+errNote
+      +'　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">再取得</button>'
+      +'　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
+    const rb=document.getElementById("retryImg");
+    if(rb)rb.addEventListener("click",()=>{imgCache={};saveImgCache();lastImgError="";render();});
     const b=document.getElementById("setApi");
     if(b)b.addEventListener("click",setRakutenKeys);
   }
