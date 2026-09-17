@@ -193,6 +193,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
     <button class="btn sub2 noprint" id="resetChk" style="padding:8px 12px;font-size:12.5px;">リセット</button>
   </div>
   <div class="note" id="progNote" style="margin-top:9px;"></div>
+  <div class="note noprint" id="ckStatus" style="margin-top:8px;"></div>
   <div class="note noprint" id="imgStatus" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
 </div>
 
@@ -249,7 +250,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.2200";
+const APP_VERSION="v2026.09.17.2330";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -610,6 +611,7 @@ function applyShared(p){
     +`<span style="color:var(--t3);">${esc(p.file||"")}　${when}　${esc(p.by||"")}さんが共有　全${total}点</span>`;
   updateImgStatus();
   render();
+  startCkSync();
   return true;
 }
 
@@ -788,17 +790,96 @@ function parseSheet(rows){
   return items;
 }
 
-/* ========= チェック状態 ========= */
+/* ========= チェック状態（全端末で共有） ========= */
+// 複数人で同時にピックするため、
+// ・保存時は「共有の最新」と「自分のチェック」を足し合わせる（誰のチェックも消えない）
+// ・外したチェックだけは明示的に取り消しとして送る
+// という形にして、お互いのチェックを上書きしないようにしている。
 function ckKey(){return KIND+":"+listId+":"+store;}
+function ckTool(){return (KIND==="idou"?"pick-checked-idou":"pick-checked");}
+let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set();
+
 function loadChecked(){
   checked=new Set();
   try{
     const raw=localStorage.getItem(ckKey());
     if(raw)checked=new Set(JSON.parse(raw));
   }catch(e){}
+  lastRemoved=new Set();
+  pullChecked();   // 開いた直後に共有分を取り込む
 }
 function saveChecked(){
   try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+  // 連続タップでも通信が集中しないよう、少しまとめて送る
+  clearTimeout(ckPushTimer);
+  ckPushTimer=setTimeout(pushChecked,700);
+}
+// 共有先から取り込む
+async function pullChecked(){
+  if(!listId)return;
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
+    if(!r.ok)return;
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    if(!p||!p.lists)return;
+    const mine=p.lists[ckKey()];
+    if(!mine||!Array.isArray(mine.items))return;
+    const before=checked.size;
+    // 共有分を足す。ただし自分がこの場で外したものは戻さない
+    mine.items.forEach(h=>{ if(!lastRemoved.has(h))checked.add(h); });
+    try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+    if(checked.size!==before)render();
+    showCkStatus(mine.by,mine.at);
+  }catch(e){}
+}
+// 共有先へ送る（最新と足し合わせてから書き戻す）
+async function pushChecked(){
+  if(!listId)return;
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
+    let p={lists:{}};
+    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload&&rows[0].payload.lists)p=rows[0].payload;}
+    const k=ckKey();
+    const remote=new Set((p.lists[k]&&p.lists[k].items)||[]);
+    // 自分のチェックを足し、自分が外した分だけ取り消す
+    checked.forEach(h=>remote.add(h));
+    lastRemoved.forEach(h=>remote.delete(h));
+    p.lists[k]={items:[...remote],by:myName(),at:new Date().toISOString()};
+    // 古いリストが溜まらないよう、直近20リストだけ残す
+    const ks=Object.keys(p.lists);
+    if(ks.length>20){
+      const keep={};
+      ks.map(x=>({x,at:p.lists[x].at||""})).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,20)
+        .forEach(o=>keep[o.x]=p.lists[o.x]);
+      p.lists=keep;
+    }
+    const res=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+      method:"POST",
+      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
+    });
+    if(res.ok){
+      lastRemoved=new Set();
+      checked=new Set(remote);
+      try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+      render();
+      showCkStatus(myName(),new Date().toISOString());
+    }
+  }catch(e){}
+}
+function showCkStatus(by,at){
+  const el=document.getElementById("ckStatus");
+  if(!el)return;
+  const d=at?new Date(at):null;
+  const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中</span>`
+    +(by?`<span class="muted">　最終更新 ${esc(when)} ${esc(by)}さん</span>`:"");
+}
+// 他の人のピックを取り込むため、30秒ごとに同期する
+function startCkSync(){
+  clearInterval(ckSyncTimer);
+  ckSyncTimer=setInterval(()=>{ if(listId)pullChecked(); },30000);
 }
 
 /* ========= 描画 ========= */
@@ -846,7 +927,7 @@ function render(){
 
   el.querySelectorAll("[data-ck]").forEach(b=>b.addEventListener("click",()=>{
     const h=b.getAttribute("data-ck");
-    if(checked.has(h))checked.delete(h); else checked.add(h);
+    if(checked.has(h)){checked.delete(h);lastRemoved.add(h);} else {checked.add(h);lastRemoved.delete(h);}
     saveChecked();render();
   }));
   loadVisibleImages();
@@ -899,7 +980,8 @@ document.getElementById("q").addEventListener("input",render);
   });
 });
 document.getElementById("resetChk").addEventListener("click",()=>{
-  if(!confirm(`${store} のチェックをすべて外しますか？`))return;
+  if(!confirm(`${store} のチェックをすべて外しますか？\n\n全員の共有からも外れます。`))return;
+  checked.forEach(h=>lastRemoved.add(h));
   checked=new Set();saveChecked();render();
 });
 document.getElementById("printBtn").addEventListener("click",()=>window.print());
@@ -996,7 +1078,7 @@ document.getElementById("vPrevItem").addEventListener("click",()=>viewerMove(-1)
 document.getElementById("vNextItem").addEventListener("click",()=>viewerMove(1));
 document.getElementById("vChk").addEventListener("click",()=>{
   const it=vList[vIdx];if(!it)return;
-  if(checked.has(it.hinban))checked.delete(it.hinban); else checked.add(it.hinban);
+  if(checked.has(it.hinban)){checked.delete(it.hinban);lastRemoved.add(it.hinban);} else {checked.add(it.hinban);lastRemoved.delete(it.hinban);}
   saveChecked();paintViewer();render();
 });
 document.addEventListener("keydown",e=>{
