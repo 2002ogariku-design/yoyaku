@@ -160,7 +160,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.16.2000";
+const APP_VERSION="v2026.09.16.2100";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -213,6 +213,15 @@ function rkUrl(hinban,ver,mode){
 const IMG_CACHE="pick-img-cache-v1";
 let imgCache={};
 try{imgCache=JSON.parse(localStorage.getItem(IMG_CACHE)||"{}");}catch(e){imgCache={};}
+// 以前のバージョンでは、通信制限による失敗まで「画像なし」として保存していた。
+// 起動時に一度だけその記録を捨てて、取り直せるようにする。
+try{
+  if(localStorage.getItem("pick-img-purged")!=="1"){
+    Object.keys(imgCache).forEach(k=>{ if(!imgCache[k])delete imgCache[k]; });
+    localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
+    localStorage.setItem("pick-img-purged","1");
+  }
+}catch(e){}
 function saveImgCache(){
   try{
     // 古い分が溜まらないよう直近800件に抑える
@@ -331,16 +340,19 @@ function updateImgStatus(done,total){
       +'<span style="color:var(--t3);">（楽天の制限に合わせて1件ずつ取得しています）</span>';
     return;
   }else{
-    const pending=[...document.querySelectorAll("[data-img]")].filter(b=>!b.dataset.loaded).length;
+    const boxes=[...document.querySelectorAll("[data-img]")];
+    const shown=boxes.filter(b=>b.querySelector("img")).length;
     const errNote=lastImgError?` <span style="color:var(--orange);">（${esc(lastImgError)}）</span>`:"";
-    el.innerHTML='<span style="color:var(--green);font-weight:700;">✓ 写真の取得完了</span>'+errNote
-      +(pending?`　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">未取得 ${pending}件を再試行</button>`
-               :`　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">再取得</button>`)
+    el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ 写真 ${shown} / ${boxes.length} 件</span>`+errNote
+      +'　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">写真が無い分を取り直す</button>'
       +'　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
     const rb=document.getElementById("retryImg");
     if(rb)rb.addEventListener("click",()=>{
-      // 未取得の分だけ再試行する（取得済みは消さない）
-      document.querySelectorAll("[data-img]").forEach(b=>{if(!b.dataset.loaded)b.removeAttribute("data-loaded");});
+      // 「画像なし」として保存された記録は、通信制限による誤判定の可能性があるので消す。
+      // 取得できている写真はそのまま残す。
+      Object.keys(imgCache).forEach(k=>{ if(!imgCache[k])delete imgCache[k]; });
+      saveImgCache();
+      boxes.forEach(b=>{ if(!b.querySelector("img"))b.removeAttribute("data-loaded"); });
       lastImgError="";loadVisibleImages();
     });
   }
