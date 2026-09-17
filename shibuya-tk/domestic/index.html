@@ -224,7 +224,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.1900";
+const APP_VERSION="v2026.09.17.2030";
 
 /* ===== ドメスティックブランド辞書 ===== */
 // 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
@@ -405,23 +405,57 @@ async function readFiles(files){
   const msg=document.getElementById("loadMsg");
   msg.textContent="読み込み中...";
   let added=0,total=0,skipped=0;
+  const diag=[];
+  RAWBRANDS={};
   const seen=new Set(ALL.map(r=>r.uid));
   for(const f of files){
     try{
       const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
       for(const sn of wb.SheetNames){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
-        // ヘッダー行を探す
+        // ヘッダー行を探す。「ブランド名」は完全一致だと表記ゆれで外れるため、
+        // 候補を順に探して見つかった列を使う。
         let hi=-1,cols={};
-        for(let i=0;i<Math.min(rows.length,20);i++){
+        for(let i=0;i<Math.min(rows.length,25);i++){
           const line=rows[i].map(v=>String(v||"").trim());
-          if(line.includes("ブランド名")&&line.includes("売上売価金額")){
+          const hasBrand=line.some(v=>v==="ブランド名"||v==="ブランド名称"||v==="ブランド名（カナ）");
+          const hasPrice=line.some(v=>v==="売上売価金額"||v==="売価合計"||v==="単品売価（税込）");
+          if(hasBrand&&hasPrice){
             hi=i;
-            Object.entries(WANT).forEach(([k,label])=>{const j=line.indexOf(label);if(j>=0)cols[k]=j;});
+            const find=(...names)=>{for(const n of names){const j=line.indexOf(n);if(j>=0)return j;}return -1;};
+            cols.date=find("売上日付","入金日");
+            cols.cust=find("客層名称");
+            cols.brand=find("ブランド名","ブランド名（カナ）","ブランド名称");
+            cols.brandEn=find("ブランド名称");
+            cols.model=find("モデル名","モデル");
+            cols.name=find("商品名称","品名");
+            cols.cat=find("大分類名称");
+            cols.cat2=find("中分類名称");
+            cols.cat3=find("小分類名称");
+            cols.size=find("サイズ名称","サイズ*");
+            cols.rank=find("状態ランク");
+            cols.qty=find("売上数量","リアル在庫数量");
+            cols.price=find("売上売価金額","単品売価（税込）");
+            cols.cost=find("売上原価金額","単品原価");
+            cols.jan=find("JANコード");
+            cols.staff=find("販売員名称");
+            cols.store=find("店舗名称");
+            Object.keys(cols).forEach(k=>{if(cols[k]<0)delete cols[k];});
             break;
           }
         }
-        if(hi<0)continue;
+        if(hi<0){diag.push(`${f.name}／${sn}：ヘッダー行が見つかりません`);continue;}
+        if(cols.brand==null||cols.price==null){
+          diag.push(`${f.name}／${sn}：必要な列が見つかりません（ブランド名／売上売価金額）`);continue;
+        }
+        // 未分類の確認用にブランドを集計（同じ読み込みの中で行う）
+        for(let i=hi+1;i<rows.length;i++){
+          const b=String(rows[i][cols.brand]==null?"":rows[i][cols.brand]).trim();
+          if(!b)continue;
+          if(!RAWBRANDS[b])RAWBRANDS[b]={qty:0,sales:0};
+          RAWBRANDS[b].qty+=Number(rows[i][cols.qty])||1;
+          RAWBRANDS[b].sales+=Number(String(rows[i][cols.price]).replace(/[^\d.-]/g,""))||0;
+        }
         for(let i=hi+1;i<rows.length;i++){
           const r=rows[i];
           const g=k=>cols[k]!=null?String(r[cols[k]]==null?"":r[cols[k]]).trim():"";
@@ -449,7 +483,13 @@ async function readFiles(files){
     }catch(e){console.error(e);msg.innerHTML='<span style="color:var(--red);">'+esc(f.name)+' の読み込みに失敗：'+esc(e.message)+'</span>';return;}
   }
   if(!ALL.length){
-    msg.innerHTML='<span style="color:var(--red);">ドメスティックブランドの明細が見つかりませんでした。「設定」でブランド一覧を確認してください。</span>';
+    const top=Object.entries(RAWBRANDS).sort((a,b)=>b[1].sales-a[1].sales).slice(0,8)
+      .map(([b,v])=>`${esc(b)}（${v.qty}点）`).join("、");
+    msg.innerHTML='<span style="color:var(--red);font-weight:700;">ドメスティックブランドの明細が見つかりませんでした。</span>'
+      +`<br><span class="muted">読み取った行：${total.toLocaleString()}件／ドメ以外として除外：${skipped.toLocaleString()}件</span>`
+      +(diag.length?`<br><span style="color:var(--orange);">${diag.map(esc).join("<br>")}</span>`:"")
+      +(top?`<br><span class="muted">ファイル内の主なブランド：${top}</span>`:"")
+      +'<br><span class="muted">「設定」→「未分類のブランドを見る」で全ブランドを確認できます。</span>';
     return;
   }
   msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${added.toLocaleString()}点を取り込みました</span>`
@@ -803,37 +843,6 @@ document.getElementById("xlsxOut").addEventListener("click",()=>{
   }
   XLSX.writeFile(wb,`ドメスティック売れ履歴_${pl.replace(/[^\w一-龥ぁ-ん]/g,"")}_${sl}.xlsx`);
 });
-
-/* 取り込み時に全ブランドを記録（未分類の確認用） */
-const _readFiles=readFiles;
-readFiles=async function(files){
-  RAWBRANDS={};
-  for(const f of files){
-    try{
-      const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
-      for(const sn of wb.SheetNames){
-        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
-        let hi=-1,bi=-1,pi=-1,qi=-1;
-        for(let i=0;i<Math.min(rows.length,20);i++){
-          const line=rows[i].map(v=>String(v||"").trim());
-          if(line.includes("ブランド名")&&line.includes("売上売価金額")){
-            hi=i;bi=line.indexOf("ブランド名");pi=line.indexOf("売上売価金額");qi=line.indexOf("売上数量");break;
-          }
-        }
-        if(hi<0)continue;
-        for(let i=hi+1;i<rows.length;i++){
-          const b=String(rows[i][bi]==null?"":rows[i][bi]).trim();
-          if(!b)continue;
-          if(!RAWBRANDS[b])RAWBRANDS[b]={qty:0,sales:0};
-          RAWBRANDS[b].qty+=Number(rows[i][qi])||1;
-          RAWBRANDS[b].sales+=Number(String(rows[i][pi]).replace(/[^\d.-]/g,""))||0;
-        }
-      }
-    }catch(e){}
-  }
-  return _readFiles(files);
-};
-
 
 /* ===== 起動時：共有データを取り込む ===== */
 async function bootShared(){
