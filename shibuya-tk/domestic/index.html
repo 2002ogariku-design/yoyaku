@@ -224,7 +224,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.2030";
+const APP_VERSION="v2026.09.18.1000";
 
 /* ===== ドメスティックブランド辞書 ===== */
 // 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
@@ -358,7 +358,8 @@ function sharedInfoHtml(p,extra){
 }
 
 /* ===== 状態 ===== */
-let ALL=[];              // 読み込んだ全明細（ドメスティックのみ）
+let ALL=[];              // 集計対象（ドメスティックのみ）
+let RAWROWS=[];          // ファイル内の全明細。辞書に追加した時に再読み込みせず引き上げるため保持する
 let period="all", halfKey="", seg="all";
 let brandSort={k:"sales",d:-1};
 let modelMode="all", avgMode="brand";
@@ -406,7 +407,7 @@ async function readFiles(files){
   msg.textContent="読み込み中...";
   let added=0,total=0,skipped=0;
   const diag=[];
-  RAWBRANDS={};
+  RAWBRANDS={};RAWROWS=[];
   const seen=new Set(ALL.map(r=>r.uid));
   for(const f of files){
     try{
@@ -462,7 +463,6 @@ async function readFiles(files){
           const brand=g("brand");
           if(!brand)continue;
           total++;
-          if(!isDomestic(brand)){skipped++;continue;}
           const date=g("date").replace(/[^0-9]/g,"");
           if(date.length<8)continue;
           let price=Number(g("price").replace(/[^\d.-]/g,""))||0;
@@ -473,10 +473,13 @@ async function readFiles(files){
           const uid=[g("jan"),date,g("price"),g("staff")].join("|");
           if(seen.has(uid))continue;
           seen.add(uid);
-          ALL.push({date,cust,brand,model:g("model")||g("name"),name:g("name"),
+          const rec={date,cust,brand,model:g("model")||g("name"),name:g("name"),
             cat:g("cat"),cat2:g("cat2"),cat3:g("cat3"),size:g("size"),rank:g("rank"),
             qty:Number(g("qty"))||1,price,cost,profit:price-cost,
-            store:g("store"),staff:g("staff"),jan:g("jan"),uid});
+            store:g("store"),staff:g("staff"),jan:g("jan"),uid};
+          RAWROWS.push(rec);            // 後から辞書に追加できるよう全行を残す
+          if(!isDomestic(brand)){skipped++;continue;}
+          ALL.push(rec);
           added++;
         }
       }
@@ -749,17 +752,79 @@ document.getElementById("resetList").addEventListener("click",()=>{
   try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}
   fillLists();
 });
-// 取り込み時に弾いたブランドを見せて、辞書の追加漏れを見つけやすくする
+// 取り込み時に弾いたブランドを一覧で見せ、その場で辞書に追加できるようにする。
+// 国内ブランドの取りこぼしを見つける唯一の手段なので、追加はワンタップにする。
 let RAWBRANDS={};
-document.getElementById("showUnmatched").addEventListener("click",()=>{
+let exListOnly=false;   // 除外リストで弾いた分だけ表示するか
+function renderUnmatched(){
   const el=document.getElementById("unmatched");
-  const list=Object.entries(RAWBRANDS).filter(([b])=>!isDomestic(b)).sort((a,b)=>b[1].sales-a[1].sales).slice(0,120);
-  if(!list.length){el.innerHTML='<div class="note">ファイルを読み込むと、集計対象外のブランドが一覧で出ます。</div>';return;}
-  el.innerHTML='<div class="note" style="margin-bottom:7px;">集計対象外のブランド（売上順）。国内ブランドが混ざっていたら上の一覧に追加してください。</div>'
-    +'<div class="tw" style="max-height:320px;overflow-y:auto;"><table><thead><tr><th>ブランド</th><th class="num">点数</th><th class="num">売上</th></tr></thead><tbody>'
-    +list.map(([b,v])=>`<tr><td>${esc(b)}</td><td class="num">${nf(v.qty)}</td><td class="num">${YEN(v.sales)}</td></tr>`).join("")
-    +'</tbody></table></div>';
-});
+  const all=Object.entries(RAWBRANDS);
+  if(!all.length){
+    el.innerHTML='<div class="note">ファイルを読み込むと、集計対象外のブランドが一覧で出ます。</div>';
+    return;
+  }
+  // 弾かれた理由で分ける
+  //  ex   … 除外リストに当てはまって外れた（例：ゴローズ）
+  //  none … 辞書に無いため外れた
+  const rows=all.filter(([b])=>!isDomestic(b)).map(([b,v])=>{
+    const byEx=EX_LIST.some(x=>x&&b.includes(x));
+    return {b,...v,byEx};
+  }).sort((a,b)=>b.sales-a.sales);
+  const show=exListOnly?rows.filter(r=>r.byEx):rows;
+  const exN=rows.filter(r=>r.byEx).length;
+  el.innerHTML=
+    `<div class="note" style="margin-bottom:8px;">
+      集計から外れているブランド <b>${rows.length}件</b>（売上順）${exN?`　うち除外リスト指定 <b>${exN}件</b>`:""}<br>
+      国内ブランドが混ざっていたら「＋追加」を押してください。その場で辞書に入り、全員に共有されます。
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+      <span class="chip${exListOnly?"":" on"}" id="uAll">すべて（${rows.length}）</span>
+      <span class="chip${exListOnly?" on":""}" id="uEx">除外リスト指定のみ（${exN}）</span>
+    </div>
+    <div class="tw" style="max-height:360px;overflow-y:auto;"><table>
+      <thead><tr><th>ブランド</th><th class="num">点数</th><th class="num">売上</th><th>理由</th><th></th></tr></thead>
+      <tbody>${show.slice(0,200).map(r=>`<tr>
+        <td class="nm">${esc(r.b)}</td>
+        <td class="num">${nf(r.qty)}</td>
+        <td class="num">${YEN(r.sales)}</td>
+        <td style="font-size:11px;color:${r.byEx?"var(--red)":"var(--t3)"};">${r.byEx?"除外リスト":"辞書に無い"}</td>
+        <td><button class="btn sub2" data-add="${esc(r.b)}" style="padding:6px 10px;font-size:11.5px;white-space:nowrap;">＋追加</button></td>
+      </tr>`).join("")}</tbody></table></div>`
+    +(show.length>200?'<div class="note" style="margin-top:6px;">※ 売上上位200件を表示しています。</div>':"");
+  document.getElementById("uAll").addEventListener("click",()=>{exListOnly=false;renderUnmatched();});
+  document.getElementById("uEx").addEventListener("click",()=>{exListOnly=true;renderUnmatched();});
+  el.querySelectorAll("[data-add]").forEach(b=>b.addEventListener("click",()=>addBrandToDict(b.getAttribute("data-add"))));
+}
+// 辞書に追加する。除外リストで弾かれていた場合は、そちらからも外す。
+async function addBrandToDict(brand){
+  const b=String(brand||"").trim();
+  if(!b)return;
+  const hitEx=EX_LIST.filter(x=>x&&b.includes(x));
+  if(hitEx.length){
+    if(!confirm(`「${b}」は除外リストの「${hitEx.join("、")}」に当てはまって外れています。\n\n除外リストから「${hitEx.join("、")}」を削除して、集計に含めますか？\n（同じ語を含む他のブランドも集計に入ります）`))return;
+    EX_LIST=EX_LIST.filter(x=>!hitEx.includes(x));
+  }
+  if(!JP_LIST.includes(b))JP_LIST.push(b);
+  try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}
+  fillLists();
+  // 既に読み込んである明細から、その場で対象に引き上げる（再読み込み不要）
+  let back=0;
+  if(typeof RAWROWS!=="undefined"&&RAWROWS.length){
+    const add=RAWROWS.filter(r=>isDomestic(r.brand)&&!ALL.some(x=>x.uid===r.uid));
+    ALL.push(...add);back=add.length;
+  }
+  renderUnmatched();
+  if(back){ buildHalfSel(); renderAll(); }
+  // 辞書は全員で揃っている必要があるので共有する
+  try{
+    const p=await shareAll("辞書に「"+b+"」を追加");
+    document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
+    alert(`「${b}」を追加し、全員に共有しました。`+(back?`\n\n読み込み済みの明細から ${back}点を集計に追加しました。`:`\n\nこのブランドの明細は今回のファイルにありません。`));
+  }catch(e){
+    alert(`「${b}」を追加しました（この端末のみ）。共有に失敗：`+e.message);
+  }
+}
+document.getElementById("showUnmatched").addEventListener("click",renderUnmatched);
 
 /* ===== エクセル書き出し ===== */
 document.getElementById("xlsxOut").addEventListener("click",()=>{
