@@ -82,8 +82,15 @@ tbody tr:hover td{background:#fafafa;}
   <div class="sub">国内ブランドのみを抽出して集計します</div>
 </header>
 
+<div class="c" id="sharedCard">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+    <div id="sharedInfo" class="note" style="flex:1;">共有データを確認中…</div>
+    <button class="btn sub2" id="reloadShared" style="padding:8px 12px;font-size:12.5px;flex-shrink:0;">🔄 更新</button>
+  </div>
+</div>
+
 <div class="c" id="loadCard">
-  <div class="c-title">📥 売上明細表を読み込む</div>
+  <div class="c-title">📥 売上明細表を読み込む（全員に共有されます）</div>
   <div class="drop" id="drop">📄 エクセルファイルを選択<br>
     <span style="font-size:11px;font-weight:500;">売上明細表(集計ありver.2)</span></div>
   <input type="file" id="fileIn" accept=".xlsx,.xls" multiple style="display:none;">
@@ -217,7 +224,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.1700";
+const APP_VERSION="v2026.09.17.1900";
 
 /* ===== ドメスティックブランド辞書 ===== */
 // 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
@@ -247,6 +254,107 @@ function isDomestic(brand){
   if(!b)return false;
   if(EX_LIST.some(x=>x&&b.includes(x)))return false;
   return JP_LIST.some(x=>x&&b.includes(x));
+}
+
+
+/* ========= 共有（Supabase） ========= */
+// 読み込んだ明細とブランド辞書を全端末で共有する。
+// 辞書が揃っていないと人によって集計結果が変わるため、辞書も一緒に共有する。
+const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY="rinkan-app-pw";
+const TOOL="domestic";
+// HTTPヘッダーは半角のみ。日本語入力のままだと通信自体が失敗するため必ず整える。
+function sanitizePw(s){
+  if(!s)return "";
+  let t=String(s).replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  return t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+}
+function getAppPw(){
+  let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
+  p=sanitizePw(p);
+  if(!p){
+    p=sanitizePw(prompt("共有パスワードを入力してください（半角英数字）"));
+    if(p){try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}
+  }
+  return p||"";
+}
+function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
+function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,
+  "x-app-password":getAppPw(),"Content-Type":"application/json"};}
+function myName(){
+  let n="";try{n=localStorage.getItem("dom-staff")||"";}catch(e){}
+  if(!n){n=(prompt("お名前を入力してください（誰が共有したか分かるようにするため）")||"").trim();
+    if(n){try{localStorage.setItem("dom-staff",n);}catch(e){}}}
+  return n||"不明";
+}
+// 明細は件数が増えるとMB級になるので gzip 圧縮して保存する
+async function gzipB64(str){
+  if(typeof CompressionStream==="undefined")return null;
+  const cs=new CompressionStream("gzip");
+  const blob=await new Response(new Blob([new TextEncoder().encode(str)]).stream().pipeThrough(cs)).blob();
+  const buf=new Uint8Array(await blob.arrayBuffer());
+  let bin="";const CH=0x8000;
+  for(let i=0;i<buf.length;i+=CH)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+CH));
+  return btoa(bin);
+}
+async function ungzipB64(b64){
+  const bin=atob(b64);
+  const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+  const ds=new DecompressionStream("gzip");
+  return await (await new Response(new Blob([buf]).stream().pipeThrough(ds)).blob()).text();
+}
+async function sbPut(payload){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    method:"POST",
+    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
+  });
+  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
+  if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,90));}
+}
+async function sbGet(){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const rows=await r.json();
+  return rows.length?rows[0].payload:null;
+}
+// 明細（列を配列にして軽量化）＋辞書を共有する
+const SCHEMA=["date","cust","brand","model","name","cat","cat2","cat3","size","rank","qty","price","cost","store","staff","jan","uid"];
+async function shareAll(note){
+  const rows=ALL.map(r=>SCHEMA.map(k=>r[k]===undefined||r[k]===""?null:r[k]));
+  const body=JSON.stringify({schema:SCHEMA,rows});
+  const gz=await gzipB64(body);
+  const payload={v:2,at:new Date().toISOString(),by:myName(),note:note||"",
+    count:ALL.length,jp:JP_LIST,ex:EX_LIST};
+  if(gz)payload.gz=gz; else payload.raw={schema:SCHEMA,rows};
+  await sbPut(payload);
+  return payload;
+}
+function applyShared(p){
+  if(!p)return false;
+  if(Array.isArray(p.jp)&&p.jp.length){JP_LIST=p.jp;try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));}catch(e){}}
+  if(Array.isArray(p.ex)){EX_LIST=p.ex;try{localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}}
+  fillLists();
+  return true;
+}
+function rowsFromPayload(obj){
+  if(!obj||!obj.rows)return [];
+  return obj.rows.map(a=>{
+    const o={};obj.schema.forEach((k,i)=>o[k]=a[i]==null?"":a[i]);
+    o.qty=Number(o.qty)||1;o.price=Number(o.price)||0;o.cost=Number(o.cost)||0;
+    o.profit=o.price-o.cost;
+    return o;
+  });
+}
+function sharedInfoHtml(p,extra){
+  const d=p.at?new Date(p.at):null;
+  const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+  return `<span style="color:var(--green);font-weight:800;">✓ 共有データを表示中</span><br>`
+    +`<span class="muted">${when}　${esc(p.by||"")}さんが共有　${(p.count||0).toLocaleString()}点`
+    +(p.note?`　${esc(p.note)}`:"")+`</span>`+(extra||"");
 }
 
 /* ===== 状態 ===== */
@@ -349,6 +457,17 @@ async function readFiles(files){
   buildHalfSel();
   document.getElementById("scopeCard").style.display="block";
   renderAll();
+  // 全端末に共有する
+  msg.innerHTML+='<br><span style="color:var(--blue);">共有中…</span>';
+  try{
+    const p=await shareAll(files.length===1?files[0].name:files.length+"ファイル");
+    msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${added.toLocaleString()}点を取り込みました</span>`
+      +`<br><span class="muted">ドメスティック以外の${skipped.toLocaleString()}点は除外</span>`
+      +`<br><span style="color:var(--green);font-weight:700;">✓ 全員に共有しました（ブランド辞書も一緒に共有）</span>`;
+    document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
+  }catch(e){
+    msg.innerHTML+=`<br><span style="color:var(--red);">⚠ 共有に失敗：${esc(e.message)}（この端末では使えています）</span>`;
+  }
 }
 
 function buildHalfSel(){
@@ -573,7 +692,16 @@ document.getElementById("saveList").addEventListener("click",()=>{
   JP_LIST=document.getElementById("jpList").value.split("\n").map(s=>s.trim()).filter(Boolean);
   EX_LIST=document.getElementById("exList").value.split("\n").map(s=>s.trim()).filter(Boolean);
   try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}
-  alert("保存しました。ファイルを読み込み直すと、新しい設定で集計されます。");
+  // 辞書は全員で揃っていないと集計結果が食い違うので、保存時に共有する
+  (async()=>{
+    try{
+      const p=await shareAll("ブランド辞書を更新");
+      document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
+      alert("保存し、全員に共有しました。\n\n読み込み済みの明細は、新しい辞書で絞り込むためファイルを読み込み直してください。");
+    }catch(e){
+      alert("保存しました（この端末のみ）。共有に失敗："+e.message);
+    }
+  })();
 });
 document.getElementById("resetList").addEventListener("click",()=>{
   if(!confirm("初期設定に戻しますか？"))return;
@@ -705,6 +833,51 @@ readFiles=async function(files){
   }
   return _readFiles(files);
 };
+
+
+/* ===== 起動時：共有データを取り込む ===== */
+async function bootShared(){
+  const info=document.getElementById("sharedInfo");
+  try{
+    const p=await sbGet();
+    if(!p){
+      info.innerHTML='<span class="muted">まだ共有データがありません。下からファイルを読み込むと全員に共有されます。</span>';
+      return;
+    }
+    applyShared(p);            // 辞書を先に反映
+    let obj=null;
+    if(p.gz){ obj=JSON.parse(await ungzipB64(p.gz)); }
+    else if(p.raw){ obj=p.raw; }
+    if(obj){
+      ALL=rowsFromPayload(obj);
+      if(ALL.length){
+        buildHalfSel();
+        document.getElementById("scopeCard").style.display="block";
+        renderAll();
+        info.innerHTML=sharedInfoHtml(p,
+          '<div style="margin-top:7px;"><button class="btn sub2" id="showLoad" style="padding:7px 12px;font-size:12px;">新しいファイルを読み込む</button></div>');
+        document.getElementById("loadCard").style.display="none";
+        const sl=document.getElementById("showLoad");
+        if(sl)sl.addEventListener("click",()=>{
+          const lc=document.getElementById("loadCard");
+          lc.style.display="block";lc.scrollIntoView({behavior:"smooth"});
+        });
+        return;
+      }
+    }
+    info.innerHTML='<span class="muted">共有されたブランド辞書を取り込みました。明細は下から読み込んでください。</span>';
+  }catch(e){
+    info.innerHTML='<span style="color:var(--orange);">共有データを読み込めませんでした：'+esc(e.message)+'</span>';
+  }
+}
+document.getElementById("reloadShared").addEventListener("click",async()=>{
+  const b=document.getElementById("reloadShared");
+  b.textContent="更新中...";b.disabled=true;
+  document.getElementById("sharedInfo").textContent="共有データを確認中…";
+  await bootShared();
+  b.textContent="🔄 更新";b.disabled=false;
+});
+bootShared();
 
 (function(){
   const b=document.createElement("div");
