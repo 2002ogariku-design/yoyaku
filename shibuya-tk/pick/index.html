@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>撤収ピッキング | RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -86,6 +86,53 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 #verBadge{position:fixed;right:8px;bottom:78px;z-index:60;background:rgba(0,0,0,.62);
   color:#fff;font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;cursor:pointer;}
 .note{font-size:11.5px;color:var(--t3);line-height:1.6;}
+
+/* ===== スマホ最適化 ===== */
+.i-thumb{position:relative;}
+.i-thumb.has{cursor:zoom-in;}
+.th-n{position:absolute;right:3px;bottom:3px;background:rgba(0,0,0,.66);color:#fff;
+  font-size:10px;font-weight:800;padding:1px 5px;border-radius:7px;}
+/* 拡大ビューア */
+.viewer{display:none;position:fixed;inset:0;z-index:200;background:#000;
+  flex-direction:column;}
+.viewer.on{display:flex;}
+.v-bar{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  background:rgba(0,0,0,.9);}
+.v-x{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:50%;
+  width:38px;height:38px;font-size:17px;flex-shrink:0;cursor:pointer;}
+.v-title{flex:1;min-width:0;color:#fff;font-size:13px;font-weight:800;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.v-chk{background:#34c759;color:#fff;border:none;border-radius:10px;padding:9px 13px;
+  font-size:13px;font-weight:800;font-family:var(--font);flex-shrink:0;cursor:pointer;}
+.v-chk.off{background:rgba(255,255,255,.16);}
+.v-stage{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;}
+.v-stage img{min-width:100%;width:100%;height:100%;object-fit:contain;scroll-snap-align:center;}
+.v-dots{display:flex;gap:6px;justify-content:center;padding:8px;}
+.v-dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);}
+.v-dots i.on{background:#fff;}
+.v-info{color:#fff;font-size:12.5px;line-height:1.55;padding:0 16px 10px;text-align:center;
+  max-height:23vh;overflow-y:auto;}
+.v-info b{font-size:15px;}
+.v-nav{display:flex;gap:8px;padding:8px 12px calc(env(safe-area-inset-bottom) + 12px);
+  background:rgba(0,0,0,.9);}
+.v-nav button,.v-nav a{flex:1;text-align:center;background:rgba(255,255,255,.14);color:#fff;
+  border:none;border-radius:11px;padding:13px 8px;font-size:13.5px;font-weight:700;
+  font-family:var(--font);text-decoration:none;cursor:pointer;}
+.v-nav a{background:#0071e3;}
+/* 一覧をスマホで見やすく */
+@media(max-width:520px){
+  .wrap{padding:12px 10px 0;}
+  h1{font-size:22px;}
+  .c{padding:13px;border-radius:14px;}
+  .item{padding:11px;gap:10px;}
+  .i-thumb{width:88px;height:88px;}
+  .i-key{font-size:18px;}
+  .i-name{font-size:12.5px;-webkit-line-clamp:3;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;}
+  .i-acts button,.i-acts a{padding:9px 11px;font-size:12px;}
+  .chk{width:34px;height:34px;}
+}
+
 @media print{
   .foot,#verBadge,.drop,.i-acts,.c.noprint{display:none!important;}
   body{background:#fff;padding:0;}
@@ -99,7 +146,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 <header>
   <div class="eyebrow">RINKAN SHIBUYA</div>
   <h1>撤収ピッキング</h1>
-  <div class="sub">ピッキングリストを読み込んで、タップで楽天検索・チェック</div>
+  <div class="sub">写真をタップで拡大・スワイプで切替。チェックしながらピック</div>
 </header>
 
 <div class="c noprint" id="loadCard">
@@ -152,6 +199,23 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 </div>
 
+
+<div class="viewer" id="viewer">
+  <div class="v-bar">
+    <button class="v-x" id="vClose">✕</button>
+    <div class="v-title" id="vTitle"></div>
+    <button class="v-chk" id="vChk">✓ ピック</button>
+  </div>
+  <div class="v-stage" id="vStage"></div>
+  <div class="v-dots" id="vDots"></div>
+  <div class="v-info" id="vInfo"></div>
+  <div class="v-nav">
+    <button id="vPrevItem">◀ 前の商品</button>
+    <a id="vOpen" target="_blank" rel="noopener">楽天で見る</a>
+    <button id="vNextItem">次の商品 ▶</button>
+  </div>
+</div>
+
 <div class="foot noprint" id="foot" style="display:none;">
   <div class="foot-in">
     <button class="btn blue" id="nextTodo" style="flex:1;">▶ 次の未ピックへ</button>
@@ -160,7 +224,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.16.2100";
+const APP_VERSION="v2026.09.17.1000";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -267,12 +331,15 @@ async function tryFetchImage(hinban){
         const j=JSON.parse(txt);
         if(!j.Items||!j.Items.length){ break; } // このモードでは見つからない
         const it=j.Items[0].Item||j.Items[0];
-        const pick=a=>Array.isArray(a)&&a.length?(a[0].imageUrl||""):"";
-        let img=pick(it.mediumImageUrls)||pick(it.smallImageUrls)||"";
-        if(img){
-          img=img.replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
+        const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+        let list=urls(it.mediumImageUrls);
+        if(!list.length)list=urls(it.smallImageUrls);
+        if(list.length){
+          // 楽天はサイズ指定を付け替えられる。一覧は小さく、拡大時は大きく使う。
+          const big=list.map(u=>u.replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
+          const thumb=list[0].replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
           lastImgError="";
-          return {img};
+          return {img:{t:thumb,list:big,name:it.itemName||"",price:Number(it.itemPrice)||0,url:it.itemUrl||""}};
         }
         break;
       }catch(e){
@@ -322,12 +389,20 @@ async function loadVisibleImages(){
   imgLoading=false;
   updateImgStatus();
 }
-function setThumb(box,url){
-  if(url){
-    box.innerHTML=`<img src="${url}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`;
+// キャッシュは新形式(オブジェクト)と旧形式(文字列)の両方を受ける
+function imgThumb(v){ return !v?"":(typeof v==="string"?v:v.t); }
+function imgList(v){ return !v?[]:(typeof v==="string"?[v]:(v.list||[])); }
+function setThumb(box,v){
+  const t=imgThumb(v);
+  if(t){
+    const n=imgList(v).length;
+    box.innerHTML=`<img src="${t}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`
+      +(n>1?`<span class="th-n">${n}</span>`:"");
     box.style.background="#fff";
+    box.classList.add("has");
   }else{
-    box.innerHTML='<span style="font-size:9.5px;color:var(--t3);text-align:center;line-height:1.3;">画像<br>なし</span>';
+    box.innerHTML='<span style="font-size:10px;color:var(--t3);text-align:center;line-height:1.3;">画像<br>なし</span>';
+    box.classList.remove("has");
   }
 }
 function updateImgStatus(done,total){
@@ -377,6 +452,7 @@ let store="";
 let listId="";        // ファイル内容から作る識別子（チェック状態の保存キー）
 let checked=new Set();
 let filter="all";
+let currentShown=[];
 
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const yen=n=>"¥"+Number(n||0).toLocaleString("ja-JP");
@@ -506,6 +582,7 @@ function render(){
     return true;
   });
 
+  currentShown=show;
   if(!show.length){
     el.innerHTML=`<div class="c"><div class="empty">${items.length?"該当する商品がありません":"この店舗の商品はありません"}</div></div>`;
     return;
@@ -525,6 +602,9 @@ function render(){
     saveChecked();render();
   }));
   loadVisibleImages();
+  el.querySelectorAll("[data-img]").forEach(b=>b.addEventListener("click",()=>{
+    if(b.classList.contains("has"))openViewer(b.getAttribute("data-img"));
+  }));
   el.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",async()=>{
     const v=b.getAttribute("data-copy");
     try{await navigator.clipboard.writeText(v);}catch(e){}
@@ -600,6 +680,74 @@ document.getElementById("tplSave").addEventListener("click",()=>{
 });
 document.getElementById("tplA").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_A;});
 document.getElementById("tplB").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_B;});
+
+
+/* ========= 写真の拡大ビューア ========= */
+let vIdx=-1;           // 表示中の商品（現在の一覧内）
+let vList=[];          // ビューア対象の商品配列
+function openViewer(hinban){
+  const items=SHEETS[store]||[];
+  vList=currentShown.length?currentShown:items;
+  vIdx=vList.findIndex(i=>i.hinban===hinban);
+  if(vIdx<0)return;
+  document.getElementById("viewer").classList.add("on");
+  document.body.style.overflow="hidden";
+  paintViewer();
+}
+function closeViewer(){
+  document.getElementById("viewer").classList.remove("on");
+  document.body.style.overflow="";
+  vIdx=-1;
+}
+function paintViewer(){
+  const it=vList[vIdx];
+  if(!it)return;
+  const v=imgCache[it.hinban];
+  const list=imgList(v);
+  const stage=document.getElementById("vStage");
+  stage.innerHTML=list.length
+    ? list.map(u=>`<img src="${u}" alt="">`).join("")
+    : '<div style="margin:auto;color:#888;font-size:14px;">画像がありません</div>';
+  stage.scrollLeft=0;
+  const dots=document.getElementById("vDots");
+  dots.innerHTML=list.length>1?list.map((_,i)=>`<i class="${i===0?"on":""}"></i>`).join(""):"";
+  stage.onscroll=()=>{
+    if(list.length<2)return;
+    const n=Math.round(stage.scrollLeft/stage.clientWidth);
+    [...dots.children].forEach((d,i)=>d.classList.toggle("on",i===n));
+  };
+  document.getElementById("vTitle").textContent=`${vIdx+1} / ${vList.length}　${it.hinban}`;
+  const nm=(v&&typeof v==="object"&&v.name)?v.name:it.name;
+  document.getElementById("vInfo").innerHTML=
+    `<b>${esc(it.hinban)}</b><br>${esc(nm||"")}`
+    +(it.acc?`<br><span style="color:#ffd27a;">付属品：${esc(it.acc)}</span>`:"")
+    +(it.price?`<br><span style="color:#fff;font-weight:800;">${yen(it.price)}</span>`:"");
+  document.getElementById("vOpen").href=searchUrl(it);
+  const on=checked.has(it.hinban);
+  const cb=document.getElementById("vChk");
+  cb.textContent=on?"✓ ピック済み":"✓ ピック";
+  cb.classList.toggle("off",!on);
+}
+function viewerMove(d){
+  if(vIdx<0)return;
+  const n=vIdx+d;
+  if(n<0||n>=vList.length)return;
+  vIdx=n;paintViewer();
+}
+document.getElementById("vClose").addEventListener("click",closeViewer);
+document.getElementById("vPrevItem").addEventListener("click",()=>viewerMove(-1));
+document.getElementById("vNextItem").addEventListener("click",()=>viewerMove(1));
+document.getElementById("vChk").addEventListener("click",()=>{
+  const it=vList[vIdx];if(!it)return;
+  if(checked.has(it.hinban))checked.delete(it.hinban); else checked.add(it.hinban);
+  saveChecked();paintViewer();render();
+});
+document.addEventListener("keydown",e=>{
+  if(!document.getElementById("viewer").classList.contains("on"))return;
+  if(e.key==="Escape")closeViewer();
+  if(e.key==="ArrowRight")viewerMove(1);
+  if(e.key==="ArrowLeft")viewerMove(-1);
+});
 
 /* バージョン表示（タップで強制更新） */
 (function(){
