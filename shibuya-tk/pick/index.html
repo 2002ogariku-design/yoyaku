@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>撤収ピッキング | RINKAN渋谷</title>
+<title>ピッキングツール | RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -36,6 +36,14 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   font-size:14px;font-weight:700;cursor:pointer;background:var(--t1);color:#fff;}
 .btn.sub2{background:var(--card2);color:var(--t1);}
 .btn.blue{background:var(--blue);color:#fff;}
+.seg{display:flex;gap:5px;background:var(--card2);padding:4px;border-radius:12px;}
+.seg button{flex:1;border:none;background:none;font-family:var(--font);font-size:13.5px;
+  font-weight:700;color:var(--t2);padding:11px 6px;border-radius:9px;cursor:pointer;}
+.seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.i-warn{display:block;font-size:12px;font-weight:800;color:#fff;background:#e5484d;
+  border-radius:8px;padding:7px 10px;margin-top:7px;line-height:1.45;}
+.warn-banner{background:#fff4f4;border:1.5px solid #e5484d;border-radius:12px;
+  padding:12px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#a3161b;}
 .pill{background:var(--card);border:1px solid var(--line);border-radius:20px;
   padding:8px 14px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;font-family:var(--font);}
 .pill.on{background:var(--t1);color:#fff;border-color:var(--t1);}
@@ -148,8 +156,12 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 <div class="wrap">
 <header>
   <div class="eyebrow">RINKAN SHIBUYA</div>
-  <h1>撤収ピッキング</h1>
+  <h1>ピッキングツール</h1>
   <div class="sub">写真をタップで拡大・スワイプで切替。チェックしながらピック</div>
+  <div class="seg" id="kindSeg" style="margin-top:11px;">
+    <button data-k="tesshu" class="on">📦 撤収</button>
+    <button data-k="idou">🔄 在庫移動</button>
+  </div>
 </header>
 
 <div class="c" id="sharedCard">
@@ -235,7 +247,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.1500";
+const APP_VERSION="v2026.09.17.2100";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -519,7 +531,8 @@ async function expandImages(baseUrls){
 const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
 const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
 const SB_PW_KEY="rinkan-app-pw";
-const TOOL="pick-list";
+let KIND="tesshu";  // tesshu=撤収 / idou=在庫移動
+function TOOLKEY(){return KIND==="idou"?"pick-list-idou":"pick-list";}
 // HTTPヘッダーには半角しか入れられない。日本語入力のまま打つと通信が失敗するため必ず整える。
 function sanitizePw(s){
   if(!s)return "";
@@ -557,14 +570,14 @@ async function shareList(fileName){
   const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
     method:"POST",
     headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
+    body:JSON.stringify({tool:TOOLKEY(),payload,updated_at:new Date().toISOString()})
   });
   if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
   if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,90));}
 }
 
 async function fetchShared(){
-  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
   if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
   if(!r.ok)throw new Error("HTTP "+r.status);
   const rows=await r.json();
@@ -581,7 +594,7 @@ function applyShared(p){
   loadChecked();
   const sel=document.getElementById("storeSel");
   sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
-  let pref="";try{pref=localStorage.getItem("pick-store")||"";}catch(e){}
+  let pref="";try{pref=localStorage.getItem("pick-store-"+KIND)||"";}catch(e){}
   store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
   sel.value=store;
   ["storeCard","progCard","filterCard","foot"].forEach(id=>{
@@ -646,7 +659,7 @@ async function readFile(file){
     sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
     // 前回選んだ店舗を復元（なければ渋谷）
     let pref="";
-    try{pref=localStorage.getItem("pick-store")||"";}catch(e){}
+    try{pref=localStorage.getItem("pick-store-"+KIND)||"";}catch(e){}
     store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
     sel.value=store;
 
@@ -698,20 +711,23 @@ function parseSheet(rows){
       .filter(x=>x.n>=1000);
     const price=nums.length?nums[nums.length-1].n:0;
     const texts=after.filter(v=>v&&!/^[\d,]+$/.test(v));
-    // 商品名は一番長いテキスト、付属品は短いテキスト
+    // 「※」で始まる行は作業指示（例：出庫せずに店頭裏に引く）。
+    // 見落とすと事故になるため、商品名と切り離して警告として扱う。
+    const warn=texts.filter(t=>/^[※*]/.test(t)).join(" / ");
+    const body=texts.filter(t=>!/^[※*]/.test(t));
     let name="",acc="";
-    if(texts.length){
-      const sorted=[...texts].sort((a,b)=>b.length-a.length);
+    if(body.length){
+      const sorted=[...body].sort((a,b)=>b.length-a.length);
       name=sorted[0]||"";
-      acc=texts.filter(t=>t!==name&&t.length<=12).join(" ");
+      acc=body.filter(t=>t!==name&&t.length<=12).join(" ");
     }
-    items.push({hinban,key:keyOf(hinban),cat,acc,name,price});
+    items.push({hinban,key:keyOf(hinban),cat,acc,name,price,warn});
   }
   return items;
 }
 
 /* ========= チェック状態 ========= */
-function ckKey(){return listId+":"+store;}
+function ckKey(){return KIND+":"+listId+":"+store;}
 function loadChecked(){
   checked=new Set();
   try{
@@ -741,7 +757,7 @@ function render(){
   let show=items.filter(i=>{
     if(filter==="todo"&&checked.has(i.hinban))return false;
     if(filter==="done"&&!checked.has(i.hinban))return false;
-    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc).toLowerCase().includes(q)))return false;
+    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc+" "+(i.warn||"")).toLowerCase().includes(q)))return false;
     return true;
   });
 
@@ -750,9 +766,16 @@ function render(){
     el.innerHTML=`<div class="c"><div class="empty">${items.length?"該当する商品がありません":"この店舗の商品はありません"}</div></div>`;
     return;
   }
+  // 作業指示のある商品を先頭でまとめて知らせる
+  const warns=items.filter(i=>i.warn);
+  const wb2=warns.length?`<div class="warn-banner">
+      <b>⚠ 注意が必要な商品が ${warns.length}点あります</b><br>
+      ${[...new Set(warns.map(i=>i.warn))].map(w=>esc(w)).join("<br>")}
+      <div style="margin-top:6px;font-size:11.5px;">該当：${warns.map(i=>esc(i.hinban)).join(" / ")}</div>
+    </div>`:"";
   // カテゴリごとにまとめる
   const cats=[...new Set(show.map(i=>i.cat||"その他"))];
-  el.innerHTML=cats.map(c=>{
+  el.innerHTML=wb2+cats.map(c=>{
     const list=show.filter(i=>(i.cat||"その他")===c);
     const cd=list.filter(i=>checked.has(i.hinban)).length;
     return `<div class="cat-head">◆ ${esc(c)} <span class="n">${cd}/${list.length}</span></div>`
@@ -788,6 +811,7 @@ function itemHtml(i,no){
       <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
       ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
+      ${i.warn?`<div class="i-warn">⚠ ${esc(i.warn)}</div>`:""}
       <div class="i-acts">
         <a class="go" href="${searchUrl(i)}" target="_blank" rel="noopener">▶ 商品ページを開く</a>
         <a href="${fallbackUrl(i)}" target="_blank" rel="noopener">🔍 検索で探す</a>
@@ -800,7 +824,7 @@ function itemHtml(i,no){
 /* ========= 操作 ========= */
 document.getElementById("storeSel").addEventListener("change",e=>{
   store=e.target.value;
-  try{localStorage.setItem("pick-store",store);}catch(err){}
+  try{localStorage.setItem("pick-store-"+KIND,store);}catch(err){}
   loadChecked();render();
 });
 document.getElementById("q").addEventListener("input",render);
@@ -889,6 +913,7 @@ function paintViewer(){
   document.getElementById("vInfo").innerHTML=
     `<b>${esc(it.hinban)}</b><br>${esc(nm||"")}`
     +(it.acc?`<br><span style="color:#ffd27a;">付属品：${esc(it.acc)}</span>`:"")
+    +(it.warn?`<br><span style="color:#ff8a8a;font-weight:800;">⚠ ${esc(it.warn)}</span>`:"")
     +(it.price?`<br><span style="color:#fff;font-weight:800;">${yen(it.price)}</span>`:"");
   document.getElementById("vOpen").href=searchUrl(it);
   const on=checked.has(it.hinban);
@@ -917,6 +942,40 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowLeft")viewerMove(-1);
 });
 
+
+
+/* ===== 撤収 / 在庫移動 の切り替え ===== */
+// それぞれ別のリストとして扱う（共有先・チェック状態・店舗選択を分ける）
+function kindLabel(){return KIND==="idou"?"在庫移動":"撤収";}
+document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("click",async()=>{
+  if(b.dataset.k===KIND)return;
+  document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  KIND=b.dataset.k;
+  try{localStorage.setItem("pick-kind",KIND);}catch(e){}
+  // 表示を初期化してから、その種類の共有リストを読み込む
+  SHEETS={};store="";listId="";checked=new Set();
+  document.getElementById("list").innerHTML="";
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display="none";
+  });
+  document.getElementById("loadCard").style.display="block";
+  document.querySelector("#loadCard .c-title").textContent=
+    `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
+  document.getElementById("loadMsg").innerHTML="";
+  document.getElementById("sharedInfo").textContent="共有リストを確認中…";
+  const ex=document.getElementById("showLoad");
+  if(ex&&ex.parentElement)ex.parentElement.remove();
+  await bootShared();
+}));
+try{
+  const k=localStorage.getItem("pick-kind");
+  if(k==="idou"){
+    KIND="idou";
+    document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x.dataset.k==="idou"));
+  }
+}catch(e){}
+document.querySelector("#loadCard .c-title").textContent=
+  `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
 
 /* ========= 起動時：共有リストを取り込む ========= */
 async function bootShared(){
