@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>売れ履歴 ドメスティック版 | RINKAN渋谷</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  --bg:#f5f5f7;--card:#fff;--card2:#f0f0f3;--line:#e3e3e8;
+  --t1:#1d1d1f;--t2:#4a4a4f;--t3:#8e8e93;
+  --blue:#0071e3;--green:#34c759;--orange:#ff9500;--red:#e5484d;--purple:#5b3fc4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:15px;
+  line-height:1.5;padding-bottom:84px;}
+.wrap{max-width:1000px;margin:0 auto;padding:16px 14px 0;}
+.eyebrow{font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.09em;}
+h1{font-size:24px;font-weight:800;margin:2px 0 3px;letter-spacing:-.02em;}
+.sub{font-size:12.5px;color:var(--t3);}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.c-title{font-size:13px;font-weight:800;color:var(--t2);margin-bottom:11px;}
+.drop{border:2px dashed #c7c7cc;border-radius:14px;padding:26px 14px;text-align:center;
+  color:var(--t3);cursor:pointer;font-weight:700;font-size:14px;background:var(--card2);}
+select,input[type=text],textarea{width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--line);
+  background:var(--card2);font-size:14px;font-family:var(--font);color:var(--t1);}
+textarea{min-height:150px;line-height:1.7;resize:vertical;}
+.btn{border:none;border-radius:11px;padding:10px 16px;font-family:var(--font);font-size:14px;
+  font-weight:700;cursor:pointer;background:var(--t1);color:#fff;}
+.btn.sub2{background:var(--card2);color:var(--t1);}
+.seg{display:flex;gap:5px;background:var(--card2);padding:4px;border-radius:12px;flex-wrap:wrap;}
+.seg button{flex:1;min-width:88px;border:none;background:none;font-family:var(--font);font-size:12.5px;
+  font-weight:700;color:var(--t2);padding:9px 6px;border-radius:9px;cursor:pointer;white-space:nowrap;}
+.seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.chip{display:inline-block;padding:6px 12px;margin:2px;border-radius:16px;border:1px solid var(--line);
+  background:var(--card2);font-size:12.5px;cursor:pointer;font-weight:700;}
+.chip.on{background:var(--t1);color:#fff;border-color:var(--t1);}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
+.kpi{background:var(--card2);border-radius:13px;padding:13px;}
+.kpi .lbl{font-size:11px;color:var(--t3);font-weight:700;}
+.kpi .val{font-size:21px;font-weight:800;margin-top:3px;letter-spacing:-.02em;}
+.kpi .sub{font-size:11px;color:var(--t3);margin-top:2px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:#000;color:#fff;padding:9px 8px;text-align:left;font-size:11px;font-weight:700;
+  position:sticky;top:0;white-space:nowrap;cursor:pointer;}
+tbody td{padding:9px 8px;border-bottom:1px solid var(--line);}
+tbody tr:hover td{background:#fafafa;}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.nm{font-weight:700;}
+.muted{color:var(--t3);}
+.empty{text-align:center;color:var(--t3);padding:30px;font-size:14px;}
+.tabbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;z-index:50;
+  padding-bottom:env(safe-area-inset-bottom);}
+.tabbar button{flex:1;border:none;background:none;font-family:var(--font);font-size:10.5px;
+  font-weight:700;color:var(--t3);padding:9px 2px;cursor:pointer;}
+.tabbar button.on{color:var(--blue);}
+.tabbar .ic{display:block;font-size:19px;margin-bottom:1px;}
+.view{display:none;}.view.on{display:block;}
+#verBadge{position:fixed;right:8px;bottom:70px;z-index:60;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;cursor:pointer;}
+.note{font-size:11.5px;color:var(--t3);line-height:1.6;}
+.bar{height:7px;background:var(--card2);border-radius:4px;overflow:hidden;}
+.bar>div{height:100%;background:var(--purple);}
+@media(max-width:520px){
+  .wrap{padding:12px 10px 0;}h1{font-size:21px;}.c{padding:13px;}
+  .kpi .val{font-size:18px;}table{font-size:12px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">RINKAN SHIBUYA</div>
+  <h1>売れ履歴 ドメスティック版</h1>
+  <div class="sub">国内ブランドのみを抽出して集計します</div>
+</header>
+
+<div class="c" id="loadCard">
+  <div class="c-title">📥 売上明細表を読み込む</div>
+  <div class="drop" id="drop">📄 エクセルファイルを選択<br>
+    <span style="font-size:11px;font-weight:500;">売上明細表(集計ありver.2)</span></div>
+  <input type="file" id="fileIn" accept=".xlsx,.xls" multiple style="display:none;">
+  <div id="loadMsg" class="note" style="margin-top:10px;"></div>
+</div>
+
+<div class="c" id="scopeCard" style="display:none;">
+  <div class="c-title">📅 期間</div>
+  <div class="seg" id="periodSeg" style="margin-bottom:9px;">
+    <button data-p="all" class="on">総合（全期間）</button>
+    <button data-p="half">半期別</button>
+  </div>
+  <select id="halfSel" style="display:none;"></select>
+  <div class="c-title" style="margin-top:13px;">👥 客層セグメント</div>
+  <div class="seg" id="segSeg">
+    <button data-s="all" class="on">全客層</button>
+    <button data-s="jp">日本人</button>
+    <button data-s="fn">外国人</button>
+    <button data-s="new">新規日本人</button>
+    <button data-s="rep">顧客日本人</button>
+  </div>
+  <div class="note" id="scopeNote" style="margin-top:9px;"></div>
+</div>
+
+<!-- ブランド別 -->
+<div class="view on" id="v-brand">
+  <div class="c">
+    <div class="c-title">🏷 ブランド別 売上・粗利・点数</div>
+    <div class="kpis" id="brandKpis" style="margin-bottom:13px;"></div>
+    <div class="tw"><table id="brandTbl">
+      <thead><tr>
+        <th data-s="name">ブランド</th><th data-s="qty" class="num">点数</th>
+        <th data-s="sales" class="num">売上</th><th data-s="profit" class="num">粗利</th>
+        <th data-s="rate" class="num">粗利率</th><th data-s="avg" class="num">平均単価</th>
+      </tr></thead><tbody id="brandBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- 客層 -->
+<div class="view" id="v-cust">
+  <div class="c">
+    <div class="c-title">🌏 客層別（日本人 / 外国人）</div>
+    <div id="custA"></div>
+  </div>
+  <div class="c">
+    <div class="c-title">🆕 客層別（新規日本人 / 顧客日本人）</div>
+    <div id="custB"></div>
+  </div>
+</div>
+
+<!-- 売れモデル -->
+<div class="view" id="v-model">
+  <div class="c">
+    <div class="c-title">🔥 売れモデルランキング</div>
+    <div class="seg" id="modelSeg" style="margin-bottom:11px;">
+      <button data-m="all" class="on">全ブランド横断</button>
+      <button data-m="brand">ブランド別</button>
+    </div>
+    <select id="modelBrandSel" style="display:none;margin-bottom:11px;"></select>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>ブランド</th><th>モデル</th><th class="num">点数</th>
+        <th class="num">売上</th><th class="num">粗利</th><th class="num">平均単価</th></tr></thead>
+      <tbody id="modelBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- 平均単価 -->
+<div class="view" id="v-avg">
+  <div class="c">
+    <div class="c-title">💰 平均単価</div>
+    <div class="seg" id="avgSeg" style="margin-bottom:11px;">
+      <button data-a="brand" class="on">ブランド別（全アイテム）</button>
+      <button data-a="item">アイテム別（小分類）</button>
+    </div>
+    <select id="avgBrandSel" style="display:none;margin-bottom:11px;"></select>
+    <div class="tw"><table>
+      <thead><tr><th id="avgH1">ブランド</th><th class="num">点数</th><th class="num">平均単価</th>
+        <th class="num">最低</th><th class="num">最高</th><th class="num">売上</th></tr></thead>
+      <tbody id="avgBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ランキング -->
+<div class="view" id="v-rank">
+  <div class="c">
+    <div class="c-title">🏆 ドメスティックブランド ランキング</div>
+    <div class="seg" id="rankSeg" style="margin-bottom:11px;">
+      <button data-r="qty" class="on">売れ点数</button>
+      <button data-r="sales">売上金額</button>
+      <button data-r="profit">粗利金額</button>
+    </div>
+    <div class="note" style="margin-bottom:11px;">上部の「期間」「客層」の設定が反映されます。半期別にすると半期ごとの順位になります。</div>
+    <div id="rankBody"></div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="view" id="v-set">
+  <div class="c">
+    <div class="c-title">⚙️ ドメスティックブランドの一覧</div>
+    <div class="note" style="margin-bottom:9px;">
+      1行に1ブランド。ここに含まれるブランドだけを集計します（部分一致）。<br>
+      ゴローズは初期状態で<b>除外</b>しています。含めたい場合は下の除外リストから消してください。
+    </div>
+    <textarea id="jpList"></textarea>
+    <div class="c-title" style="margin-top:13px;">🚫 除外するブランド</div>
+    <div class="note" style="margin-bottom:9px;">上の一覧に当てはまっても、ここに書いたものは集計から外します。</div>
+    <textarea id="exList" style="min-height:80px;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;">
+      <button class="btn" id="saveList">保存して再集計</button>
+      <button class="btn sub2" id="resetList">初期設定に戻す</button>
+      <button class="btn sub2" id="showUnmatched">未分類のブランドを見る</button>
+    </div>
+    <div id="unmatched" style="margin-top:12px;"></div>
+  </div>
+  <div class="c">
+    <div class="c-title">📤 書き出し</div>
+    <button class="btn" id="xlsxOut" style="background:#217346;">⬇ エクセルに書き出す</button>
+    <div class="note" style="margin-top:8px;">表示中の期間・客層で、全項目をシート分けして出力します。</div>
+  </div>
+</div>
+</div>
+
+<div class="tabbar" id="tabbar">
+  <button data-v="brand" class="on"><span class="ic">🏷</span>ブランド</button>
+  <button data-v="cust"><span class="ic">🌏</span>客層</button>
+  <button data-v="model"><span class="ic">🔥</span>売れモデル</button>
+  <button data-v="avg"><span class="ic">💰</span>平均単価</button>
+  <button data-v="rank"><span class="ic">🏆</span>順位</button>
+  <button data-v="set"><span class="ic">⚙️</span>設定</button>
+</div>
+
+<script>
+const APP_VERSION="v2026.09.17.1700";
+
+/* ===== ドメスティックブランド辞書 ===== */
+// 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
+const JP_DEFAULT=[
+"セントマイケル","サカイ","アンダーカバー","タディアンドキング","ヨウジヤマモト","レディメイド",
+"ヒューマンメイド","アベイシングエイプ","ダブルタップス","ネイバーフッド","コムデギャルソン",
+"ジュンヤワタナベ","イッセイミヤケ","ミハラヤスヒロ","ホワイトマウンテニアリング","ナンバーナイン",
+"トーガ","ケイスケヨシダ","ダイリク","ソロイスト","タカヒロミヤシタ","ヴィスヴィム","ネペンテス",
+"エンジニアドガーメンツ","カラー","フミトガンリュウ","ジエダ","ステュディオス","ファセッタズム",
+"チルドレンオブザディスコーダンス","エムエーエスユー","ヨーク","シュガーヒル","ニードルス",
+"エヌハリウッド","ベドウィン","グラミチ","ポーター","ミスターハリウッド","フラグメント",
+"ナナミカ","エフシーアールビー","エヴィス","オアスロウ","ワコマリア","マインデニム",
+"ゴッドセレクション","ハイク","オーラリー","コモリ","グラフペーパー","ユニフォームエクスペリメント",
+"キディル","オムプリッセ","ワイズ","ンダー","サッサフラス","カペルミュール","メゾンスペシャル",
+"スタジオニコルソン","ティーティーティー","ダイワピア","マウンテンリサーチ","ゴーヘンプ"
+];
+// 除外（ゴローズは別格のため初期から除外）
+const EX_DEFAULT=["ゴローズ"];
+const JP_KEY="dom-jp-list", EX_KEY="dom-ex-list";
+function loadList(key,def){
+  try{const v=localStorage.getItem(key);if(v)return JSON.parse(v);}catch(e){}
+  return def.slice();
+}
+let JP_LIST=loadList(JP_KEY,JP_DEFAULT), EX_LIST=loadList(EX_KEY,EX_DEFAULT);
+function isDomestic(brand){
+  const b=String(brand||"").trim();
+  if(!b)return false;
+  if(EX_LIST.some(x=>x&&b.includes(x)))return false;
+  return JP_LIST.some(x=>x&&b.includes(x));
+}
+
+/* ===== 状態 ===== */
+let ALL=[];              // 読み込んだ全明細（ドメスティックのみ）
+let period="all", halfKey="", seg="all";
+let brandSort={k:"sales",d:-1};
+let modelMode="all", avgMode="brand";
+let rankKey="qty";
+
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const YEN=n=>"¥"+Math.round(n||0).toLocaleString("ja-JP");
+const YENk=n=>{n=Math.round(n||0);
+  if(Math.abs(n)>=100000000)return "¥"+(n/100000000).toFixed(2)+"億";
+  if(Math.abs(n)>=10000)return "¥"+Math.round(n/10000).toLocaleString()+"万";
+  return "¥"+n.toLocaleString();};
+const nf=n=>Math.round(n||0).toLocaleString();
+
+/* ===== 客層の判定 ===== */
+// 例: 顧客 / 新規 / 新規外国人免税 / 顧客外国人免税UK など
+function isForeign(c){return /外国人|UK|免税/.test(c||"");}
+function isTaxFree(c){return /免税/.test(c||"");}
+function isNew(c){return /新規/.test(c||"");}
+function isRepeat(c){return /顧客/.test(c||"");}
+
+/* ===== 半期 ===== */
+// 5〜10月 = 上期 / 11〜4月 = 下期（11・12月は当年、1〜4月は前年の下期に属する）
+function halfOf(ymd){
+  const y=Number(String(ymd).slice(0,4)), m=Number(String(ymd).slice(4,6));
+  if(m>=5&&m<=10)return {key:y+"H1",label:`${y}年 上期（5〜10月）`,sort:y*10+1};
+  if(m>=11)return {key:y+"H2",label:`${y}年 下期（11〜4月）`,sort:y*10+2};
+  return {key:(y-1)+"H2",label:`${y-1}年 下期（11〜4月）`,sort:(y-1)*10+2};
+}
+
+/* ===== 読み込み ===== */
+const drop=document.getElementById("drop"), fileIn=document.getElementById("fileIn");
+drop.addEventListener("click",()=>fileIn.click());
+["dragover","dragenter"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.style.borderColor="var(--purple)";}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.style.borderColor="#c7c7cc";}));
+drop.addEventListener("drop",e=>{if(e.dataTransfer.files.length)readFiles(e.dataTransfer.files);});
+fileIn.addEventListener("change",e=>{if(e.target.files.length)readFiles(e.target.files);fileIn.value="";});
+
+const WANT={date:"売上日付",cust:"客層名称",brand:"ブランド名",brandEn:"ブランド名称",
+  model:"モデル名",name:"商品名称",cat:"大分類名称",cat2:"中分類名称",cat3:"小分類名称",
+  size:"サイズ名称",rank:"状態ランク",qty:"売上数量",price:"売上売価金額",cost:"売上原価金額",
+  jan:"JANコード",staff:"販売員名称",store:"店舗名称"};
+
+async function readFiles(files){
+  const msg=document.getElementById("loadMsg");
+  msg.textContent="読み込み中...";
+  let added=0,total=0,skipped=0;
+  const seen=new Set(ALL.map(r=>r.uid));
+  for(const f of files){
+    try{
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+      for(const sn of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
+        // ヘッダー行を探す
+        let hi=-1,cols={};
+        for(let i=0;i<Math.min(rows.length,20);i++){
+          const line=rows[i].map(v=>String(v||"").trim());
+          if(line.includes("ブランド名")&&line.includes("売上売価金額")){
+            hi=i;
+            Object.entries(WANT).forEach(([k,label])=>{const j=line.indexOf(label);if(j>=0)cols[k]=j;});
+            break;
+          }
+        }
+        if(hi<0)continue;
+        for(let i=hi+1;i<rows.length;i++){
+          const r=rows[i];
+          const g=k=>cols[k]!=null?String(r[cols[k]]==null?"":r[cols[k]]).trim():"";
+          const brand=g("brand");
+          if(!brand)continue;
+          total++;
+          if(!isDomestic(brand)){skipped++;continue;}
+          const date=g("date").replace(/[^0-9]/g,"");
+          if(date.length<8)continue;
+          let price=Number(g("price").replace(/[^\d.-]/g,""))||0;
+          const cust=g("cust");
+          // 免税は売価が税抜で記録されているため、1.1倍して税込にそろえる
+          if(isTaxFree(cust))price=Math.round(price*1.1);
+          const cost=Number(g("cost").replace(/[^\d.-]/g,""))||0;
+          const uid=[g("jan"),date,g("price"),g("staff")].join("|");
+          if(seen.has(uid))continue;
+          seen.add(uid);
+          ALL.push({date,cust,brand,model:g("model")||g("name"),name:g("name"),
+            cat:g("cat"),cat2:g("cat2"),cat3:g("cat3"),size:g("size"),rank:g("rank"),
+            qty:Number(g("qty"))||1,price,cost,profit:price-cost,
+            store:g("store"),staff:g("staff"),jan:g("jan"),uid});
+          added++;
+        }
+      }
+    }catch(e){console.error(e);msg.innerHTML='<span style="color:var(--red);">'+esc(f.name)+' の読み込みに失敗：'+esc(e.message)+'</span>';return;}
+  }
+  if(!ALL.length){
+    msg.innerHTML='<span style="color:var(--red);">ドメスティックブランドの明細が見つかりませんでした。「設定」でブランド一覧を確認してください。</span>';
+    return;
+  }
+  msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${added.toLocaleString()}点を取り込みました</span>`
+    +`<br><span class="muted">全${total.toLocaleString()}点のうち、ドメスティック以外の${skipped.toLocaleString()}点は除外</span>`;
+  buildHalfSel();
+  document.getElementById("scopeCard").style.display="block";
+  renderAll();
+}
+
+function buildHalfSel(){
+  const m={};
+  ALL.forEach(r=>{const h=halfOf(r.date);m[h.key]={label:h.label,sort:h.sort};});
+  const list=Object.entries(m).sort((a,b)=>b[1].sort-a[1].sort);
+  const sel=document.getElementById("halfSel");
+  sel.innerHTML=list.map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join("");
+  if(!halfKey||!m[halfKey])halfKey=list.length?list[0][0]:"";
+  sel.value=halfKey;
+}
+
+/* ===== 絞り込み ===== */
+function scoped(){
+  return ALL.filter(r=>{
+    if(period==="half"&&halfOf(r.date).key!==halfKey)return false;
+    if(seg==="jp"&&isForeign(r.cust))return false;
+    if(seg==="fn"&&!isForeign(r.cust))return false;
+    if(seg==="new"&&!(isNew(r.cust)&&!isForeign(r.cust)))return false;
+    if(seg==="rep"&&!(isRepeat(r.cust)&&!isForeign(r.cust)))return false;
+    return true;
+  });
+}
+function agg(rows,keyFn){
+  const m={};
+  rows.forEach(r=>{
+    const k=keyFn(r);
+    if(!k)return;
+    if(!m[k])m[k]={key:k,qty:0,sales:0,profit:0,prices:[]};
+    m[k].qty+=r.qty;m[k].sales+=r.price;m[k].profit+=r.profit;m[k].prices.push(r.price);
+  });
+  return Object.values(m).map(v=>({...v,
+    avg:v.qty?v.sales/v.qty:0,
+    rate:v.sales?v.profit/v.sales*100:0,
+    min:v.prices.length?Math.min(...v.prices):0,
+    max:v.prices.length?Math.max(...v.prices):0}));
+}
+
+/* ===== 描画 ===== */
+function renderAll(){
+  const rows=scoped();
+  const pl=period==="half"?(document.getElementById("halfSel").selectedOptions[0]||{}).text||"":"全期間";
+  const sl={all:"全客層",jp:"日本人",fn:"外国人",new:"新規日本人",rep:"顧客日本人"}[seg];
+  document.getElementById("scopeNote").innerHTML=
+    `<b>${esc(pl)}</b> ／ <b>${esc(sl)}</b>　対象 ${rows.length.toLocaleString()}点`;
+  renderBrand(rows);renderCust(rows);renderModel(rows);renderAvg(rows);renderRank();
+}
+
+function renderBrand(rows){
+  const list=agg(rows,r=>r.brand);
+  const tot=list.reduce((a,v)=>({qty:a.qty+v.qty,sales:a.sales+v.sales,profit:a.profit+v.profit}),{qty:0,sales:0,profit:0});
+  document.getElementById("brandKpis").innerHTML=`
+    <div class="kpi"><div class="lbl">売上点数</div><div class="val">${nf(tot.qty)}<span style="font-size:12px;">点</span></div></div>
+    <div class="kpi"><div class="lbl">総売上</div><div class="val">${YENk(tot.sales)}</div><div class="sub">${YEN(tot.sales)}</div></div>
+    <div class="kpi"><div class="lbl">総粗利</div><div class="val">${YENk(tot.profit)}</div><div class="sub">粗利率 ${tot.sales?(tot.profit/tot.sales*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="lbl">ブランド数</div><div class="val">${list.length}</div></div>
+    <div class="kpi"><div class="lbl">平均単価</div><div class="val">${YEN(tot.qty?tot.sales/tot.qty:0)}</div></div>`;
+  const k=brandSort.k,d=brandSort.d;
+  list.sort((a,b)=>k==="name"?d*String(a.key).localeCompare(String(b.key),"ja"):d*(a[k]-b[k]));
+  document.getElementById("brandBody").innerHTML=list.length?list.map(v=>`<tr>
+    <td class="nm">${esc(v.key)}</td>
+    <td class="num">${nf(v.qty)}</td>
+    <td class="num"><b>${YEN(v.sales)}</b></td>
+    <td class="num">${YEN(v.profit)}</td>
+    <td class="num" style="color:${v.rate>=50?"var(--green)":v.rate>=30?"var(--t1)":"var(--red)"};">${v.rate.toFixed(1)}%</td>
+    <td class="num">${YEN(v.avg)}</td></tr>`).join("")
+    :'<tr><td colspan="6" class="empty">該当データがありません</td></tr>';
+}
+document.querySelectorAll("#brandTbl thead th").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.getAttribute("data-s");if(!k)return;
+  brandSort.d=(brandSort.k===k)?-brandSort.d:(k==="name"?1:-1);
+  brandSort.k=k;renderBrand(scoped());
+}));
+
+function twoCol(rows,fa,fb,la,lb){
+  const A=rows.filter(fa),B=rows.filter(fb);
+  const s=a=>({qty:a.reduce((x,r)=>x+r.qty,0),sales:a.reduce((x,r)=>x+r.price,0),profit:a.reduce((x,r)=>x+r.profit,0)});
+  const sa=s(A),sb=s(B),tot=sa.sales+sb.sales||1;
+  const brands=agg(rows,r=>r.brand).sort((a,b)=>b.sales-a.sales).slice(0,25).map(v=>v.key);
+  const per=brands.map(b=>{
+    const x=s(A.filter(r=>r.brand===b)),y=s(B.filter(r=>r.brand===b));
+    return {b,x,y};
+  });
+  return `<div class="kpis" style="margin-bottom:13px;">
+      <div class="kpi"><div class="lbl">${la}</div><div class="val">${YENk(sa.sales)}</div>
+        <div class="sub">${nf(sa.qty)}点 ・ ${(sa.sales/tot*100).toFixed(1)}% ・ 粗利${YENk(sa.profit)}</div></div>
+      <div class="kpi"><div class="lbl">${lb}</div><div class="val">${YENk(sb.sales)}</div>
+        <div class="sub">${nf(sb.qty)}点 ・ ${(sb.sales/tot*100).toFixed(1)}% ・ 粗利${YENk(sb.profit)}</div></div>
+      <div class="kpi"><div class="lbl">${la}の平均単価</div><div class="val">${YEN(sa.qty?sa.sales/sa.qty:0)}</div></div>
+      <div class="kpi"><div class="lbl">${lb}の平均単価</div><div class="val">${YEN(sb.qty?sb.sales/sb.qty:0)}</div></div>
+    </div>
+    <div class="bar" style="margin-bottom:13px;"><div style="width:${(sa.sales/tot*100).toFixed(1)}%"></div></div>
+    <div class="tw"><table><thead><tr><th>ブランド</th>
+      <th class="num">${la} 点数</th><th class="num">${la} 売上</th>
+      <th class="num">${lb} 点数</th><th class="num">${lb} 売上</th><th class="num">${la}比率</th></tr></thead>
+      <tbody>${per.map(p=>{
+        const t=p.x.sales+p.y.sales||1;
+        return `<tr><td class="nm">${esc(p.b)}</td>
+          <td class="num">${nf(p.x.qty)}</td><td class="num">${YEN(p.x.sales)}</td>
+          <td class="num">${nf(p.y.qty)}</td><td class="num">${YEN(p.y.sales)}</td>
+          <td class="num">${(p.x.sales/t*100).toFixed(0)}%</td></tr>`;}).join("")||
+        '<tr><td colspan="6" class="empty">該当なし</td></tr>'}</tbody></table></div>`;
+}
+function renderCust(rows){
+  document.getElementById("custA").innerHTML=
+    twoCol(rows,r=>!isForeign(r.cust),r=>isForeign(r.cust),"日本人","外国人");
+  const jp=rows.filter(r=>!isForeign(r.cust));
+  document.getElementById("custB").innerHTML=
+    twoCol(jp,r=>isNew(r.cust),r=>isRepeat(r.cust),"新規日本人","顧客日本人");
+}
+
+function renderModel(rows){
+  const bsel=document.getElementById("modelBrandSel");
+  const brands=[...new Set(rows.map(r=>r.brand))].sort();
+  if(bsel.options.length!==brands.length)
+    bsel.innerHTML=brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("");
+  bsel.style.display=modelMode==="brand"?"block":"none";
+  let src=rows;
+  if(modelMode==="brand"&&bsel.value)src=rows.filter(r=>r.brand===bsel.value);
+  const list=agg(src,r=>r.brand+"|||"+(r.model||"（モデル名なし）"))
+    .sort((a,b)=>b.qty-a.qty||b.sales-a.sales).slice(0,100);
+  document.getElementById("modelBody").innerHTML=list.length?list.map((v,i)=>{
+    const [b,m]=v.key.split("|||");
+    return `<tr><td class="muted">${i+1}</td><td>${esc(b)}</td><td class="nm">${esc(m)}</td>
+      <td class="num"><b>${nf(v.qty)}</b></td><td class="num">${YEN(v.sales)}</td>
+      <td class="num">${YEN(v.profit)}</td><td class="num">${YEN(v.avg)}</td></tr>`;
+  }).join(""):'<tr><td colspan="7" class="empty">該当なし</td></tr>';
+}
+
+function renderAvg(rows){
+  const bsel=document.getElementById("avgBrandSel");
+  const brands=[...new Set(rows.map(r=>r.brand))].sort();
+  if(bsel.options.length!==brands.length)
+    bsel.innerHTML=brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join("");
+  bsel.style.display=avgMode==="item"?"block":"none";
+  document.getElementById("avgH1").textContent=avgMode==="item"?"アイテム（小分類）":"ブランド";
+  let list;
+  if(avgMode==="item"){
+    const src=bsel.value?rows.filter(r=>r.brand===bsel.value):rows;
+    list=agg(src,r=>r.cat3||r.cat2||"（未分類）");
+  }else{
+    list=agg(rows,r=>r.brand);
+  }
+  list.sort((a,b)=>b.avg-a.avg);
+  document.getElementById("avgBody").innerHTML=list.length?list.map(v=>`<tr>
+    <td class="nm">${esc(v.key)}</td><td class="num">${nf(v.qty)}</td>
+    <td class="num"><b>${YEN(v.avg)}</b></td><td class="num muted">${YEN(v.min)}</td>
+    <td class="num muted">${YEN(v.max)}</td><td class="num">${YEN(v.sales)}</td></tr>`).join("")
+    :'<tr><td colspan="6" class="empty">該当なし</td></tr>';
+}
+
+function renderRank(){
+  const el=document.getElementById("rankBody");
+  const label={qty:"売れ点数",sales:"売上金額",profit:"粗利金額"}[rankKey];
+  const fmt=v=>rankKey==="qty"?nf(v)+"点":YEN(v);
+  const blocks=[];
+  if(period==="all"){
+    blocks.push({title:"総合（全期間）",rows:scoped()});
+  }else{
+    blocks.push({title:(document.getElementById("halfSel").selectedOptions[0]||{}).text||"",rows:scoped()});
+  }
+  el.innerHTML=blocks.map(bk=>{
+    const list=agg(bk.rows,r=>r.brand).sort((a,b)=>b[rankKey]-a[rankKey]).slice(0,30);
+    const max=list.length?list[0][rankKey]:1;
+    return `<div style="font-size:12.5px;font-weight:800;margin:4px 0 9px;">${esc(bk.title)}　<span class="muted">${label}順</span></div>`
+      +(list.length?list.map((v,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);">
+          <span style="width:24px;font-size:13px;font-weight:800;color:${i<3?"var(--purple)":"var(--t3)"};">${i+1}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(v.key)}</div>
+            <div class="bar" style="margin-top:4px;"><div style="width:${(v[rankKey]/max*100).toFixed(1)}%"></div></div>
+          </div>
+          <div style="text-align:right;white-space:nowrap;">
+            <div style="font-size:13.5px;font-weight:800;">${fmt(v[rankKey])}</div>
+            <div class="muted" style="font-size:10.5px;">${nf(v.qty)}点 / ${YENk(v.sales)}</div>
+          </div>
+        </div>`).join(""):'<div class="empty">該当なし</div>');
+  }).join("");
+}
+
+/* ===== 操作 ===== */
+document.querySelectorAll("#periodSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#periodSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  period=b.dataset.p;
+  document.getElementById("halfSel").style.display=period==="half"?"block":"none";
+  renderAll();
+}));
+document.getElementById("halfSel").addEventListener("change",e=>{halfKey=e.target.value;renderAll();});
+document.querySelectorAll("#segSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#segSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  seg=b.dataset.s;renderAll();
+}));
+document.querySelectorAll("#modelSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#modelSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  modelMode=b.dataset.m;renderModel(scoped());
+}));
+document.getElementById("modelBrandSel").addEventListener("change",()=>renderModel(scoped()));
+document.querySelectorAll("#avgSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#avgSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  avgMode=b.dataset.a;renderAvg(scoped());
+}));
+document.getElementById("avgBrandSel").addEventListener("change",()=>renderAvg(scoped()));
+document.querySelectorAll("#rankSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#rankSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  rankKey=b.dataset.r;renderRank();
+}));
+document.querySelectorAll("#tabbar button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#tabbar button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("on"));
+  document.getElementById("v-"+b.dataset.v).classList.add("on");
+  window.scrollTo({top:0});
+}));
+
+/* ===== 設定 ===== */
+function fillLists(){
+  document.getElementById("jpList").value=JP_LIST.join("\n");
+  document.getElementById("exList").value=EX_LIST.join("\n");
+}
+fillLists();
+document.getElementById("saveList").addEventListener("click",()=>{
+  JP_LIST=document.getElementById("jpList").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  EX_LIST=document.getElementById("exList").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}
+  alert("保存しました。ファイルを読み込み直すと、新しい設定で集計されます。");
+});
+document.getElementById("resetList").addEventListener("click",()=>{
+  if(!confirm("初期設定に戻しますか？"))return;
+  JP_LIST=JP_DEFAULT.slice();EX_LIST=EX_DEFAULT.slice();
+  try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));localStorage.setItem(EX_KEY,JSON.stringify(EX_LIST));}catch(e){}
+  fillLists();
+});
+// 取り込み時に弾いたブランドを見せて、辞書の追加漏れを見つけやすくする
+let RAWBRANDS={};
+document.getElementById("showUnmatched").addEventListener("click",()=>{
+  const el=document.getElementById("unmatched");
+  const list=Object.entries(RAWBRANDS).filter(([b])=>!isDomestic(b)).sort((a,b)=>b[1].sales-a[1].sales).slice(0,120);
+  if(!list.length){el.innerHTML='<div class="note">ファイルを読み込むと、集計対象外のブランドが一覧で出ます。</div>';return;}
+  el.innerHTML='<div class="note" style="margin-bottom:7px;">集計対象外のブランド（売上順）。国内ブランドが混ざっていたら上の一覧に追加してください。</div>'
+    +'<div class="tw" style="max-height:320px;overflow-y:auto;"><table><thead><tr><th>ブランド</th><th class="num">点数</th><th class="num">売上</th></tr></thead><tbody>'
+    +list.map(([b,v])=>`<tr><td>${esc(b)}</td><td class="num">${nf(v.qty)}</td><td class="num">${YEN(v.sales)}</td></tr>`).join("")
+    +'</tbody></table></div>';
+});
+
+/* ===== エクセル書き出し ===== */
+document.getElementById("xlsxOut").addEventListener("click",()=>{
+  if(!ALL.length){alert("先にファイルを読み込んでください。");return;}
+  const rows=scoped();
+  const pl=period==="half"?((document.getElementById("halfSel").selectedOptions[0]||{}).text||""):"全期間";
+  const sl={all:"全客層",jp:"日本人",fn:"外国人",new:"新規日本人",rep:"顧客日本人"}[seg];
+  const wb=XLSX.utils.book_new();
+  const W=(ws,w)=>{ws["!cols"]=w.map(x=>({wch:x}));};
+  const head=t=>[[`ドメスティック売れ履歴 ${t}`],[`期間：${pl}　客層：${sl}`],[]];
+
+  // ブランド別
+  {
+    const list=agg(rows,r=>r.brand).sort((a,b)=>b.sales-a.sales);
+    const aoa=[...head("ブランド別"),["ブランド","点数","売上","粗利","粗利率(%)","平均単価"]];
+    list.forEach(v=>aoa.push([v.key,v.qty,v.sales,v.profit,Number(v.rate.toFixed(1)),Math.round(v.avg)]));
+    aoa.push(["合計",list.reduce((a,v)=>a+v.qty,0),list.reduce((a,v)=>a+v.sales,0),list.reduce((a,v)=>a+v.profit,0),"",""]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);W(ws,[26,9,14,14,11,13]);
+    XLSX.utils.book_append_sheet(wb,ws,"ブランド別");
+  }
+  // 客層別
+  {
+    const mk=(src,fa,fb,la,lb)=>{
+      const bs=[...new Set(src.map(r=>r.brand))];
+      const s=a=>({qty:a.reduce((x,r)=>x+r.qty,0),sales:a.reduce((x,r)=>x+r.price,0),profit:a.reduce((x,r)=>x+r.profit,0)});
+      return bs.map(b=>{
+        const A=s(src.filter(r=>r.brand===b&&fa(r))),B=s(src.filter(r=>r.brand===b&&fb(r)));
+        return [b,A.qty,A.sales,A.profit,B.qty,B.sales,B.profit];
+      }).sort((x,y)=>(y[2]+y[5])-(x[2]+x[5]));
+    };
+    const a1=[...head("客層別（日本人/外国人）"),
+      ["ブランド","日本人 点数","日本人 売上","日本人 粗利","外国人 点数","外国人 売上","外国人 粗利"]];
+    mk(rows,r=>!isForeign(r.cust),r=>isForeign(r.cust)).forEach(r=>a1.push(r));
+    const w1=XLSX.utils.aoa_to_sheet(a1);W(w1,[26,12,14,14,12,14,14]);
+    XLSX.utils.book_append_sheet(wb,w1,"客層_日本人外国人");
+
+    const jp=rows.filter(r=>!isForeign(r.cust));
+    const a2=[...head("客層別（新規/顧客・日本人）"),
+      ["ブランド","新規 点数","新規 売上","新規 粗利","顧客 点数","顧客 売上","顧客 粗利"]];
+    mk(jp,r=>isNew(r.cust),r=>isRepeat(r.cust)).forEach(r=>a2.push(r));
+    const w2=XLSX.utils.aoa_to_sheet(a2);W(w2,[26,12,14,14,12,14,14]);
+    XLSX.utils.book_append_sheet(wb,w2,"客層_新規顧客");
+  }
+  // 売れモデル
+  {
+    const list=agg(rows,r=>r.brand+"|||"+(r.model||"（なし）")).sort((a,b)=>b.qty-a.qty).slice(0,300);
+    const aoa=[...head("売れモデルランキング"),["#","ブランド","モデル","点数","売上","粗利","平均単価"]];
+    list.forEach((v,i)=>{const [b,m]=v.key.split("|||");aoa.push([i+1,b,m,v.qty,v.sales,v.profit,Math.round(v.avg)]);});
+    const ws=XLSX.utils.aoa_to_sheet(aoa);W(ws,[5,22,34,8,13,13,12]);
+    XLSX.utils.book_append_sheet(wb,ws,"売れモデル");
+  }
+  // 平均単価（ブランド×小分類）
+  {
+    const list=agg(rows,r=>r.brand+"|||"+(r.cat3||r.cat2||"（未分類）")).sort((a,b)=>b.sales-a.sales);
+    const aoa=[...head("平均単価（ブランド×アイテム）"),["ブランド","アイテム(小分類)","点数","平均単価","最低","最高","売上"]];
+    list.forEach(v=>{const [b,c]=v.key.split("|||");aoa.push([b,c,v.qty,Math.round(v.avg),v.min,v.max,v.sales]);});
+    const ws=XLSX.utils.aoa_to_sheet(aoa);W(ws,[24,20,8,13,12,12,14]);
+    XLSX.utils.book_append_sheet(wb,ws,"平均単価");
+  }
+  // 半期別サマリー（全半期）
+  {
+    const halves={};
+    ALL.forEach(r=>{const h=halfOf(r.date);(halves[h.key]=halves[h.key]||{label:h.label,sort:h.sort,rows:[]}).rows.push(r);});
+    const aoa=[[`ドメスティック売れ履歴 半期別サマリー`],[],["半期","ブランド","点数","売上","粗利","粗利率(%)"]];
+    Object.values(halves).sort((a,b)=>a.sort-b.sort).forEach(h=>{
+      agg(h.rows,r=>r.brand).sort((a,b)=>b.sales-a.sales).forEach(v=>
+        aoa.push([h.label,v.key,v.qty,v.sales,v.profit,Number(v.rate.toFixed(1))]));
+    });
+    const ws=XLSX.utils.aoa_to_sheet(aoa);W(ws,[22,24,8,14,14,11]);
+    XLSX.utils.book_append_sheet(wb,ws,"半期別");
+  }
+  // 明細
+  {
+    const aoa=[["明細（ドメスティックのみ・免税は売価×1.1で税込に換算）"],[],
+      ["売上日","客層","ブランド","モデル","小分類","サイズ","ランク","点数","売価(税込)","原価","粗利","店舗","販売員"]];
+    rows.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>aoa.push(
+      [r.date,r.cust,r.brand,r.model,r.cat3,r.size,r.rank,r.qty,r.price,r.cost,r.profit,r.store,r.staff]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);W(ws,[11,16,22,30,16,10,8,7,13,12,12,14,14]);
+    ws["!freeze"]={xSplit:0,ySplit:3};
+    XLSX.utils.book_append_sheet(wb,ws,"明細");
+  }
+  XLSX.writeFile(wb,`ドメスティック売れ履歴_${pl.replace(/[^\w一-龥ぁ-ん]/g,"")}_${sl}.xlsx`);
+});
+
+/* 取り込み時に全ブランドを記録（未分類の確認用） */
+const _readFiles=readFiles;
+readFiles=async function(files){
+  RAWBRANDS={};
+  for(const f of files){
+    try{
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+      for(const sn of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
+        let hi=-1,bi=-1,pi=-1,qi=-1;
+        for(let i=0;i<Math.min(rows.length,20);i++){
+          const line=rows[i].map(v=>String(v||"").trim());
+          if(line.includes("ブランド名")&&line.includes("売上売価金額")){
+            hi=i;bi=line.indexOf("ブランド名");pi=line.indexOf("売上売価金額");qi=line.indexOf("売上数量");break;
+          }
+        }
+        if(hi<0)continue;
+        for(let i=hi+1;i<rows.length;i++){
+          const b=String(rows[i][bi]==null?"":rows[i][bi]).trim();
+          if(!b)continue;
+          if(!RAWBRANDS[b])RAWBRANDS[b]={qty:0,sales:0};
+          RAWBRANDS[b].qty+=Number(rows[i][qi])||1;
+          RAWBRANDS[b].sales+=Number(String(rows[i][pi]).replace(/[^\d.-]/g,""))||0;
+        }
+      }
+    }catch(e){}
+  }
+  return _readFiles(files);
+};
+
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";b.textContent=APP_VERSION;b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{const u=new URL(location.href);u.searchParams.set("v",Date.now());location.replace(u.toString());});
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>
