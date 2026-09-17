@@ -219,6 +219,18 @@ tbody tr:hover td{background:#fafafa;}
   <div class="c">
     <div class="c-title">🗂 取り込み履歴（回ごとに削除できます）</div>
     <div id="uploadLogBox"></div>
+    <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px;">
+      <div class="c-title" style="margin-bottom:8px;">🧹 データの整理</div>
+      <div class="note" style="margin-bottom:10px;">
+        履歴が残っていない（以前に取り込んだ）データは、こちらから消してください。
+      </div>
+      <div id="dataSummary" class="note" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select id="delHalfSel" style="flex:1;min-width:190px;"></select>
+        <button class="btn sub2" id="delHalfBtn" style="font-size:12.5px;">この期間を削除</button>
+      </div>
+      <button class="btn" id="delAllBtn" style="background:var(--red);margin-top:10px;">🗑 全データを削除</button>
+    </div>
   </div>
   <div class="c">
     <div class="c-title">📤 書き出し</div>
@@ -238,7 +250,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1130";
+const APP_VERSION="v2026.09.18.1300";
 
 /* ===== ドメスティックブランド辞書 ===== */
 // 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
@@ -524,7 +536,7 @@ async function readFiles(files){
   buildHalfSel();
   document.getElementById("scopeCard").style.display="block";
   renderAll();
-  renderUploadLog();
+  renderUploadLog();renderDataSummary();
   // 全端末に共有する
   msg.innerHTML+='<br><span style="color:var(--blue);">共有中…</span>';
   try{
@@ -755,7 +767,7 @@ function fillLists(){
   document.getElementById("jpList").value=JP_LIST.join("\n");
   document.getElementById("exList").value=EX_LIST.join("\n");
 }
-fillLists();renderDictList();renderUploadLog();
+fillLists();renderDictList();renderUploadLog();renderDataSummary();
 document.getElementById("saveList").addEventListener("click",()=>{
   JP_LIST=document.getElementById("jpList").value.split("\n").map(s=>s.trim()).filter(Boolean);
   EX_LIST=document.getElementById("exList").value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -922,7 +934,7 @@ async function deleteBatch(batch){
   ALL=ALL.filter(r=>r.batch!==batch);
   RAWROWS=RAWROWS.filter(r=>r.batch!==batch);
   uploadLog=uploadLog.filter(x=>x.batch!==batch);
-  buildHalfSel();renderAll();renderUploadLog();renderDictList();
+  buildHalfSel();renderAll();renderUploadLog();renderDictList();renderDataSummary();
   try{
     const p=await shareAll("取り込み分を削除");
     document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
@@ -933,6 +945,71 @@ async function removeLogEntry(batch){
   uploadLog=uploadLog.filter(x=>x.batch!==batch);
   renderUploadLog();
   try{ await shareAll("履歴を整理"); }catch(e){}
+}
+
+
+/* ===== データの整理（履歴が無い既存データも消せるようにする） ===== */
+function renderDataSummary(){
+  const el=document.getElementById("dataSummary");
+  const sel=document.getElementById("delHalfSel");
+  if(!el||!sel)return;
+  if(!ALL.length){
+    el.innerHTML='<span class="muted">取り込まれているデータはありません。</span>';
+    sel.innerHTML='<option value="">（データなし）</option>';
+    return;
+  }
+  const ds=ALL.map(r=>r.date).filter(Boolean).sort();
+  const fmt=s=>s&&s.length>=8?`${s.slice(0,4)}/${s.slice(4,6)}/${s.slice(6,8)}`:"";
+  const noBatch=ALL.filter(r=>!r.batch).length;
+  el.innerHTML=`現在 <b>${ALL.length.toLocaleString()}点</b>　期間 ${fmt(ds[0])}〜${fmt(ds[ds.length-1])}`
+    +(noBatch?`<br><span style="color:var(--orange);">うち ${noBatch.toLocaleString()}点は取り込み履歴が無いため、下の操作で削除してください。</span>`:"");
+  // 半期ごとの内訳を選べるようにする
+  const H={};
+  ALL.forEach(r=>{const h=halfOf(r.date);(H[h.key]=H[h.key]||{label:h.label,sort:h.sort,n:0}).n++;});
+  const list=Object.entries(H).sort((a,b)=>b[1].sort-a[1].sort);
+  sel.innerHTML=list.map(([k,v])=>`<option value="${k}">${esc(v.label)}（${v.n.toLocaleString()}点）</option>`).join("");
+}
+document.getElementById("delHalfBtn").addEventListener("click",async()=>{
+  const k=document.getElementById("delHalfSel").value;
+  if(!k){alert("削除する期間がありません。");return;}
+  const target=ALL.filter(r=>halfOf(r.date).key===k);
+  if(!target.length)return;
+  const label=(document.getElementById("delHalfSel").selectedOptions[0]||{}).text||"";
+  if(!confirm(`${label} のデータ ${target.length.toLocaleString()}点 を削除します。\n\nこの操作は取り消せません。よろしいですか？`))return;
+  ALL=ALL.filter(r=>halfOf(r.date).key!==k);
+  RAWROWS=RAWROWS.filter(r=>halfOf(r.date).key!==k);
+  await afterDelete(`${label}を削除`, target.length);
+});
+document.getElementById("delAllBtn").addEventListener("click",async()=>{
+  if(!ALL.length){alert("削除するデータがありません。");return;}
+  const n=ALL.length;
+  if(!confirm(`取り込まれている全データ ${n.toLocaleString()}点 を削除します。\n\n全員の共有からも消えます。よろしいですか？`))return;
+  if(!confirm("本当に削除しますか？　この操作は取り消せません。"))return;
+  ALL=[];RAWROWS=[];uploadLog=[];
+  await afterDelete("全データを削除", n);
+});
+// 削除後の共通処理（表示更新と共有）
+async function afterDelete(note,n){
+  buildHalfSel();
+  if(!ALL.length){
+    document.getElementById("scopeCard").style.display="none";
+    document.getElementById("loadCard").style.display="block";
+    ["brandBody","modelBody","avgBody","rankBody","custA","custB"].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.innerHTML="";
+    });
+    const bk=document.getElementById("brandKpis");if(bk)bk.innerHTML="";
+  }else{
+    renderAll();
+  }
+  renderUploadLog();renderDictList();renderDataSummary();renderDataSummary();
+  try{
+    const p=await shareAll(note);
+    document.getElementById("sharedInfo").innerHTML=ALL.length?sharedInfoHtml(p)
+      :'<span class="muted">共有データを削除しました。ファイルを読み込むと再び共有されます。</span>';
+    alert(`${n.toLocaleString()}点を削除し、全員の共有にも反映しました。`);
+  }catch(e){
+    alert(`削除しました（この端末のみ）。共有に失敗：`+e.message);
+  }
 }
 
 /* ===== エクセル書き出し ===== */
@@ -1039,7 +1116,7 @@ async function bootShared(){
         buildHalfSel();
         document.getElementById("scopeCard").style.display="block";
         renderAll();
-        renderUploadLog();
+        renderUploadLog();renderDataSummary();
         info.innerHTML=sharedInfoHtml(p,
           '<div style="margin-top:7px;"><button class="btn sub2" id="showLoad" style="padding:7px 12px;font-size:12px;">新しいファイルを読み込む</button></div>');
         document.getElementById("loadCard").style.display="none";
