@@ -206,6 +206,20 @@ tbody tr:hover td{background:#fafafa;}
     </div>
     <div id="unmatched" style="margin-top:12px;"></div>
   </div>
+
+  <div class="c">
+    <div class="c-title">📋 登録中のブランド（タップで削除）</div>
+    <div class="note" style="margin-bottom:9px;">
+      集計対象として登録されているブランドです。「×」で辞書から外せます。<br>
+      括弧内は今読み込んでいるデータでの点数です。0点のものは今回のデータに無いだけで、消す必要はありません。
+    </div>
+    <div id="dictList"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">🗂 取り込み履歴（回ごとに削除できます）</div>
+    <div id="uploadLogBox"></div>
+  </div>
   <div class="c">
     <div class="c-title">📤 書き出し</div>
     <button class="btn" id="xlsxOut" style="background:#217346;">⬇ エクセルに書き出す</button>
@@ -224,7 +238,7 @@ tbody tr:hover td{background:#fafafa;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1000";
+const APP_VERSION="v2026.09.18.1130";
 
 /* ===== ドメスティックブランド辞書 ===== */
 // 部分一致で判定する。表記ゆれ（〜プールオム等）も拾えるよう語幹で登録。
@@ -322,13 +336,13 @@ async function sbGet(){
   return rows.length?rows[0].payload:null;
 }
 // 明細（列を配列にして軽量化）＋辞書を共有する
-const SCHEMA=["date","cust","brand","model","name","cat","cat2","cat3","size","rank","qty","price","cost","store","staff","jan","uid"];
+const SCHEMA=["date","cust","brand","model","name","cat","cat2","cat3","size","rank","qty","price","cost","store","staff","jan","uid","batch"];
 async function shareAll(note){
   const rows=ALL.map(r=>SCHEMA.map(k=>r[k]===undefined||r[k]===""?null:r[k]));
   const body=JSON.stringify({schema:SCHEMA,rows});
   const gz=await gzipB64(body);
   const payload={v:2,at:new Date().toISOString(),by:myName(),note:note||"",
-    count:ALL.length,jp:JP_LIST,ex:EX_LIST};
+    count:ALL.length,jp:JP_LIST,ex:EX_LIST,uploadLog};
   if(gz)payload.gz=gz; else payload.raw={schema:SCHEMA,rows};
   await sbPut(payload);
   return payload;
@@ -360,6 +374,7 @@ function sharedInfoHtml(p,extra){
 /* ===== 状態 ===== */
 let ALL=[];              // 集計対象（ドメスティックのみ）
 let RAWROWS=[];          // ファイル内の全明細。辞書に追加した時に再読み込みせず引き上げるため保持する
+let uploadLog=[];        // 取り込み履歴（回ごとに削除できるようにする）
 let period="all", halfKey="", seg="all";
 let brandSort={k:"sales",d:-1};
 let modelMode="all", avgMode="brand";
@@ -408,6 +423,8 @@ async function readFiles(files){
   let added=0,total=0,skipped=0;
   const diag=[];
   RAWBRANDS={};RAWROWS=[];
+  const batchId="b"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
+  const batchFiles=[];
   const seen=new Set(ALL.map(r=>r.uid));
   for(const f of files){
     try{
@@ -476,12 +493,13 @@ async function readFiles(files){
           const rec={date,cust,brand,model:g("model")||g("name"),name:g("name"),
             cat:g("cat"),cat2:g("cat2"),cat3:g("cat3"),size:g("size"),rank:g("rank"),
             qty:Number(g("qty"))||1,price,cost,profit:price-cost,
-            store:g("store"),staff:g("staff"),jan:g("jan"),uid};
+            store:g("store"),staff:g("staff"),jan:g("jan"),uid,batch:batchId};
           RAWROWS.push(rec);            // 後から辞書に追加できるよう全行を残す
           if(!isDomestic(brand)){skipped++;continue;}
           ALL.push(rec);
           added++;
         }
+        batchFiles.push(f.name);
       }
     }catch(e){console.error(e);msg.innerHTML='<span style="color:var(--red);">'+esc(f.name)+' の読み込みに失敗：'+esc(e.message)+'</span>';return;}
   }
@@ -497,9 +515,16 @@ async function readFiles(files){
   }
   msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${added.toLocaleString()}点を取り込みました</span>`
     +`<br><span class="muted">全${total.toLocaleString()}点のうち、ドメスティック以外の${skipped.toLocaleString()}点は除外</span>`;
+  if(added>0){
+    const ds=ALL.filter(r=>r.batch===batchId).map(r=>r.date).filter(Boolean).sort();
+    uploadLog.unshift({batch:batchId,at:new Date().toISOString(),by:myName(),
+      files:[...new Set(batchFiles)].join("、"),added,from:ds[0]||"",to:ds[ds.length-1]||""});
+    if(uploadLog.length>30)uploadLog=uploadLog.slice(0,30);
+  }
   buildHalfSel();
   document.getElementById("scopeCard").style.display="block";
   renderAll();
+  renderUploadLog();
   // 全端末に共有する
   msg.innerHTML+='<br><span style="color:var(--blue);">共有中…</span>';
   try{
@@ -730,7 +755,7 @@ function fillLists(){
   document.getElementById("jpList").value=JP_LIST.join("\n");
   document.getElementById("exList").value=EX_LIST.join("\n");
 }
-fillLists();
+fillLists();renderDictList();renderUploadLog();
 document.getElementById("saveList").addEventListener("click",()=>{
   JP_LIST=document.getElementById("jpList").value.split("\n").map(s=>s.trim()).filter(Boolean);
   EX_LIST=document.getElementById("exList").value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -813,7 +838,7 @@ async function addBrandToDict(brand){
     const add=RAWROWS.filter(r=>isDomestic(r.brand)&&!ALL.some(x=>x.uid===r.uid));
     ALL.push(...add);back=add.length;
   }
-  renderUnmatched();
+  renderUnmatched();renderDictList();
   if(back){ buildHalfSel(); renderAll(); }
   // 辞書は全員で揃っている必要があるので共有する
   try{
@@ -825,6 +850,90 @@ async function addBrandToDict(brand){
   }
 }
 document.getElementById("showUnmatched").addEventListener("click",renderUnmatched);
+
+
+/* ===== 登録中ブランドの一覧と削除 ===== */
+function renderDictList(){
+  const el=document.getElementById("dictList");
+  if(!el)return;
+  if(!JP_LIST.length){el.innerHTML='<div class="note">登録されているブランドがありません。</div>';return;}
+  // 今のデータでの点数を数える（0点でも消す必要はないと分かるように出す）
+  const cnt={};
+  ALL.forEach(r=>{
+    JP_LIST.forEach(k=>{ if(r.brand&&r.brand.includes(k))cnt[k]=(cnt[k]||0)+r.qty; });
+  });
+  const sorted=[...JP_LIST].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
+  el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:5px;">'
+    +sorted.map(k=>`<span class="chip" style="cursor:default;">${esc(k)}<span class="muted" style="font-weight:400;"> (${cnt[k]||0})</span>
+       <span data-del="${esc(k)}" style="color:var(--red);font-weight:900;margin-left:5px;cursor:pointer;padding:0 3px;">×</span></span>`).join("")
+    +'</div>';
+  el.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>removeBrandFromDict(b.getAttribute("data-del"))));
+}
+async function removeBrandFromDict(key){
+  const k=String(key||"");
+  const n=ALL.filter(r=>r.brand&&r.brand.includes(k)).reduce((a,r)=>a+r.qty,0);
+  if(!confirm(`「${k}」を集計対象から外しますか？`+(n?`\n\n今のデータから ${n}点が集計外になります。`:"")))return;
+  JP_LIST=JP_LIST.filter(x=>x!==k);
+  try{localStorage.setItem(JP_KEY,JSON.stringify(JP_LIST));}catch(e){}
+  fillLists();
+  // 対象外になった明細を集計から外す（再読み込み不要）
+  ALL=ALL.filter(r=>isDomestic(r.brand));
+  buildHalfSel();renderAll();renderDictList();renderUnmatched();
+  try{
+    const p=await shareAll("辞書から「"+k+"」を削除");
+    document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
+  }catch(e){}
+}
+
+/* ===== 取り込み履歴と削除 ===== */
+function renderUploadLog(){
+  const el=document.getElementById("uploadLogBox");
+  if(!el)return;
+  if(!uploadLog.length){
+    el.innerHTML='<div class="note">まだ取り込み履歴がありません。ファイルを読み込むとここに残ります。</div>';
+    return;
+  }
+  const counts={};
+  ALL.forEach(r=>{if(r.batch)counts[r.batch]=(counts[r.batch]||0)+1;});
+  el.innerHTML='<div style="display:flex;flex-direction:column;gap:8px;">'
+    +uploadLog.map(u=>{
+      const remain=counts[u.batch]||0;
+      const d=u.at?new Date(u.at):null;
+      const when=d?`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+      const fmtD=s=>s&&s.length>=8?`${s.slice(0,4)}/${s.slice(4,6)}/${s.slice(6,8)}`:"";
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card2);border-radius:12px;padding:12px 14px;">
+        <div style="min-width:0;">
+          <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(u.files||"（ファイル名なし）")}</div>
+          <div class="muted" style="font-size:11.5px;margin-top:2px;">${when}　${esc(u.by||"")}さん　追加 ${Number(u.added||0).toLocaleString()}点${u.from?`　期間 ${fmtD(u.from)}〜${fmtD(u.to)}`:""}</div>
+          <div style="font-size:11px;color:${remain?"var(--green)":"var(--t3)"};margin-top:2px;">${remain?`現在 ${remain.toLocaleString()}点が残っています`:"このデータは既に削除されています"}</div>
+        </div>
+        ${remain?`<button class="btn" style="background:var(--red);flex-shrink:0;padding:9px 13px;font-size:12.5px;" data-delb="${esc(u.batch)}">🗑 この回を削除</button>`
+                :`<button class="btn sub2" style="flex-shrink:0;padding:9px 13px;font-size:12.5px;" data-dellog="${esc(u.batch)}">履歴を消す</button>`}
+      </div>`;
+    }).join("")+'</div>';
+  el.querySelectorAll("[data-delb]").forEach(b=>b.addEventListener("click",()=>deleteBatch(b.getAttribute("data-delb"))));
+  el.querySelectorAll("[data-dellog]").forEach(b=>b.addEventListener("click",()=>removeLogEntry(b.getAttribute("data-dellog"))));
+}
+async function deleteBatch(batch){
+  const target=ALL.filter(r=>r.batch===batch);
+  if(!target.length){alert("この回のデータは見つかりませんでした。");return;}
+  const u=uploadLog.find(x=>x.batch===batch);
+  if(!confirm(`${u?u.files:"この回"} で取り込んだ ${target.length.toLocaleString()}点 を削除します。\n\nこの操作は取り消せません。よろしいですか？`))return;
+  ALL=ALL.filter(r=>r.batch!==batch);
+  RAWROWS=RAWROWS.filter(r=>r.batch!==batch);
+  uploadLog=uploadLog.filter(x=>x.batch!==batch);
+  buildHalfSel();renderAll();renderUploadLog();renderDictList();
+  try{
+    const p=await shareAll("取り込み分を削除");
+    document.getElementById("sharedInfo").innerHTML=sharedInfoHtml(p);
+    alert(`${target.length.toLocaleString()}点を削除しました（残り ${ALL.length.toLocaleString()}点）。`);
+  }catch(e){ alert("削除しました（この端末のみ）。共有に失敗："+e.message); }
+}
+async function removeLogEntry(batch){
+  uploadLog=uploadLog.filter(x=>x.batch!==batch);
+  renderUploadLog();
+  try{ await shareAll("履歴を整理"); }catch(e){}
+}
 
 /* ===== エクセル書き出し ===== */
 document.getElementById("xlsxOut").addEventListener("click",()=>{
@@ -922,12 +1031,15 @@ async function bootShared(){
     let obj=null;
     if(p.gz){ obj=JSON.parse(await ungzipB64(p.gz)); }
     else if(p.raw){ obj=p.raw; }
+    if(Array.isArray(p.uploadLog))uploadLog=p.uploadLog;
     if(obj){
       ALL=rowsFromPayload(obj);
+      RAWROWS=ALL.slice();   // 共有データは既にドメ絞り込み済み
       if(ALL.length){
         buildHalfSel();
         document.getElementById("scopeCard").style.display="block";
         renderAll();
+        renderUploadLog();
         info.innerHTML=sharedInfoHtml(p,
           '<div style="margin-top:7px;"><button class="btn sub2" id="showLoad" style="padding:7px 12px;font-size:12px;">新しいファイルを読み込む</button></div>');
         document.getElementById("loadCard").style.display="none";
