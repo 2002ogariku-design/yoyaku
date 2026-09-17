@@ -40,6 +40,8 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 .seg button{flex:1;border:none;background:none;font-family:var(--font);font-size:13.5px;
   font-weight:700;color:var(--t2);padding:11px 6px;border-radius:9px;cursor:pointer;}
 .seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.i-info{display:inline-block;font-size:11.5px;font-weight:800;color:#0055aa;background:#e7f1ff;
+  border-radius:7px;padding:3px 9px;margin-top:6px;}
 .i-warn{display:block;font-size:12px;font-weight:800;color:#fff;background:#e5484d;
   border-radius:8px;padding:7px 10px;margin-top:7px;line-height:1.45;}
 .warn-banner{background:#fff4f4;border:1.5px solid #e5484d;border-radius:12px;
@@ -247,7 +249,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.2100";
+const APP_VERSION="v2026.09.17.2200";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -645,8 +647,19 @@ async function readFile(file){
     SHEETS={};
     for(const sn of wb.SheetNames){
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
-      const items=parseSheet(rows);
-      if(items.length)SHEETS[sn]=items;
+      // 形式を自動判別する。
+      // ①店舗ごとにシートが分かれた「◆アパレル/◆小物」形式（撤収など）
+      // ②1シートに全店舗が縦に並ぶ在庫表形式（列に店舗名称・ハイフン品番がある）
+      const flat=parseFlatSheet(rows);
+      if(flat){
+        Object.entries(flat).forEach(([store,items])=>{
+          if(!SHEETS[store])SHEETS[store]=[];
+          SHEETS[store].push(...items);
+        });
+      }else{
+        const items=parseSheet(rows);
+        if(items.length)SHEETS[sn]=items;
+      }
     }
     const names=Object.keys(SHEETS);
     if(!names.length){msg.innerHTML='<span style="color:var(--red);">品番が見つかりませんでした。ファイルを確認してください。</span>';return;}
@@ -689,6 +702,55 @@ async function readFile(file){
 
 // 1シートを商品リストに変換する。
 // 「◆アパレル」などの見出しでカテゴリが変わり、品番の行だけを拾う。
+
+// 在庫表形式（1シートに全店舗・横に長い列構成）を読む。
+// 該当しなければ null を返し、従来の店舗別シート形式として処理させる。
+function parseFlatSheet(rows){
+  let hi=-1, col={};
+  const NEED={store:"店舗名称",hinban:"ハイフン品番",jan:"JANコード",dest:"移動先",
+    brand:"ブランド名（カナ）",brandEn:"ブランド名称",model:"モデル",name:"品名",
+    size:"サイズ*",color:"カラー*",rank:"状態ランク",acc:"付属品",
+    price:"単品売価（税込）",cat:"小分類名称",cond1:"状態１",buyer:"バイヤー名称",
+    hinbanRaw:"品番"};
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const line=rows[i].map(v=>String(v==null?"":v).trim());
+    if(line.includes("店舗名称")&&(line.includes("ハイフン品番")||line.includes("品番"))){
+      hi=i;
+      Object.entries(NEED).forEach(([k,label])=>{const j=line.indexOf(label);if(j>=0)col[k]=j;});
+      break;
+    }
+  }
+  if(hi<0||col.store==null)return null;
+  const out={};
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];
+    const g=k=>col[k]!=null?String(r[col[k]]==null?"":r[col[k]]).trim():"";
+    const store=g("store");
+    // ハイフン品番があればそれを使う。無ければ15桁の品番から組み立てる。
+    let hinban=g("hinban");
+    if(!/^\d{5}-\d{6}-\d{4}$/.test(hinban)){
+      const d=g("hinbanRaw").replace(/[^0-9]/g,"");
+      hinban=d.length===15?`${d.slice(0,5)}-${d.slice(5,11)}-${d.slice(11)}`:"";
+    }
+    if(!store||!hinban)continue;
+    const brand=g("brand")||g("brandEn");
+    const nameParts=[brand,g("model"),g("name")].filter(Boolean);
+    const specs=[g("size")&&("サイズ:"+g("size")),g("color"),g("rank")&&("ランク"+g("rank"))].filter(Boolean);
+    out[store]=out[store]||[];
+    out[store].push({
+      hinban, key:keyOf(hinban),
+      cat:g("cat")||"在庫移動",
+      acc:g("acc"),
+      name:nameParts.join(" ")+(specs.length?"　"+specs.join(" / "):""),
+      price:Number(g("price").replace(/[^\d]/g,""))||0,
+      // 移動先は必ず見えるようにしておく（どこへ送るかを間違えないため）
+      info:g("dest")?("→ "+g("dest")):"", warn:"",
+      dest:g("dest"), buyer:g("buyer"), cond:g("cond1")
+    });
+  }
+  return Object.keys(out).length?out:null;
+}
+
 function parseSheet(rows){
   const items=[];
   let cat="";
@@ -757,7 +819,7 @@ function render(){
   let show=items.filter(i=>{
     if(filter==="todo"&&checked.has(i.hinban))return false;
     if(filter==="done"&&!checked.has(i.hinban))return false;
-    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc+" "+(i.warn||"")).toLowerCase().includes(q)))return false;
+    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc+" "+(i.warn||"")+" "+(i.info||"")).toLowerCase().includes(q)))return false;
     return true;
   });
 
@@ -811,6 +873,7 @@ function itemHtml(i,no){
       <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
       ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
+      ${i.info?`<div class="i-info">📍 ${esc(i.info)}</div>`:""}
       ${i.warn?`<div class="i-warn">⚠ ${esc(i.warn)}</div>`:""}
       <div class="i-acts">
         <a class="go" href="${searchUrl(i)}" target="_blank" rel="noopener">▶ 商品ページを開く</a>
@@ -913,6 +976,7 @@ function paintViewer(){
   document.getElementById("vInfo").innerHTML=
     `<b>${esc(it.hinban)}</b><br>${esc(nm||"")}`
     +(it.acc?`<br><span style="color:#ffd27a;">付属品：${esc(it.acc)}</span>`:"")
+    +(it.info?`<br><span style="color:#8ac4ff;font-weight:800;">📍 ${esc(it.info)}</span>`:"")
     +(it.warn?`<br><span style="color:#ff8a8a;font-weight:800;">⚠ ${esc(it.warn)}</span>`:"")
     +(it.price?`<br><span style="color:#fff;font-weight:800;">${yen(it.price)}</span>`:"");
   document.getElementById("vOpen").href=searchUrl(it);
