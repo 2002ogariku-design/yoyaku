@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>撤収ピッキング | RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -107,7 +107,10 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 .v-chk.off{background:rgba(255,255,255,.16);}
 .v-stage{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling:touch;}
-.v-stage img{min-width:100%;width:100%;height:100%;object-fit:contain;scroll-snap-align:center;}
+.v-stage img{min-width:100%;width:100%;height:100%;object-fit:contain;scroll-snap-align:center;
+  background:#000;}
+.v-count{color:#fff;font-size:12px;font-weight:800;margin-right:8px;}
+.v-hint{color:rgba(255,255,255,.55);font-size:10.5px;text-align:center;padding:0 0 6px;}
 .v-dots{display:flex;gap:6px;justify-content:center;padding:8px;}
 .v-dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);}
 .v-dots i.on{background:#fff;}
@@ -208,6 +211,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   </div>
   <div class="v-stage" id="vStage"></div>
   <div class="v-dots" id="vDots"></div>
+  <div class="v-hint">横スワイプで写真を切替・ピンチで拡大できます</div>
   <div class="v-info" id="vInfo"></div>
   <div class="v-nav">
     <button id="vPrevItem">◀ 前の商品</button>
@@ -224,7 +228,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.1000";
+const APP_VERSION="v2026.09.17.1200";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -335,11 +339,10 @@ async function tryFetchImage(hinban){
         let list=urls(it.mediumImageUrls);
         if(!list.length)list=urls(it.smallImageUrls);
         if(list.length){
-          // 楽天はサイズ指定を付け替えられる。一覧は小さく、拡大時は大きく使う。
-          const big=list.map(u=>u.replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
-          const thumb=list[0].replace(/\?_ex=\d+x\d+/,"?_ex=300x300");
+          // 元画像（高解像度）に変換し、連番を辿って残りの写真も集める
+          const all=await expandImages(list);
           lastImgError="";
-          return {img:{t:thumb,list:big,name:it.itemName||"",price:Number(it.itemPrice)||0,url:it.itemUrl||""}};
+          return {img:{t:toThumb(all[0]),list:all,name:it.itemName||"",price:Number(it.itemPrice)||0,url:it.itemUrl||""}};
         }
         break;
       }catch(e){
@@ -446,6 +449,62 @@ function setRakutenKeys(){
   updateImgStatus();render();
 }
 
+
+/* ========= 画像URLの処理 ========= */
+// 楽天のサムネイル用URLを、元画像（高解像度）のURLに変換する。
+// thumbnail.image.rakuten.co.jp/@0_mall/... は縮小版なので拡大すると粗い。
+function toOriginal(u){
+  if(!u)return "";
+  return String(u)
+    .replace(/\?_ex=\d+x\d+.*$/,"")
+    .replace(/^https?:\/\/thumbnail\.image\.rakuten\.co\.jp\/@0_mall\//,"https://image.rakuten.co.jp/");
+}
+// 一覧用の小さいサムネ（通信量を抑える）
+function toThumb(u){
+  const o=toOriginal(u);
+  if(!o)return "";
+  return o.replace(/^https:\/\/image\.rakuten\.co\.jp\//,"https://thumbnail.image.rakuten.co.jp/@0_mall/")+"?_ex=300x300";
+}
+// 画像が実在するか確かめる（<img>の読み込みはCORSの制限を受けない）
+function imageExists(url){
+  return new Promise(res=>{
+    const im=new Image();
+    let done=false;
+    const fin=v=>{if(!done){done=true;res(v);}};
+    im.onload=()=>fin(im.naturalWidth>1);
+    im.onerror=()=>fin(false);
+    setTimeout(()=>fin(false),6000);
+    im.src=url;
+  });
+}
+// APIは3枚までしか返さないが、楽天の画像は連番で並んでいることが多い。
+// 連番をまとめて並列に確認して、付属品などの追加写真も拾う（直列だと遅いため）。
+async function expandImages(baseUrls){
+  const found=[], seen=new Set();
+  for(const u of baseUrls){
+    const o=toOriginal(u);
+    if(o&&!seen.has(o)){seen.add(o);found.push(o);}
+  }
+  if(!found.length)return found;
+  const m=found[0].match(/^(.*?)_(\d+)(\.[a-zA-Z]+)$/);
+  if(!m)return found;
+  const [,stem,,ext]=m;
+  // 1〜12番をまとめて確認（画像の読み込みは同時に走らせても問題ない）
+  const cands=[];
+  for(let i=1;i<=12;i++){
+    const u=`${stem}_${i}${ext}`;
+    cands.push({i,u,exists:seen.has(u)?Promise.resolve(true):imageExists(u)});
+  }
+  const results=await Promise.all(cands.map(async cd=>({i:cd.i,u:cd.u,ok:await cd.exists})));
+  // 連番が途切れたらそこで打ち切る（別商品の画像を拾わないため）
+  const out=[];
+  let miss=0;
+  for(const r of results){
+    if(r.ok){ out.push(r.u); miss=0; }
+    else { miss++; if(miss>=3&&out.length)break; }
+  }
+  return out.length?out:found;
+}
 /* ========= 状態 ========= */
 let SHEETS={};        // {店舗名:[item,...]}
 let store="";
@@ -710,11 +769,16 @@ function paintViewer(){
     : '<div style="margin:auto;color:#888;font-size:14px;">画像がありません</div>';
   stage.scrollLeft=0;
   const dots=document.getElementById("vDots");
-  dots.innerHTML=list.length>1?list.map((_,i)=>`<i class="${i===0?"on":""}"></i>`).join(""):"";
+  dots.innerHTML=list.length>1
+    ? `<span class="v-count" id="vCount">1 / ${list.length}</span>`
+      +list.slice(0,12).map((_,i)=>`<i class="${i===0?"on":""}"></i>`).join("")
+    : "";
   stage.onscroll=()=>{
     if(list.length<2)return;
     const n=Math.round(stage.scrollLeft/stage.clientWidth);
-    [...dots.children].forEach((d,i)=>d.classList.toggle("on",i===n));
+    [...dots.querySelectorAll("i")].forEach((d,i)=>d.classList.toggle("on",i===n));
+    const cEl=document.getElementById("vCount");
+    if(cEl)cEl.textContent=`${Math.min(n+1,list.length)} / ${list.length}`;
   };
   document.getElementById("vTitle").textContent=`${vIdx+1} / ${vList.length}　${it.hinban}`;
   const nm=(v&&typeof v==="object"&&v.name)?v.name:it.name;
