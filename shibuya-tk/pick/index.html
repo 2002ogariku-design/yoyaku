@@ -152,8 +152,15 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   <div class="sub">写真をタップで拡大・スワイプで切替。チェックしながらピック</div>
 </header>
 
+<div class="c" id="sharedCard">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+    <div id="sharedInfo" class="note" style="flex:1;">共有リストを確認中…</div>
+    <button class="btn sub2 noprint" id="reloadShared" style="padding:8px 12px;font-size:12.5px;flex-shrink:0;">🔄 更新</button>
+  </div>
+</div>
+
 <div class="c noprint" id="loadCard">
-  <div class="c-title">📥 ピッキングリストを読み込む</div>
+  <div class="c-title">📥 ピッキングリストを読み込む（全員に共有されます）</div>
   <div class="drop" id="drop">📄 エクセルファイルを選択<br>
     <span style="font-size:11px;font-weight:500;">店舗ピッキングリスト（チャットワークで届くファイル）</span></div>
   <input type="file" id="fileIn" accept=".xlsx,.xls" style="display:none;">
@@ -228,7 +235,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.1200";
+const APP_VERSION="v2026.09.17.1500";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -505,6 +512,92 @@ async function expandImages(baseUrls){
   }
   return out.length?out:found;
 }
+
+/* ========= 共有（Supabase） ========= */
+// 朝に誰かがファイルを読み込めば、撤収担当は開くだけで同じリストが見える。
+// ファイルそのものではなく、解析済みのデータだけを共有するので軽い。
+const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_KEY="rinkan-app-pw";
+const TOOL="pick-list";
+// HTTPヘッダーには半角しか入れられない。日本語入力のまま打つと通信が失敗するため必ず整える。
+function sanitizePw(s){
+  if(!s)return "";
+  let t=String(s).replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  return t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+}
+function getAppPw(){
+  let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
+  p=sanitizePw(p);
+  if(!p){
+    const raw=prompt("共有パスワードを入力してください（半角英数字）");
+    p=sanitizePw(raw);
+    if(p){try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}
+  }
+  return p||"";
+}
+function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
+function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,
+  "x-app-password":getAppPw(),"Content-Type":"application/json"};}
+
+function myName(){
+  let n="";try{n=localStorage.getItem("pick-staff")||"";}catch(e){}
+  if(!n){
+    n=(prompt("お名前を入力してください（誰が共有したか分かるようにするため）")||"").trim();
+    if(n){try{localStorage.setItem("pick-staff",n);}catch(e){}}
+  }
+  return n||"不明";
+}
+
+async function shareList(fileName){
+  const payload={
+    file:fileName, at:new Date().toISOString(), by:myName(),
+    sheets:SHEETS, listId:listId
+  };
+  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    method:"POST",
+    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify({tool:TOOL,payload,updated_at:new Date().toISOString()})
+  });
+  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
+  if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,90));}
+}
+
+async function fetchShared(){
+  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOL+"&select=payload",{headers:sbHeaders()});
+  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const rows=await r.json();
+  return rows.length?rows[0].payload:null;
+}
+
+// 共有データを画面に反映する
+function applyShared(p){
+  if(!p||!p.sheets)return false;
+  SHEETS=p.sheets;
+  const names=Object.keys(SHEETS);
+  if(!names.length)return false;
+  listId=p.listId||("shared:"+(p.file||"")+":"+names.reduce((s,n)=>s+SHEETS[n].length,0));
+  loadChecked();
+  const sel=document.getElementById("storeSel");
+  sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
+  let pref="";try{pref=localStorage.getItem("pick-store")||"";}catch(e){}
+  store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
+  sel.value=store;
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display=id==="foot"?"block":"block";
+  });
+  const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
+  const d=p.at?new Date(p.at):null;
+  const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+  document.getElementById("sharedInfo").innerHTML=
+    `<span style="color:var(--green);font-weight:800;">✓ 共有リストを表示中</span><br>`
+    +`<span style="color:var(--t3);">${esc(p.file||"")}　${when}　${esc(p.by||"")}さんが共有　全${total}点</span>`;
+  updateImgStatus();
+  render();
+  return true;
+}
+
 /* ========= 状態 ========= */
 let SHEETS={};        // {店舗名:[item,...]}
 let store="";
@@ -561,9 +654,20 @@ async function readFile(file){
     document.getElementById("progCard").style.display="block";
     document.getElementById("filterCard").style.display="block";
     document.getElementById("foot").style.display="block";
-    msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗`;
+    msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗　<span style="color:var(--blue);">共有中…</span>`;
     updateImgStatus();
     render();
+    // 全端末に共有する
+    try{
+      await shareList(file.name);
+      msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗<br><span style="color:var(--green);font-weight:700;">✓ 全員に共有しました</span>`;
+      const d=new Date();
+      document.getElementById("sharedInfo").innerHTML=
+        `<span style="color:var(--green);font-weight:800;">✓ 共有リストを表示中</span><br>`
+        +`<span style="color:var(--t3);">${esc(file.name)}　${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}　${esc(myName())}さんが共有　全${total}点</span>`;
+    }catch(err){
+      msg.innerHTML+=`<br><span style="color:var(--red);">⚠ 共有に失敗：${esc(err.message)}（この端末では使えています）</span>`;
+    }
   }catch(e){
     console.error(e);
     msg.innerHTML='<span style="color:var(--red);">読み込みに失敗しました：'+esc(e.message)+'</span>';
@@ -812,6 +916,40 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowRight")viewerMove(1);
   if(e.key==="ArrowLeft")viewerMove(-1);
 });
+
+
+/* ========= 起動時：共有リストを取り込む ========= */
+async function bootShared(){
+  const info=document.getElementById("sharedInfo");
+  try{
+    const p=await fetchShared();
+    if(p&&applyShared(p)){
+      // 共有があれば読み込みカードは畳んでおく（必要な時だけ使う）
+      document.getElementById("loadCard").style.display="none";
+      const t=document.createElement("div");
+      t.className="note noprint";
+      t.style.marginTop="8px";
+      t.innerHTML='<button class="btn sub2" id="showLoad" style="padding:7px 12px;font-size:12px;">新しいファイルを読み込む</button>';
+      document.getElementById("sharedCard").appendChild(t);
+      document.getElementById("showLoad").addEventListener("click",()=>{
+        document.getElementById("loadCard").style.display="block";
+        document.getElementById("loadCard").scrollIntoView({behavior:"smooth"});
+      });
+    }else{
+      info.innerHTML='<span style="color:var(--t3);">まだ共有されたリストがありません。下からファイルを読み込むと全員に共有されます。</span>';
+    }
+  }catch(e){
+    info.innerHTML='<span style="color:var(--orange);">共有リストを読み込めませんでした：'+esc(e.message)+'</span>';
+  }
+}
+document.getElementById("reloadShared").addEventListener("click",async()=>{
+  const b=document.getElementById("reloadShared");
+  b.textContent="更新中...";b.disabled=true;
+  document.getElementById("sharedInfo").textContent="共有リストを確認中…";
+  await bootShared();
+  b.textContent="🔄 更新";b.disabled=false;
+});
+bootShared();
 
 /* バージョン表示（タップで強制更新） */
 (function(){
