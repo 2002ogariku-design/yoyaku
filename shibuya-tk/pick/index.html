@@ -250,7 +250,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1700";
+const APP_VERSION="v2026.09.18.1830";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -573,10 +573,17 @@ function myName(){
 }
 
 async function shareList(fileName){
+  // 既存のペイロードにある楽天APIキーを消さないよう引き継ぐ
+  let keep=null;
+  try{
+    const pr=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
+    if(pr.ok){const rows=await pr.json();if(rows.length&&rows[0].payload&&rows[0].payload.rkKeys)keep=rows[0].payload.rkKeys;}
+  }catch(e){}
   const payload={
     file:fileName, at:new Date().toISOString(), by:myName(),
     sheets:SHEETS, listId:listId
   };
+  if(keep)payload.rkKeys=keep;
   const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
     method:"POST",
     headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
@@ -627,7 +634,7 @@ function applyShared(p){
 // 端末ごとに入力させると全員分の設定が必要になるため、共有DBに置いて
 // 誰か一人が入れれば全員が使える状態にする。
 // 取得したキーは端末にも控えておき、通信できない時でも使えるようにする。
-const RK_SHARE_TOOL="rakuten-keys";
+const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
 let rkLoaded=false;
 async function loadRakutenKeysShared(){
   if(rkLoaded)return;
@@ -637,25 +644,30 @@ async function loadRakutenKeysShared(){
     if(!r.ok)return;
     const rows=await r.json();
     const p=rows.length?rows[0].payload:null;
-    if(p&&p.appId&&p.accessKey){
+    const kk=p&&p.rkKeys;
+    if(kk&&kk.appId&&kk.accessKey){
       try{
-        localStorage.setItem(RK_APPID_KEY,p.appId);
-        localStorage.setItem(RK_KEY_KEY,p.accessKey);
+        localStorage.setItem(RK_APPID_KEY,kk.appId);
+        localStorage.setItem(RK_KEY_KEY,kk.accessKey);
       }catch(e){}
-      imgCache=imgCache||{};
       updateImgStatus();
     }
   }catch(e){}
 }
+// 既存の共有先（撤収リスト）の中にキーを入れる。
+// リストを共有し直してもキーが消えないよう、書き込み時は必ず引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
   try{
-    const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:sbHeaders()});
+    let p={};
+    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload)p=rows[0].payload;}
+    p.rkKeys={appId,accessKey,at:new Date().toISOString(),by:myName()};
+    const res=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
       method:"POST",
       headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString(),by:myName()},
-        updated_at:new Date().toISOString()})
+      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:p,updated_at:new Date().toISOString()})
     });
-    if(!r.ok){const t=await r.text();return {ok:false,err:"HTTP "+r.status+" "+t.slice(0,120)};}
+    if(!res.ok){const t=await res.text();return {ok:false,err:"HTTP "+res.status+" "+t.slice(0,120)};}
     return {ok:true};
   }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }
