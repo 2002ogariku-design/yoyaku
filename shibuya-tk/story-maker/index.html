@@ -421,7 +421,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.03.1830";
+const APP_VERSION="v2026.09.18.1500";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -1630,6 +1630,37 @@ document.querySelectorAll("#kindSeg button").forEach(b=>{
     drawStory();
   });
 });
+/* ========= 楽天APIキーの共有 ========= */
+// 端末ごとに入力させないよう共有DBに置き、誰か一人が設定すれば全員が使えるようにする。
+const RK_SHARE_TOOL="rakuten-keys";
+async function loadRakutenKeysShared(){
+  try{
+    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{
+      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS()}});
+    if(!r.ok)return;
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    if(p&&p.appId&&p.accessKey){
+      try{
+        localStorage.setItem(RAKUTEN_APPID_KEY,p.appId);
+        localStorage.setItem(RAKUTEN_KEY_KEY,p.accessKey);
+      }catch(e){}
+      updateApiBadge();
+    }
+  }catch(e){}
+}
+async function saveRakutenKeysShared(appId,accessKey){
+  try{
+    const r=await fetch(SB_URL_S+"/rest/v1/app_data?on_conflict=tool",{
+      method:"POST",
+      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS(),
+        "Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString()},
+        updated_at:new Date().toISOString()})
+    });
+    return r.ok;
+  }catch(e){return false;}
+}
 const RAKUTEN_APPID_KEY="rakuten-appid";
 const RAKUTEN_KEY_KEY="rakuten-accesskey";
 function getRakutenAppId(){try{return localStorage.getItem(RAKUTEN_APPID_KEY)||"";}catch(e){return "";}}
@@ -1651,8 +1682,15 @@ window.setRakutenAppId=function(){
     localStorage.setItem(RAKUTEN_APPID_KEY,t);
     if(k)localStorage.setItem(RAKUTEN_KEY_KEY,k); else localStorage.removeItem(RAKUTEN_KEY_KEY);
   }catch(e){}
-  alert(k?"設定を保存しました。次回のスキャンから公式APIを使用します。":"アプリIDのみ保存しました。アクセスキーも必要です。");
   updateApiBadge();
+  if(t&&k){
+    saveRakutenKeysShared(t,k).then(ok=>{
+      alert(ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+              :"この端末には保存しました（共有には失敗しました）。");
+    });
+  }else{
+    alert("アプリIDのみ保存しました。アクセスキーも必要です。");
+  }
 };
 function updateApiBadge(){
   const el=document.getElementById("apiStatus");
@@ -2423,6 +2461,7 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
 });
 
 updateBrandDl();renderArchive();drawStory();updateApiBadge();updateLoanInfo();
+  if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
 // Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
 setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
 // 買取履歴もバックグラウンドで先読み（買取速報モードを即使えるように）
