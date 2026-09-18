@@ -250,7 +250,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.17.2330";
+const APP_VERSION="v2026.09.18.1500";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -469,6 +469,13 @@ function setRakutenKeys(){
   try{localStorage.setItem(RK_APPID_KEY,t);if(k.trim())localStorage.setItem(RK_KEY_KEY,k.trim());}catch(e){}
   imgCache={};saveImgCache();
   updateImgStatus();render();
+  // 全員が使えるように共有する
+  if(t&&k.trim()){
+    saveRakutenKeysShared(t,k.trim()).then(ok=>{
+      alert(ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+              :"この端末には保存しました（共有には失敗しました）。");
+    });
+  }
 }
 
 
@@ -613,6 +620,43 @@ function applyShared(p){
   render();
   startCkSync();
   return true;
+}
+
+
+/* ========= 楽天APIキーの共有 ========= */
+// 端末ごとに入力させると全員分の設定が必要になるため、共有DBに置いて
+// 誰か一人が入れれば全員が使える状態にする。
+// 取得したキーは端末にも控えておき、通信できない時でも使えるようにする。
+const RK_SHARE_TOOL="rakuten-keys";
+let rkLoaded=false;
+async function loadRakutenKeysShared(){
+  if(rkLoaded)return;
+  rkLoaded=true;
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:sbHeaders()});
+    if(!r.ok)return;
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    if(p&&p.appId&&p.accessKey){
+      try{
+        localStorage.setItem(RK_APPID_KEY,p.appId);
+        localStorage.setItem(RK_KEY_KEY,p.accessKey);
+      }catch(e){}
+      imgCache=imgCache||{};
+      updateImgStatus();
+    }
+  }catch(e){}
+}
+async function saveRakutenKeysShared(appId,accessKey){
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+      method:"POST",
+      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString(),by:myName()},
+        updated_at:new Date().toISOString()})
+    });
+    return r.ok;
+  }catch(e){return false;}
 }
 
 /* ========= 状態 ========= */
@@ -797,7 +841,7 @@ function parseSheet(rows){
 // という形にして、お互いのチェックを上書きしないようにしている。
 function ckKey(){return KIND+":"+listId+":"+store;}
 function ckTool(){return (KIND==="idou"?"pick-checked-idou":"pick-checked");}
-let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set();
+let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set(), lastLocalEdit=0;
 
 function loadChecked(){
   checked=new Set();
@@ -809,12 +853,13 @@ function loadChecked(){
   pullChecked();   // 開いた直後に共有分を取り込む
 }
 function saveChecked(){
+  lastLocalEdit=Date.now();
   try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
   // 連続タップでも通信が集中しないよう、少しまとめて送る
   clearTimeout(ckPushTimer);
   ckPushTimer=setTimeout(pushChecked,700);
 }
-// 共有先から取り込む
+// 共有先から取り込む（最新の状態をそのまま反映する）
 async function pullChecked(){
   if(!listId)return;
   try{
@@ -825,15 +870,17 @@ async function pullChecked(){
     if(!p||!p.lists)return;
     const mine=p.lists[ckKey()];
     if(!mine||!Array.isArray(mine.items))return;
-    const before=checked.size;
-    // 共有分を足す。ただし自分がこの場で外したものは戻さない
-    mine.items.forEach(h=>{ if(!lastRemoved.has(h))checked.add(h); });
+    // 自分が今まさに操作した直後は上書きしない（操作が巻き戻るのを防ぐ）
+    if(Date.now()-lastLocalEdit<3000)return;
+    const next=new Set(mine.items);
+    let changed=(next.size!==checked.size)||[...next].some(h=>!checked.has(h));
+    checked=next;
     try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
-    if(checked.size!==before)render();
+    if(changed)render();
     showCkStatus(mine.by,mine.at);
   }catch(e){}
 }
-// 共有先へ送る（最新と足し合わせてから書き戻す）
+// 共有先へ送る（自分の状態をそのまま最新として書き込む）
 async function pushChecked(){
   if(!listId)return;
   try{
@@ -841,11 +888,7 @@ async function pushChecked(){
     let p={lists:{}};
     if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload&&rows[0].payload.lists)p=rows[0].payload;}
     const k=ckKey();
-    const remote=new Set((p.lists[k]&&p.lists[k].items)||[]);
-    // 自分のチェックを足し、自分が外した分だけ取り消す
-    checked.forEach(h=>remote.add(h));
-    lastRemoved.forEach(h=>remote.delete(h));
-    p.lists[k]={items:[...remote],by:myName(),at:new Date().toISOString()};
+    p.lists[k]={items:[...checked],by:myName(),at:new Date().toISOString()};
     // 古いリストが溜まらないよう、直近20リストだけ残す
     const ks=Object.keys(p.lists);
     if(ks.length>20){
@@ -859,13 +902,7 @@ async function pushChecked(){
       headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
       body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
     });
-    if(res.ok){
-      lastRemoved=new Set();
-      checked=new Set(remote);
-      try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
-      render();
-      showCkStatus(myName(),new Date().toISOString());
-    }
+    if(res.ok)showCkStatus(myName(),new Date().toISOString());
   }catch(e){}
 }
 function showCkStatus(by,at){
@@ -873,13 +910,16 @@ function showCkStatus(by,at){
   if(!el)return;
   const d=at?new Date(at):null;
   const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
-  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中</span>`
+  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中（最新の状態が全員に反映されます）</span>`
     +(by?`<span class="muted">　最終更新 ${esc(when)} ${esc(by)}さん</span>`:"");
 }
 // 他の人のピックを取り込むため、30秒ごとに同期する
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&listId)pullChecked();
+});
 function startCkSync(){
   clearInterval(ckSyncTimer);
-  ckSyncTimer=setInterval(()=>{ if(listId)pullChecked(); },30000);
+  ckSyncTimer=setInterval(()=>{ if(listId)pullChecked(); },10000);
 }
 
 /* ========= 描画 ========= */
@@ -1111,7 +1151,7 @@ document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("clic
   document.getElementById("sharedInfo").textContent="共有リストを確認中…";
   const ex=document.getElementById("showLoad");
   if(ex&&ex.parentElement)ex.parentElement.remove();
-  await bootShared();
+  await loadRakutenKeysShared().then(bootShared);
 }));
 try{
   const k=localStorage.getItem("pick-kind");
