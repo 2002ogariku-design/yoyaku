@@ -6,6 +6,9 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 楽天APIは「許可されたウェブサイト」を照合するため、送信元の情報が必要。
+     ブラウザによって既定で送られないことがあるので明示する。 -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ピッキングツール | RINKAN渋谷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -250,7 +253,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1830";
+const APP_VERSION="v2026.09.19.1000";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -320,7 +323,7 @@ function saveImgCache(){
     localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
   }catch(e){}
 }
-let lastImgError="";
+let lastImgError="", lastImgUrl="";
 // 楽天APIは概ね「1秒1リクエスト」の制限がある（超えると HTTP 429）。
 // 全件を一気に叩くと大半が失敗するため、必ず間隔を空けて1件ずつ取得する。
 let lastCall=0;
@@ -349,9 +352,15 @@ async function tryFetchImage(hinban){
         }
         const txt=await r.text();
         if(!r.ok){
+          // 楽天は理由を本文に入れてくるので、そのまま残す（原因特定に必要）
           let msg="HTTP "+r.status;
-          try{const j=JSON.parse(txt);msg+=" "+(j.error||"")+" "+(j.error_description||"");}catch(e){}
-          lastImgError=msg.trim();
+          try{
+            const j=JSON.parse(txt);
+            const d=[j.error,j.error_description,j.message].filter(Boolean).join(" ");
+            msg+=d?(" "+d):(" "+txt.slice(0,160));
+          }catch(e){ msg+=" "+String(txt).slice(0,160); }
+          lastImgError=msg.replace(/\s+/g," ").trim();
+          lastImgUrl=rkUrl(hinban,RK_VERSIONS[0],mode).replace(/accessKey=[^&]*/,"accessKey=***").replace(/applicationId=[^&]*/,"applicationId=***");
           break; // このモードは諦めて次のモードへ
         }
         const j=JSON.parse(txt);
@@ -442,7 +451,11 @@ function updateImgStatus(done,total){
   }else{
     const boxes=[...document.querySelectorAll("[data-img]")];
     const shown=boxes.filter(b=>b.querySelector("img")).length;
-    const errNote=lastImgError?` <span style="color:var(--orange);">（${esc(lastImgError)}）</span>`:"";
+    const errNote=lastImgError
+      ? `<div style="color:var(--orange);margin-top:5px;word-break:break-all;">⚠ ${esc(lastImgError)}</div>`
+        +`<div class="muted" style="font-size:10.5px;word-break:break-all;">ID:${esc((rkAppId()||"").slice(0,8))}… Key:${esc((rkAccessKey()||"").slice(0,6))}… 送信元:${esc(location.origin)}</div>`
+        +(lastImgUrl?`<div class="muted" style="font-size:10px;word-break:break-all;">${esc(lastImgUrl)}</div>`:"")
+      :"";
     el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ 写真 ${shown} / ${boxes.length} 件</span>`+errNote
       +'　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">写真が無い分を取り直す</button>'
       +'　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
