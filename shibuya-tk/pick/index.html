@@ -253,7 +253,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.19.1000";
+const APP_VERSION="v2026.09.19.1200";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -458,7 +458,17 @@ function updateImgStatus(done,total){
       :"";
     el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ 写真 ${shown} / ${boxes.length} 件</span>`+errNote
       +'　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">写真が無い分を取り直す</button>'
+      +'　<button class="btn sub2" id="testApi" style="padding:6px 11px;font-size:12px;">接続テスト</button>'
       +'　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
+    const tb=document.getElementById("testApi");
+    if(tb)tb.addEventListener("click",async()=>{
+      tb.textContent="確認中...";tb.disabled=true;
+      const chk=await testRakutenKeys(rkAppId(),rkAccessKey());
+      tb.textContent="接続テスト";tb.disabled=false;
+      alert(chk.ok?"✓ 楽天に接続できました。キーは有効です。"
+                 :"✗ 接続できませんでした。\n\n"+chk.err
+                  +"\n\nアプリID："+rkAppId()+"\nアクセスキー："+rkAccessKey());
+    });
     const rb=document.getElementById("retryImg");
     if(rb)rb.addEventListener("click",()=>{
       // 「画像なし」として保存された記録は、通信制限による誤判定の可能性があるので消す。
@@ -472,6 +482,21 @@ function updateImgStatus(done,total){
   const b=document.getElementById("setApi");
   if(b)b.addEventListener("click",setRakutenKeys);
 }
+// 入力されたキーが実際に使えるか、楽天に1回問い合わせて確かめる
+async function testRakutenKeys(appId,accessKey){
+  const url="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+RK_VERSIONS[0]
+    +"?applicationId="+encodeURIComponent(appId)
+    +"&accessKey="+encodeURIComponent(accessKey)
+    +"&availability=0&hits=1&format=json&shopCode=gsc-rinkan&keyword=%E3%83%AA%E3%83%B3%E3%82%B0";
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(12000)});
+    const txt=await r.text();
+    if(r.ok)return {ok:true};
+    let d="";
+    try{const j=JSON.parse(txt);d=(j.errors&&j.errors.errorMessage)||j.error_description||j.error||"";}catch(e){}
+    return {ok:false,err:"HTTP "+r.status+(d?" "+d:" "+txt.slice(0,120))};
+  }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
+}
 function setRakutenKeys(){
   const id=prompt("① 楽天アプリID（applicationId）\n\nUUID形式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",rkAppId()||"");
   if(id==null)return;
@@ -479,16 +504,22 @@ function setRakutenKeys(){
   if(!t){try{localStorage.removeItem(RK_APPID_KEY);localStorage.removeItem(RK_KEY_KEY);}catch(e){}updateImgStatus();return;}
   const k=prompt("② アクセスキー（accessKey）\n\n「pk_」から始まる文字列です。",rkAccessKey()||"");
   if(k==null)return;
-  try{localStorage.setItem(RK_APPID_KEY,t);if(k.trim())localStorage.setItem(RK_KEY_KEY,k.trim());}catch(e){}
-  imgCache={};saveImgCache();
-  updateImgStatus();render();
-  // 全員が使えるように共有する
-  if(t&&k.trim()){
-    saveRakutenKeysShared(t,k.trim()).then(res=>{
-      alert(res.ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
-              :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
-    });
-  }
+  const kk=k.trim();
+  (async()=>{
+    // まず実際に使えるか確かめる。使えないキーを共有すると全端末が壊れるため。
+    const chk=await testRakutenKeys(t,kk);
+    if(!chk.ok){
+      alert("このキーでは楽天に接続できませんでした。\n\n"+chk.err
+        +"\n\n楽天ウェブサービスの管理画面で、アプリIDとアクセスキーを確認してください。\n保存を中止しました。");
+      return;
+    }
+    try{localStorage.setItem(RK_APPID_KEY,t);localStorage.setItem(RK_KEY_KEY,kk);}catch(e){}
+    imgCache={};saveImgCache();
+    updateImgStatus();render();
+    const res=await saveRakutenKeysShared(t,kk);
+    alert(res.ok?"✓ 接続を確認し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+            :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
+  })();
 }
 
 
@@ -658,7 +689,9 @@ async function loadRakutenKeysShared(){
     const rows=await r.json();
     const p=rows.length?rows[0].payload:null;
     const kk=p&&p.rkKeys;
-    if(kk&&kk.appId&&kk.accessKey){
+    // 既にこの端末でキーが設定されている場合は上書きしない。
+    // 誤ったキーが共有されると、動いている端末まで壊れてしまうため。
+    if(kk&&kk.appId&&kk.accessKey&&!(rkAppId()&&rkAccessKey())){
       try{
         localStorage.setItem(RK_APPID_KEY,kk.appId);
         localStorage.setItem(RK_KEY_KEY,kk.accessKey);
