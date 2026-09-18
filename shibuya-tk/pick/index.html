@@ -250,7 +250,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1500";
+const APP_VERSION="v2026.09.18.1700";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -471,9 +471,9 @@ function setRakutenKeys(){
   updateImgStatus();render();
   // 全員が使えるように共有する
   if(t&&k.trim()){
-    saveRakutenKeysShared(t,k.trim()).then(ok=>{
-      alert(ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
-              :"この端末には保存しました（共有には失敗しました）。");
+    saveRakutenKeysShared(t,k.trim()).then(res=>{
+      alert(res.ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+              :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
     });
   }
 }
@@ -655,8 +655,9 @@ async function saveRakutenKeysShared(appId,accessKey){
       body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString(),by:myName()},
         updated_at:new Date().toISOString()})
     });
-    return r.ok;
-  }catch(e){return false;}
+    if(!r.ok){const t=await r.text();return {ok:false,err:"HTTP "+r.status+" "+t.slice(0,120)};}
+    return {ok:true};
+  }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }
 
 /* ========= 状態 ========= */
@@ -844,12 +845,8 @@ function ckTool(){return (KIND==="idou"?"pick-checked-idou":"pick-checked");}
 let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set(), lastLocalEdit=0;
 
 function loadChecked(){
-  checked=new Set();
-  try{
-    const raw=localStorage.getItem(ckKey());
-    if(raw)checked=new Set(JSON.parse(raw));
-  }catch(e){}
-  lastRemoved=new Set();
+  loadMarksLocal();
+  applyMarks();
   pullChecked();   // 開いた直後に共有分を取り込む
 }
 function saveChecked(){
@@ -859,7 +856,48 @@ function saveChecked(){
   clearTimeout(ckPushTimer);
   ckPushTimer=setTimeout(pushChecked,700);
 }
-// 共有先から取り込む（最新の状態をそのまま反映する）
+// 商品1点ごとに「いつ・誰が・付けたか外したか」を持たせ、
+// 商品単位で新しい方を採用する。これにより
+//  ・2人が同じ店舗を分担しても、お互いのチェックが消えない
+//  ・チェックを外した操作もきちんと全員に伝わる
+// の両方が成り立つ。
+let ckMarks={};   // { 品番: {on:true/false, at:ミリ秒, by:名前} }
+
+function markLocal(h,on){
+  ckMarks[h]={on:!!on,at:Date.now(),by:myName()};
+}
+function applyMarks(){
+  const next=new Set();
+  Object.entries(ckMarks).forEach(([h,m])=>{ if(m&&m.on)next.add(h); });
+  checked=next;
+  try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));
+      localStorage.setItem(ckKey()+":marks",JSON.stringify(ckMarks));}catch(e){}
+}
+function loadMarksLocal(){
+  ckMarks={};
+  try{
+    const raw=localStorage.getItem(ckKey()+":marks");
+    if(raw)ckMarks=JSON.parse(raw)||{};
+    else{
+      // 旧形式（チェック一覧だけ）から引き継ぐ
+      const old=localStorage.getItem(ckKey());
+      if(old)JSON.parse(old).forEach(h=>ckMarks[h]={on:true,at:1,by:""});
+    }
+  }catch(e){ckMarks={};}
+}
+// 商品ごとに新しい方を採用して統合する
+function mergeMarks(remote){
+  let changed=false;
+  Object.entries(remote||{}).forEach(([h,rm])=>{
+    if(!rm)return;
+    const lm=ckMarks[h];
+    if(!lm||(rm.at||0)>(lm.at||0)){
+      if(!lm||lm.on!==rm.on)changed=true;
+      ckMarks[h]=rm;
+    }
+  });
+  return changed;
+}
 async function pullChecked(){
   if(!listId)return;
   try{
@@ -869,26 +907,32 @@ async function pullChecked(){
     const p=rows.length?rows[0].payload:null;
     if(!p||!p.lists)return;
     const mine=p.lists[ckKey()];
-    if(!mine||!Array.isArray(mine.items))return;
-    // 自分が今まさに操作した直後は上書きしない（操作が巻き戻るのを防ぐ）
-    if(Date.now()-lastLocalEdit<3000)return;
-    const next=new Set(mine.items);
-    let changed=(next.size!==checked.size)||[...next].some(h=>!checked.has(h));
-    checked=next;
-    try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+    if(!mine)return;
+    // 新形式（marks）があればそれを、無ければ旧形式の一覧を取り込む
+    const remote=mine.marks||{};
+    if(!mine.marks&&Array.isArray(mine.items))
+      mine.items.forEach(h=>remote[h]={on:true,at:1,by:mine.by||""});
+    const changed=mergeMarks(remote);
+    applyMarks();
     if(changed)render();
     showCkStatus(mine.by,mine.at);
   }catch(e){}
 }
-// 共有先へ送る（自分の状態をそのまま最新として書き込む）
 async function pushChecked(){
   if(!listId)return;
   try{
+    // 送る直前にも取り込み、他の人の操作を消さないようにする
     const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
     let p={lists:{}};
     if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload&&rows[0].payload.lists)p=rows[0].payload;}
     const k=ckKey();
-    p.lists[k]={items:[...checked],by:myName(),at:new Date().toISOString()};
+    const cur=p.lists[k]||{};
+    const remote=cur.marks||{};
+    if(!cur.marks&&Array.isArray(cur.items))
+      cur.items.forEach(h=>remote[h]={on:true,at:1,by:cur.by||""});
+    mergeMarks(remote);
+    applyMarks();
+    p.lists[k]={marks:ckMarks,items:[...checked],by:myName(),at:new Date().toISOString()};
     // 古いリストが溜まらないよう、直近20リストだけ残す
     const ks=Object.keys(p.lists);
     if(ks.length>20){
@@ -902,7 +946,7 @@ async function pushChecked(){
       headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
       body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
     });
-    if(res.ok)showCkStatus(myName(),new Date().toISOString());
+    if(res.ok){render();showCkStatus(myName(),new Date().toISOString());}
   }catch(e){}
 }
 function showCkStatus(by,at){
@@ -910,7 +954,7 @@ function showCkStatus(by,at){
   if(!el)return;
   const d=at?new Date(at):null;
   const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
-  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中（最新の状態が全員に反映されます）</span>`
+  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中（2人で分担してもお互いのチェックは消えません）</span>`
     +(by?`<span class="muted">　最終更新 ${esc(when)} ${esc(by)}さん</span>`:"");
 }
 // 他の人のピックを取り込むため、30秒ごとに同期する
@@ -967,7 +1011,7 @@ function render(){
 
   el.querySelectorAll("[data-ck]").forEach(b=>b.addEventListener("click",()=>{
     const h=b.getAttribute("data-ck");
-    if(checked.has(h)){checked.delete(h);lastRemoved.add(h);} else {checked.add(h);lastRemoved.delete(h);}
+    markLocal(h,!checked.has(h));applyMarks();
     saveChecked();render();
   }));
   loadVisibleImages();
@@ -1021,8 +1065,8 @@ document.getElementById("q").addEventListener("input",render);
 });
 document.getElementById("resetChk").addEventListener("click",()=>{
   if(!confirm(`${store} のチェックをすべて外しますか？\n\n全員の共有からも外れます。`))return;
-  checked.forEach(h=>lastRemoved.add(h));
-  checked=new Set();saveChecked();render();
+  [...checked].forEach(h=>markLocal(h,false));
+  applyMarks();saveChecked();render();
 });
 document.getElementById("printBtn").addEventListener("click",()=>window.print());
 document.getElementById("nextTodo").addEventListener("click",()=>{
@@ -1118,7 +1162,7 @@ document.getElementById("vPrevItem").addEventListener("click",()=>viewerMove(-1)
 document.getElementById("vNextItem").addEventListener("click",()=>viewerMove(1));
 document.getElementById("vChk").addEventListener("click",()=>{
   const it=vList[vIdx];if(!it)return;
-  if(checked.has(it.hinban)){checked.delete(it.hinban);lastRemoved.add(it.hinban);} else {checked.add(it.hinban);lastRemoved.delete(it.hinban);}
+  markLocal(it.hinban,!checked.has(it.hinban));applyMarks();
   saveChecked();paintViewer();render();
 });
 document.addEventListener("keydown",e=>{
