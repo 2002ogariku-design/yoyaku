@@ -421,7 +421,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.18.1500";
+const APP_VERSION="v2026.09.18.1830";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -1632,7 +1632,7 @@ document.querySelectorAll("#kindSeg button").forEach(b=>{
 });
 /* ========= 楽天APIキーの共有 ========= */
 // 端末ごとに入力させないよう共有DBに置き、誰か一人が設定すれば全員が使えるようにする。
-const RK_SHARE_TOOL="rakuten-keys";
+const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
 async function loadRakutenKeysShared(){
   try{
     const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{
@@ -1640,25 +1640,31 @@ async function loadRakutenKeysShared(){
     if(!r.ok)return;
     const rows=await r.json();
     const p=rows.length?rows[0].payload:null;
-    if(p&&p.appId&&p.accessKey){
+    const kk=p&&p.rkKeys;
+    if(kk&&kk.appId&&kk.accessKey){
       try{
-        localStorage.setItem(RAKUTEN_APPID_KEY,p.appId);
-        localStorage.setItem(RAKUTEN_KEY_KEY,p.accessKey);
+        localStorage.setItem(RAKUTEN_APPID_KEY,kk.appId);
+        localStorage.setItem(RAKUTEN_KEY_KEY,kk.accessKey);
       }catch(e){}
       updateApiBadge();
     }
   }catch(e){}
 }
+// 既存の共有先の中にキーを入れる。他の内容は消さないよう引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
   try{
-    const r=await fetch(SB_URL_S+"/rest/v1/app_data?on_conflict=tool",{
+    const hdr={"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS(),
+      "Content-Type":"application/json"};
+    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:hdr});
+    let p={};
+    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload)p=rows[0].payload;}
+    p.rkKeys={appId,accessKey,at:new Date().toISOString()};
+    const res=await fetch(SB_URL_S+"/rest/v1/app_data?on_conflict=tool",{
       method:"POST",
-      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS(),
-        "Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"},
-      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString()},
-        updated_at:new Date().toISOString()})
+      headers:Object.assign({},hdr,{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:p,updated_at:new Date().toISOString()})
     });
-    if(!r.ok){const t=await r.text();return {ok:false,err:"HTTP "+r.status+" "+t.slice(0,120)};}
+    if(!res.ok){const t=await res.text();return {ok:false,err:"HTTP "+res.status+" "+t.slice(0,120)};}
     return {ok:true};
   }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }
