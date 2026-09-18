@@ -1658,8 +1658,9 @@ async function saveRakutenKeysShared(appId,accessKey){
       body:JSON.stringify({tool:RK_SHARE_TOOL,payload:{appId,accessKey,at:new Date().toISOString()},
         updated_at:new Date().toISOString()})
     });
-    return r.ok;
-  }catch(e){return false;}
+    if(!r.ok){const t=await r.text();return {ok:false,err:"HTTP "+r.status+" "+t.slice(0,120)};}
+    return {ok:true};
+  }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }
 const RAKUTEN_APPID_KEY="rakuten-appid";
 const RAKUTEN_KEY_KEY="rakuten-accesskey";
@@ -1684,9 +1685,9 @@ window.setRakutenAppId=function(){
   }catch(e){}
   updateApiBadge();
   if(t&&k){
-    saveRakutenKeysShared(t,k).then(ok=>{
-      alert(ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
-              :"この端末には保存しました（共有には失敗しました）。");
+    saveRakutenKeysShared(t,k).then(res=>{
+      alert(res.ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+              :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
     });
   }else{
     alert("アプリIDのみ保存しました。アクセスキーも必要です。");
