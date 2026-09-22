@@ -208,7 +208,8 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       </div>
       <div style="font-size:11.5px;color:var(--t2);line-height:1.6;">
         <b>値札 → 商品写真 → 値札 → 商品写真…</b> の順で撮った写真をまとめて選んでください。<br>
-        値札を自動で読み取り、商品ごとに組み立てます。あとは1件ずつ確認して保存するだけです。
+        値札を自動で読み取り、商品ごとに組み立てます。あとは1件ずつ確認して保存するだけです。<br>
+        <span style="color:#5b3fc4;">小物タグは<b>品番が書かれた面</b>を撮ってください（ブランド・サイズ・ランクは楽天から取得します）。</span>
       </div>
       <input type="file" id="batchIn" accept="image/*" multiple style="display:none;">
       <div id="batchProgress" style="display:none;margin-top:10px;"></div>
@@ -421,7 +422,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.19.1400";
+const APP_VERSION="v2026.09.21.1500";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -815,25 +816,39 @@ document.getElementById("batchIn").addEventListener("change",async e=>{
   prog.style.display="block";
   document.getElementById("batchList").style.display="none";
 
-  // 値札を順にスキャン
-  for(let i=0;i<batchItems.length;i++){
-    prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:#5b3fc4;">🔍 値札を読み取り中... ${i+1} / ${batchItems.length}</div>
+  // 値札を3件ずつ同時に読み取る。1件目が読めたらすぐ確認を始められるようにする。
+  let done=0, started=false;
+  const total=batchItems.length;
+  const showProg=()=>{
+    prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:#5b3fc4;">🔍 値札を読み取り中... ${done} / ${total}</div>
       <div style="height:6px;background:#e6e0ff;border-radius:4px;margin-top:7px;overflow:hidden;">
-        <div style="height:100%;width:${Math.round(i/batchItems.length*100)}%;background:#5b3fc4;transition:width .2s;"></div></div>`;
-    try{ batchItems[i].data=await scanTagToData(batchItems[i].tagFile); }
-    catch(err){ console.error(err); batchItems[i].data={ok:false,brand:"",size:"",rank:"",price:0}; }
-    // 商品写真も読み込んでおく
-    try{
-      const du=await new Promise(r=>{const fr=new FileReader();fr.onload=ev=>r(ev.target.result);fr.readAsDataURL(batchItems[i].photoFile);});
-      batchItems[i].img=await new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=du;});
-      batchItems[i].photoUrl=du;
-    }catch(err){ console.error(err); }
-  }
-  const okN=batchItems.filter(b=>b.data&&b.data.ok).length;
-  prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--green);">✓ ${batchItems.length}件を読み取りました（うち${okN}件は情報取得済み）</div>
-    <div style="font-size:11.5px;color:var(--t3);margin-top:4px;">下の一覧から順に確認して保存してください。</div>`;
+        <div style="height:100%;width:${Math.round(done/total*100)}%;background:#5b3fc4;transition:width .2s;"></div></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:5px;">読み終わった商品から確認・保存できます</div>`;
+  };
+  showProg();
   renderBatchList();
-  batchGoto(0);
+  const t0=Date.now();
+  const work=async i=>{
+    const b=batchItems[i];
+    const photoP=(async()=>{
+      try{b.photoUrl=await readAsDataURL(b.photoFile);b.img=await loadImg(b.photoUrl);}catch(e){console.error(e);}
+    })();
+    try{ b.data=await scanTagToData(b.tagFile); }
+    catch(err){ console.error(err); b.data={ok:false,brand:"",size:"",rank:"",price:0,reason:"読み取り中にエラーが発生しました"}; }
+    await photoP;
+    done++;showProg();renderBatchList();
+    if(!started){ started=true; batchGoto(i); }
+    else if(batchIndex===i&&b.waiting&&!b.state){ fillBatchFields(b); }
+  };
+  let next=0;
+  const runner=async()=>{ while(next<total){ const i=next++; await work(i); } };
+  await Promise.all([runner(),runner(),runner()]);
+  const okN=batchItems.filter(b=>b.data&&b.data.ok&&!b.data.reason).length;
+  const ngN=total-okN;
+  const sec=Math.round((Date.now()-t0)/1000);
+  prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--green);">✓ ${total}件を読み取りました（${sec}秒）</div>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:4px;">取得できた ${okN}件${ngN?` ／ <span style="color:var(--orange);font-weight:700;">要確認 ${ngN}件</span>（⚠の商品は手入力してください）`:""}</div>`;
+  renderBatchList();
 });
 
 function renderBatchList(){
@@ -849,15 +864,32 @@ function renderBatchList(){
       return `<div class="batchRow" data-i="${i}" style="display:flex;gap:9px;align-items:center;background:${i===batchIndex?'#efe9ff':'#fff'};border:1px solid ${i===batchIndex?'#5b3fc4':'var(--line,#eee)'};border-radius:10px;padding:8px 10px;cursor:pointer;opacity:${b.done?0.6:1};">
         <img src="${b.photoUrl||""}" style="width:40px;height:40px;object-fit:cover;border-radius:7px;flex-shrink:0;background:#eee;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(d.brand)||'<span style="color:var(--orange);">ブランド未取得</span>'}</div>
-          <div style="font-size:11px;color:var(--t3);">${[d.size&&("size "+d.size),d.rank&&("RANK "+d.rank),d.price&&("¥"+Number(d.price).toLocaleString())].filter(Boolean).map(esc).join(" / ")||"—"}</div>
+          <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.data?(esc(d.brand)||'<span style="color:var(--orange);">ブランド未取得</span>'):'<span style="color:var(--t3);">…</span>'}</div>
+          <div style="font-size:11px;color:var(--t3);">${b.data?([d.size&&("size "+d.size),d.rank&&("RANK "+d.rank),d.price&&("¥"+Number(d.price).toLocaleString())].filter(Boolean).map(esc).join(" / ")||"—"):"読み取り中…"}</div>
+          ${d.reason?`<div style="font-size:10.5px;color:var(--orange);font-weight:700;">⚠ ${esc(d.reason)}</div>`:(d.hinban?`<div style="font-size:10px;color:var(--t3);">${esc(d.via||"")} ${esc(d.hinban)}</div>`:"")}
         </div>
-        <div style="font-size:16px;flex-shrink:0;">${b.done?"✅":(d.ok?"🕐":"⚠️")}</div>
+        <div style="font-size:16px;flex-shrink:0;">${b.done?"✅":(!b.data?"⏳":(d.ok&&!d.reason?"🕐":"⚠️"))}</div>
       </div>`;
     }).join("")}</div>`;
   el.querySelectorAll(".batchRow").forEach(r=>r.addEventListener("click",()=>batchGoto(Number(r.dataset.i))));
 }
 
+function fillBatchFields(b,silent){
+  const d=b.data||{};
+  document.getElementById("sBrand").value=d.brand||"";
+  document.getElementById("sSize").value=d.size||"";
+  document.getElementById("sPrice").value=d.price?String(d.price):"";
+  setRank(d.rank||"");
+  b.waiting=false;
+  if(!silent){
+    photoImg=b.img||photoImg;
+    document.getElementById("photoControls").style.display=photoImg?"block":"none";
+    document.getElementById("photoDrop").innerHTML=`📷 ${batchIndex+1}/${batchItems.length} 件目 ✓`;
+    if(d.dataUrl){document.getElementById("tagRefImg").src=d.dataUrl;document.getElementById("tagRefArea").style.display="block";}
+    drawStory();
+  }
+  if(typeof updateLoanInfo==="function")updateLoanInfo();
+}
 function batchGoto(i){
   if(!batchItems.length)return;
   if(batchIndex>=0&&batchItems[batchIndex])batchItems[batchIndex].state=pqCurrentState();
@@ -866,17 +898,19 @@ function batchGoto(i){
   // 写真をセット
   photoImg=b.img||null;
   photoOffX=0;photoOffY=0;photoZoom=1;
-  if(b.state){ pqApplyState(b.state); }
-  else{
-    const d=b.data||{};
-    document.getElementById("sBrand").value=d.brand||"";
-    document.getElementById("sSize").value=d.size||"";
-    document.getElementById("sPrice").value=d.price?String(d.price):"";
-    setRank(d.rank||"");
+  if(b.state){ pqApplyState(b.state); b.waiting=false; }
+  else if(!b.data){
+    // まだ読み取り中。読み終わったら自動で入力する
+    b.waiting=true;
+    ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+    setRank("");
   }
+  else{ fillBatchFields(b,true); }
   document.getElementById("photoControls").style.display=photoImg?"block":"none";
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
-  document.getElementById("photoDrop").innerHTML=`📷 ${batchIndex+1}/${batchItems.length} 件目 ✓`;
+  document.getElementById("photoDrop").innerHTML=b.data
+    ?`📷 ${batchIndex+1}/${batchItems.length} 件目 ✓`
+    :`📷 ${batchIndex+1}/${batchItems.length} 件目（値札を読み取り中…）`;
   // 値札の参考画像も出す
   if(b.data&&b.data.dataUrl){
     document.getElementById("tagRefImg").src=b.data.dataUrl;
@@ -943,68 +977,302 @@ document.getElementById("tagScanBtn").addEventListener("click",async()=>{
 
 // 値札を読み取って「データだけ」を返す（画面のフォームは触らない）。
 // 一括処理で複数の値札をまとめてスキャンするために使う。
-async function scanTagToData(file){
-  const out={brand:"",size:"",rank:"",price:0,hinban:"",url:"",ok:false};
-  const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
-  out.dataUrl=dataUrl;
-  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-  // QR読み取り
-  let qr=null;
-  for(const sz of [1400,900]){
-    if(qr)break;
-    const scale=Math.min(sz/Math.max(img.width,img.height),1);
-    const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
-    const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
-    const tctx=tc.getContext("2d");
-    tctx.drawImage(img,0,0,sw,sh);
-    const idata=tctx.getImageData(0,0,sw,sh);
-    qr=jsQR(idata.data,sw,sh,{inversionAttempts:"dontInvert"});
-    if(!qr){
-      const d=idata.data;
-      for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>128?255:0;d[i]=g;d[i+1]=g;d[i+2]=g;}
-      tctx.putImageData(idata,0,0);
-      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh,{inversionAttempts:"dontInvert"});
+
+/* ===================== 値札読み取り（共通・高精度版） ===================== */
+function readAsDataURL(file){return new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});}
+function loadImg(src){return new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=src;});}
+const tick0=()=>new Promise(r=>setTimeout(r,0)); // 画面の更新を挟む
+
+// OCRは2本の作業員で並列に回す（まとめて作成で待ち時間を半分にするため）
+const OCR_POOL_SIZE=2;
+const _ocrPool=[], _ocrBusy=[], _ocrWaiters=[];
+async function _makeOcrWorker(){const w=await Tesseract.createWorker("eng");await w.setParameters({tessedit_pageseg_mode:"6"});return w;}
+async function withOcr(fn){
+  let idx=-1;
+  for(;;){
+    for(let i=0;i<OCR_POOL_SIZE;i++){ if(!_ocrBusy[i]){idx=i;break;} }
+    if(idx>=0)break;
+    await new Promise(r=>_ocrWaiters.push(r));
+  }
+  _ocrBusy[idx]=true;
+  try{
+    if(!_ocrPool[idx])_ocrPool[idx]=idx===0?await getOcrWorker():await _makeOcrWorker();
+    return await fn(_ocrPool[idx]);
+  }finally{
+    _ocrBusy[idx]=false;
+    const r=_ocrWaiters.shift(); if(r)r();
+  }
+}
+
+// 写真の中から白い値札の範囲を探す（見つからなければ写真全体）
+function detectTagBox(img){
+  const dw=Math.min(800,img.width), ds=dw/img.width, dh=Math.max(1,Math.round(img.height*ds));
+  const c=document.createElement("canvas");c.width=dw;c.height=dh;
+  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0,dw,dh);
+  const d=x.getImageData(0,0,dw,dh).data;
+  const rb=new Array(dh).fill(0), cb=new Array(dw).fill(0);
+  for(let y=0;y<dh;y++)for(let xx=0;xx<dw;xx++){
+    const i=(y*dw+xx)*4;
+    if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]>150){rb[y]++;cb[xx]++;}
+  }
+  let r0=0,r1=dh-1,c0=0,c1=dw-1;
+  for(let y=0;y<dh;y++){if(rb[y]/dw>0.3){r0=y;break;}}
+  for(let y=dh-1;y>=0;y--){if(rb[y]/dw>0.3){r1=y;break;}}
+  for(let xx=0;xx<dw;xx++){if(cb[xx]/dh>0.3){c0=xx;break;}}
+  for(let xx=dw-1;xx>=0;xx--){if(cb[xx]/dh>0.3){c1=xx;break;}}
+  let sx=c0/ds, sy=r0/ds, sw=(c1-c0)/ds, sh=(r1-r0)/ds;
+  if(sw<img.width*0.15||sh<img.height*0.05)return {sx:0,sy:0,sw:img.width,sh:img.height,whole:true};
+  // 端の文字が切れないよう少し余白を足す
+  const px=sw*0.04, py=sh*0.04;
+  sx=Math.max(0,sx-px); sy=Math.max(0,sy-py);
+  sw=Math.min(img.width-sx,sw+px*2); sh=Math.min(img.height-sy,sh+py*2);
+  return {sx,sy,sw,sh,whole:false};
+}
+
+// ---- QR ----
+function _qrTry(img,sx,sy,sw,sh,maxSide,inv){
+  if(sw<20||sh<20)return "";
+  const sc=Math.min(maxSide/Math.max(sw,sh),3);
+  const w=Math.max(1,Math.round(sw*sc)), h=Math.max(1,Math.round(sh*sc));
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d",{willReadFrequently:true});x.imageSmoothingQuality="high";
+  x.drawImage(img,sx,sy,sw,sh,0,0,w,h);
+  const r=jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:inv||"dontInvert"});
+  return r&&r.data?String(r.data):"";
+}
+// 値札のQRは小さいので、写真全体だけでなく値札部分・右下部分を拡大して何通りか試す
+async function decodeQRRobust(img){
+  const W=img.width,H=img.height;
+  const b=detectTagBox(img);
+  const regions=[
+    [0,0,W,H],
+    [b.sx,b.sy,b.sw,b.sh],
+    [b.sx+b.sw*0.4,b.sy+b.sh*0.4,b.sw*0.6,b.sh*0.6],   // 値札の右下（QRの位置）
+    [W*0.35,H*0.35,W*0.65,H*0.65],
+    [b.sx,b.sy+b.sh*0.4,b.sw,b.sh*0.6],                // 値札の下半分
+  ];
+  for(const [sx,sy,sw,sh] of regions){
+    for(const m of [1200,800,1600]){
+      const s=_qrTry(img,sx,sy,sw,sh,m);
+      if(s)return s;
+    }
+    await tick0();
+  }
+  // 最後に白黒反転も含めて試す
+  for(const [sx,sy,sw,sh] of regions.slice(0,3)){
+    const s=_qrTry(img,sx,sy,sw,sh,1000,"attemptBoth");
+    if(s)return s;
+  }
+  return "";
+}
+// QRの中身から品番と楽天URLを取り出す
+function hinbanFromQR(raw){
+  const s=String(raw||"").trim();
+  if(!s)return {url:"",hinban:""};
+  let hinban="";
+  const m=s.match(/(\d{5})-(\d{6})-(\d{4})/);
+  if(m)hinban=m[0];
+  if(!hinban){
+    const p=s.match(/gsc-rinkan\/([^\/?#]+)/);
+    const d=p?p[1].replace(/[^0-9]/g,""):"";
+    if(d.length===15)hinban=`${d.slice(0,5)}-${d.slice(5,11)}-${d.slice(11)}`;
+  }
+  let url=/^https?:\/\//i.test(s)?s:"";
+  if(!url&&hinban)url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;
+  return {url,hinban};
+}
+
+// ---- 画像処理 ----
+function _lumOf(ctx,w,h){
+  const d=ctx.getImageData(0,0,w,h).data, lum=new Float32Array(w*h);
+  const hist=new Uint32Array(256);
+  for(let i=0,p=0;i<d.length;i+=4,p++){const v=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];lum[p]=v;hist[v|0]++;}
+  // 2%〜98%でコントラストを広げる（暗い写真・白飛びに強くする）
+  const n=w*h; let acc=0,lo=0,hi=255;
+  for(let i=0;i<256;i++){acc+=hist[i];if(acc>=n*0.02){lo=i;break;}}
+  acc=0;for(let i=255;i>=0;i--){acc+=hist[i];if(acc>=n*0.02){hi=i;break;}}
+  const rng=Math.max(1,hi-lo);
+  for(let p=0;p<n;p++){let v=(lum[p]-lo)/rng*255;lum[p]=v<0?0:v>255?255:v;}
+  return lum;
+}
+function _otsu(lum){
+  const h=new Uint32Array(256);for(let i=0;i<lum.length;i++)h[lum[i]|0]++;
+  const total=lum.length;let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];
+  let sB=0,wB=0,max=0,thr=128;
+  for(let t=0;t<256;t++){wB+=h[t];if(!wB)continue;const wF=total-wB;if(!wF)break;
+    sB+=t*h[t];const mB=sB/wB,mF=(sum-sB)/wF,bt=wB*wF*(mB-mF)*(mB-mF);if(bt>max){max=bt;thr=t;}}
+  return thr;
+}
+// 照明ムラに強い二値化（周囲の明るさと比べて判定する）
+function _bradley(lum,w,h,S,T){
+  const W1=w+1, ii=new Float64Array(W1*(h+1));
+  for(let y=0;y<h;y++){let rs=0;for(let x=0;x<w;x++){rs+=lum[y*w+x];ii[(y+1)*W1+x+1]=ii[y*W1+x+1]+rs;}}
+  const out=new Uint8ClampedArray(w*h), s2=S>>1;
+  for(let y=0;y<h;y++){
+    const y1=Math.max(0,y-s2),y2=Math.min(h-1,y+s2);
+    for(let x=0;x<w;x++){
+      const x1=Math.max(0,x-s2),x2=Math.min(w-1,x+s2);
+      const cnt=(x2-x1+1)*(y2-y1+1);
+      const sum=ii[(y2+1)*W1+x2+1]-ii[y1*W1+x2+1]-ii[(y2+1)*W1+x1]+ii[y1*W1+x1];
+      out[y*w+x]=(lum[y*w+x]*cnt<=sum*(1-T))?0:255;
     }
   }
-  let url="",hinban="";
-  if(qr&&qr.data){
-    const raw=qr.data.trim();
-    const hm=raw.match(/(\d{5}-\d{6}-\d{4})/);
-    if(hm)hinban=hm[1];
-    if(/^https?:\/\//i.test(raw))url=raw;
-    else if(hinban)url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;
-  }else{
-    const pn=await ocrProductNumber(dataUrl);
-    if(pn){url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;hinban=pn;}
+  return out;
+}
+function _binCanvas(bin,w,h,rot){
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d");const id=x.createImageData(w,h);const d=id.data;
+  for(let p=0,i=0;p<bin.length;p++,i+=4){d[i]=d[i+1]=d[i+2]=bin[p];d[i+3]=255;}
+  x.putImageData(id,0,0);
+  if(!rot)return c;
+  const r=document.createElement("canvas");
+  const sw=rot%180!==0;r.width=sw?h:w;r.height=sw?w:h;
+  const rx=r.getContext("2d");rx.translate(r.width/2,r.height/2);rx.rotate(rot*Math.PI/180);
+  rx.drawImage(c,-w/2,-h/2);return r;
+}
+function _cropLum(img,box,maxSide,maxUp){
+  const sc=Math.min(maxSide/Math.max(box.sw,box.sh),maxUp);
+  const w=Math.max(1,Math.round(box.sw*sc)), h=Math.max(1,Math.round(box.sh*sc));
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d",{willReadFrequently:true});x.imageSmoothingQuality="high";
+  x.drawImage(img,box.sx,box.sy,box.sw,box.sh,0,0,w,h);
+  return {lum:_lumOf(x,w,h),w,h};
+}
+
+// ---- 品番（小物タグ） ----
+// 真ん中の6桁は日付（YYMMDD）なので、日付として成り立つものだけを採用して誤読を弾く
+function _validDate6(s){
+  const yy=+s.slice(0,2),mm=+s.slice(2,4),dd=+s.slice(4,6);
+  return yy>=18&&yy<=40&&mm>=1&&mm<=12&&dd>=1&&dd<=31;
+}
+function parsePN(text){
+  const lines=String(text||"").split(/\n/);
+  const cand=[];
+  const scan=s=>{
+    const t=s.replace(/[–—~_]/g,"-");
+    for(const m of t.matchAll(/(\d{5})\s*-?\s*(\d{6})\s*-?\s*(\d{4})/g))cand.push([m[1],m[2],m[3]]);
+    const dig=t.replace(/[^0-9]/g,"");
+    for(let i=0;i+15<=dig.length;i++)cand.push([dig.slice(i,i+5),dig.slice(i+5,i+11),dig.slice(i+11,i+15)]);
+  };
+  lines.forEach(scan);
+  for(let i=0;i+1<lines.length;i++)scan(lines[i]+lines[i+1]); // 2行に割れて読まれた場合
+  for(const [a,b,c] of cand){ if(_validDate6(b))return `${a}-${b}-${c}`; }
+  return "";
+}
+async function ocrPNRobust(img){
+  const box=detectTagBox(img);
+  const {lum,w,h}=_cropLum(img,box,1800,3);
+  const S=Math.max(15,Math.round(w/14));
+  const brad=_bradley(lum,w,h,S,0.15);
+  const th=_otsu(lum);
+  const ots=new Uint8ClampedArray(w*h);for(let i=0;i<lum.length;i++)ots[i]=lum[i]>th?255:0;
+  // 縦向きに撮った写真でも読めるよう、回転も試す（早く当たった時点で終わる）
+  const passes=[[brad,0,"11"],[ots,0,"11"],[ots,0,"6"],[brad,90,"11"],[brad,270,"11"]];
+  return await withOcr(async wk=>{
+    await wk.setParameters({tessedit_char_whitelist:"0123456789-",tessedit_pageseg_mode:"11"});
+    try{
+      for(const [bin,rot,psm] of passes){
+        await wk.setParameters({tessedit_pageseg_mode:psm});
+        const {data}=await wk.recognize(_binCanvas(bin,w,h,rot));
+        const pn=parsePN(data.text);
+        console.log("PN pass",psm,rot,JSON.stringify(data.text).slice(0,80),"→",pn);
+        if(pn)return pn;
+      }
+      // 値札の検出に失敗している場合に備え、写真全体でも一度だけ試す
+      if(!box.whole){
+        const whole=_cropLum(img,{sx:0,sy:0,sw:img.width,sh:img.height},1800,2);
+        const b2=_bradley(whole.lum,whole.w,whole.h,Math.max(15,Math.round(whole.w/14)),0.15);
+        await wk.setParameters({tessedit_pageseg_mode:"11"});
+        const {data}=await wk.recognize(_binCanvas(b2,whole.w,whole.h,0));
+        const pn=parsePN(data.text);
+        if(pn)return pn;
+      }
+      return "";
+    }finally{
+      await wk.setParameters({tessedit_char_whitelist:"",tessedit_pageseg_mode:"6"});
+    }
+  });
+}
+
+// ---- 楽天（公式API） ----
+// 1秒1回の制限があるので間隔を空け、商品が無いと分かったらすぐ返す。
+// 停止している中継サービスには回さない（ここで最大1分待たされていた）。
+let _rkLast=0;
+async function _rkThrottle(){const w=_rkLast+1100-Date.now();if(w>0)await new Promise(r=>setTimeout(r,w));_rkLast=Date.now();}
+async function _rkQuery(q){
+  const base="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
+    +"?applicationId="+encodeURIComponent(getRakutenAppId())
+    +"&accessKey="+encodeURIComponent(getRakutenAccessKey())
+    +"&availability=0&hits=1&format=json";
+  for(let a=0;a<3;a++){
+    await _rkThrottle();
+    try{
+      const r=await fetch(base+q,{signal:AbortSignal.timeout(6000)});
+      if(r.status===429){await new Promise(s=>setTimeout(s,1500*(a+1)));continue;}
+      if(!r.ok){
+        let d="";try{const j=await r.json();d=(j.errors&&j.errors.errorMessage)||j.error_description||j.error||"";}catch(e){}
+        return {err:"HTTP "+r.status+(d?" "+d:"")};
+      }
+      const j=await r.json();
+      return {items:(j.Items||[]).map(x=>x.Item||x)};
+    }catch(e){ if(a===2)return {err:e.name==="TimeoutError"?"タイムアウト":(e.message||"通信失敗")}; }
+  }
+  return {err:"混雑しています"};
+}
+async function rakutenLookup(hinban,url){
+  const hasKey=getRakutenAppId()&&getRakutenAccessKey();
+  if(hasKey&&hinban){
+    let res=await _rkQuery("&itemCode="+encodeURIComponent("gsc-rinkan:"+hinban));
+    // 品番での直接指定が通らない・見つからない場合は検索でも探す（キー不正の時は無駄なので探さない）
+    if((res.err&&!/HTTP 40[13]/.test(res.err))||(!res.err&&!res.items.length))
+      res=await _rkQuery("&shopCode=gsc-rinkan&keyword="+encodeURIComponent(hinban));
+    if(res.err)return {ok:false,err:res.err};
+    if(!res.items.length)return {ok:false,notFound:true};
+    const it=res.items[0];
+    const e2=s=>String(s||"").replace(/"/g,"&quot;");
+    const syn='<meta property="og:title" content="'+e2(it.itemName)+'">'
+             +'<meta name="description" content="'+e2(it.itemCaption)+'">';
+    const p=parseRakutenHtml(syn)||{};
+    return {ok:true,via:"api",brand:p.brand||"",size:p.size||"",rank:p.rank||"",
+            price:Number(it.itemPrice)||p.price||0,name:it.itemName||""};
+  }
+  // APIキーが無い端末だけ、旧来の中継サービスを試す
+  if(!hasKey&&url&&/rakuten\.co\.jp/i.test(url)){
+    const g=await fetchRakuten(url);
+    return (g&&g.ok)?g:{ok:false,err:"楽天APIが未設定です"};
+  }
+  return {ok:false,notFound:!hinban};
+}
+
+async function scanTagToData(file){
+  const out={brand:"",size:"",rank:"",price:0,hinban:"",url:"",ok:false,reason:"",via:""};
+  const dataUrl=await readAsDataURL(file);
+  out.dataUrl=dataUrl;
+  const img=await loadImg(dataUrl);
+  // 1) QR → 2) 無ければ品番をOCR
+  let {url,hinban}=hinbanFromQR(await decodeQRRobust(img));
+  if(hinban||url)out.via="QR";
+  if(!hinban&&!url){
+    hinban=await ocrPNRobust(img);
+    if(hinban){url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;out.via="品番";}
   }
   out.hinban=hinban;out.url=url;
-  const isRakuten=url&&/rakuten\.co\.jp/i.test(url);
-  const pricePromise=ocrTagPrice(dataUrl);
-  const rakutenPromise=(async()=>{
-    if(getRakutenAppId()&&hinban){
-      const api=await fetchRakutenAPI(hinban);
-      if(api&&api.name){
-        const esc2=s=>String(s||"").replace(/"/g,"&quot;");
-        const synthetic='<meta property="og:title" content="'+esc2(api.name)+'">'
-                       +'<meta name="description" content="'+esc2(api.caption)+'">';
-        const parsed=parseRakutenHtml(synthetic);
-        if(parsed&&(parsed.brand||parsed.size||parsed.rank)){
-          if(!parsed.price&&api.price)parsed.price=api.price;
-          return parsed;
-        }
-      }
-    }
-    return isRakuten?fetchRakuten(url):null;
-  })();
-  const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
-  if(got&&got.ok){
-    if(got.brand)out.brand=got.brand;
-    if(got.size)out.size=got.size;
-    if(got.rank)out.rank=got.rank;
-    if(got.price)out.price=got.price;
+  // 3) 楽天照会と値札の価格OCRを同時に進める
+  const [info,tagPrice]=await Promise.all([
+    (hinban||url)?rakutenLookup(hinban,url):Promise.resolve(null),
+    ocrTagPrice(dataUrl)
+  ]);
+  if(info&&info.ok){
+    out.brand=info.brand||"";out.size=info.size||"";out.rank=info.rank||"";
+    if(info.price)out.price=info.price;
   }
-  if(tagPrice&&tagPrice>0)out.price=tagPrice; // 値札の税込価格を優先
+  // 値札の税込価格を優先（楽天の価格は手数料込みの場合があるため）
+  if(tagPrice&&tagPrice>0)out.price=tagPrice;
   out.ok=!!(out.brand||out.price);
+  if(!hinban&&!url)out.reason="値札を読み取れませんでした";
+  else if(info&&info.notFound)out.reason="楽天に商品ページがありません";
+  else if(info&&info.err)out.reason="楽天に接続できません（"+info.err+"）";
+  else if(!out.brand)out.reason="ブランドを取得できませんでした";
   return out;
 }
 
@@ -1024,37 +1292,13 @@ async function scanTagQR(file, prefix){
   // Scan QR code from image (capped resolution — full-res is slow and rarely needed)
   const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
   let qr=null;
-  const sizes=[1400, 900];
-  for(const sz of sizes){
-    if(qr)break;
-    const scale=Math.min(sz/Math.max(img.width,img.height),1);
-    const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
-    const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
-    const tctx=tc.getContext("2d");
-    tctx.drawImage(img,0,0,sw,sh);
-    const td3=tctx.getImageData(0,0,sw,sh);
-    qr=jsQR(td3.data,sw,sh,{inversionAttempts:"dontInvert"});
-    if(!qr){
-      const d=td3.data;
-      for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>128?255:0;d[i]=g;d[i+1]=g;d[i+2]=g;}
-      tctx.putImageData(td3,0,0);
-      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh,{inversionAttempts:"dontInvert"});
-    }
-  }
+  {const s=await decodeQRRobust(img);if(s)qr={data:s};}
 
   let url="", hinban="";
   if(qr&&qr.data){
     console.log("QR data:",qr.data);
-    const raw=qr.data.trim();
-    // 品番パターンを拾う
-    const hm=raw.match(/(\d{5}-\d{6}-\d{4})/);
-    if(hm)hinban=hm[1];
-    if(/^https?:\/\//i.test(raw)){
-      url=raw;
-    }else if(hinban){
-      // QRがURLでなく品番だけの場合でも楽天ページを組み立てる
-      url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;
-    }
+    const q=hinbanFromQR(qr.data);
+    url=q.url;hinban=q.hinban;
   }else{
     // No QR (accessory/small-item tags) — OCR the product number instead
     status.textContent="🔍 "+prefix+"商品番号を読み取り中...";
@@ -1072,24 +1316,7 @@ async function scanTagQR(file, prefix){
   const pricePromise=ocrTagPrice(dataUrl);
   // 公式APIが設定されていればそちらを優先（中継サービス不要で安定）。
   // 未設定または取得失敗なら、従来どおり中継サービス経由で取得する。
-  const rakutenPromise=(async()=>{
-    if(getRakutenAppId()&&hinban){
-      const api=await fetchRakutenAPI(hinban);
-      if(api&&api.name){
-        // 公式APIの商品名・説明文を、既存パーサーが読める形（og:title + description）に包む
-        const esc2=s=>String(s||"").replace(/"/g,"&quot;");
-        const synthetic='<meta property="og:title" content="'+esc2(api.name)+'">'
-                       +'<meta name="description" content="'+esc2(api.caption)+'">';
-        const parsed=parseRakutenHtml(synthetic);
-        if(parsed&&(parsed.brand||parsed.size||parsed.rank)){
-          if(!parsed.price&&api.price)parsed.price=api.price;
-          parsed.via="api";
-          return parsed;
-        }
-      }
-    }
-    return isRakuten?fetchRakuten(url):null;
-  })();
+  const rakutenPromise=(hinban||url)?rakutenLookup(hinban,url):Promise.resolve(null);
   const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
 
   if(got&&got.ok){
@@ -1153,107 +1380,42 @@ async function scanTagQR(file, prefix){
 // OCR the RINKAN product number (format: 5digits-6digits-4digits) from tag photo.
 // Used for tags that have no QR code (accessories / small items).
 async function ocrProductNumber(dataUrl){
-  try{
-    const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-    // Whole image, capped ~1600px for speed. Product number is small sparse printed text.
-    const maxd=1600, sc=Math.min(maxd/Math.max(img.width,img.height),1.2);
-    const cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
-    const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
-    const c2=cv.getContext("2d");c2.imageSmoothingQuality="high";
-    const base=c2;
-    base.drawImage(img,0,0,cw,ch);
-    const src=base.getImageData(0,0,cw,ch);
-    const lum=new Float32Array(cw*ch);
-    for(let i=0,p=0;i<src.data.length;i+=4,p++)lum[p]=0.299*src.data[i]+0.587*src.data[i+1]+0.114*src.data[i+2];
-    const w=await getOcrWorker();
-    await w.setParameters({tessedit_pageseg_mode:"11"}); // sparse text
-    const findPN=t=>{
-      const norm=t.replace(/(?<=\d)[\s.](?=\d)/g,"").replace(/[–—]/g,"-");
-      const m=norm.match(/(\d{5}-\d{6}-\d{4})/);
-      return m?m[1]:"";
-    };
-    let result="";
-    for(const thr of [160,180]){
-      const idd=c2.createImageData(cw,ch);const d=idd.data;
-      for(let i=0,p=0;i<d.length;i+=4,p++){const v=lum[p]>thr?255:0;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
-      c2.putImageData(idd,0,0);
-      const {data}=await w.recognize(cv);
-      console.log("PN OCR thr="+thr+":",JSON.stringify(data.text));
-      const pn=findPN(data.text);
-      if(pn){result=pn;break;}
-    }
-    await w.setParameters({tessedit_pageseg_mode:"6"}); // restore
-    return result;
-  }catch(e){console.log("product number OCR error:",e);return "";}
+  try{ return await ocrPNRobust(await loadImg(dataUrl)); }
+  catch(e){ console.log("product number OCR error:",e); return ""; }
 }
 
 // OCR the tax-included price from the RINKAN tag photo.
 // Tax-included = the price NOT marked exc.tax (usually the larger, on its own line).
 async function ocrTagPrice(dataUrl){
   try{
-    const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
-    // 1) Detect the bright tag region (white label on dark background)
-    const dw=Math.min(1000,img.width), dscale=dw/img.width, dh=Math.round(img.height*dscale);
-    const dc=document.createElement("canvas");dc.width=dw;dc.height=dh;
-    const dctx=dc.getContext("2d");dctx.drawImage(img,0,0,dw,dh);
-    const dd=dctx.getImageData(0,0,dw,dh).data;
-    const rowBright=new Array(dh).fill(0),colBright=new Array(dw).fill(0);
-    for(let y=0;y<dh;y++)for(let x=0;x<dw;x++){
-      const i=(y*dw+x)*4;const g=0.299*dd[i]+0.587*dd[i+1]+0.114*dd[i+2];
-      if(g>150){rowBright[y]++;colBright[x]++;}
-    }
-    let r0=0,r1=dh-1,c0=0,c1=dw-1;
-    for(let y=0;y<dh;y++){if(rowBright[y]/dw>0.3){r0=y;break;}}
-    for(let y=dh-1;y>=0;y--){if(rowBright[y]/dw>0.3){r1=y;break;}}
-    for(let x=0;x<dw;x++){if(colBright[x]/dh>0.3){c0=x;break;}}
-    for(let x=dw-1;x>=0;x--){if(colBright[x]/dh>0.3){c1=x;break;}}
-    // Map back to full-res, with small padding
-    let sx=c0/dscale, sy=r0/dscale, sw=(c1-c0)/dscale, sh=(r1-r0)/dscale;
-    if(sw<img.width*0.15||sh<img.height*0.05){sx=0;sy=0;sw=img.width;sh=img.height;} // fallback: whole image
-
-    // 2) Render cropped tag upscaled to grayscale (capped lower for speed)
-    const up=Math.min(1.6, 1800/Math.max(sw,sh));
-    const cw=Math.round(sw*up), ch=Math.round(sh*up);
-    const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
-    const c2=cv.getContext("2d");c2.imageSmoothingQuality="high";
-    c2.drawImage(img,sx,sy,sw,sh,0,0,cw,ch);
-    const idd=c2.getImageData(0,0,cw,ch);const d=idd.data;
-    // grayscale + autocontrast (stretch 2%-98%)
-    const lum=new Float32Array(cw*ch);
-    for(let i=0,p=0;i<d.length;i+=4,p++)lum[p]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-    const sorted=Float32Array.from(lum).sort();
-    const lo=sorted[Math.floor(sorted.length*0.02)],hi=sorted[Math.floor(sorted.length*0.98)]||255;
-    const rng=Math.max(1,hi-lo);
-
-    let best=0,bestAll=0;
-    for(const thr of [150,170]){
-      for(let i=0,p=0;i<d.length;i+=4,p++){
-        let v=(lum[p]-lo)/rng*255; // autocontrast
-        v=v>thr?255:0;
-        d[i]=d[i+1]=d[i+2]=v;
-      }
-      c2.putImageData(idd,0,0);
-      const w=await getOcrWorker();
-      await w.setParameters({tessedit_pageseg_mode:"4"}); // column layout
-      const {data}=await w.recognize(cv);
-      const text=data.text;
-      console.log("Tag price OCR thr="+thr+":",JSON.stringify(text));
-      const taxIncluded=[],allPrices=[];
-      for(const ln of text.split("\n")){
-        const isExTax=/exc|tax|税抜|外/i.test(ln);
-        // Require a ¥/￥/円 on the line — real prices have it; barcode/model numbers don't.
-        // This rejects back-tag numbers like 2901512419855 or 15160-260708-0363.
-        if(!/[¥￥]|円/.test(ln))continue;
-        const nums=[...ln.matchAll(/(\d{1,3}(?:,\d{3})+)/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
-        for(const n of nums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
-      }
-      if(taxIncluded.length){best=Math.max(...taxIncluded);break;}
-      if(allPrices.length&&!bestAll)bestAll=Math.max(...allPrices);
-    }
-    await (await getOcrWorker()).setParameters({tessedit_pageseg_mode:"6"}); // restore default
-    const result=best||bestAll||0;
-    console.log("price result:",result);
-    return result;
+    const img=await loadImg(dataUrl);
+    const box=detectTagBox(img);
+    const {lum,w,h}=_cropLum(img,box,1500,1.6);
+    const th=_otsu(lum);
+    // 写真ごとに最適な境目（大津）を先に試し、だめなら固定値で補う
+    const thrs=[...new Set([th,150,175])];
+    return await withOcr(async wk=>{
+      await wk.setParameters({tessedit_pageseg_mode:"4",tessedit_char_whitelist:""});
+      let best=0,bestAll=0;
+      try{
+        for(const t of thrs){
+          const bin=new Uint8ClampedArray(w*h);
+          for(let i=0;i<lum.length;i++)bin[i]=lum[i]>t?255:0;
+          const {data}=await wk.recognize(_binCanvas(bin,w,h,0));
+          const taxIncluded=[],allPrices=[];
+          for(const ln of data.text.split("\n")){
+            const isExTax=/exc|tax|税抜|外/i.test(ln);
+            // ¥/円の無い行は価格ではない（バーコード番号や品番を拾わないため）
+            if(!/[¥￥]|円/.test(ln))continue;
+            const nums=[...ln.matchAll(/(\d{1,3}(?:,\d{3})+)/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+            for(const n of nums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+          }
+          if(taxIncluded.length){best=Math.max(...taxIncluded);break;}
+          if(allPrices.length&&!bestAll)bestAll=Math.max(...allPrices);
+        }
+      }finally{ await wk.setParameters({tessedit_pageseg_mode:"6"}); }
+      return best||bestAll||0;
+    });
   }catch(e){console.log("tag OCR error:",e);return 0;}
 }
 
@@ -1783,7 +1945,7 @@ async function fetchRakutenAPI(hinban){
   if(!getRakutenAppId()||!getRakutenAccessKey()||!hinban)return null;
   for(const ver of RAKUTEN_VERSIONS){
     try{
-      const resp=await fetch(rakutenSearchUrl(hinban,ver),{signal:AbortSignal.timeout(9000)});
+      const resp=await fetch(rakutenSearchUrl(hinban,ver),{signal:AbortSignal.timeout(6000)});
       if(!resp.ok){console.log("Rakuten API",ver,"HTTP",resp.status);continue;}
       const j=await resp.json();
       if(!j.Items||!j.Items.length)return null; // 接続成功・該当なし
@@ -1807,7 +1969,7 @@ async function fetchRakuten(url){
   let html2="";
   for(const mk of proxies){
     try{
-      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
+      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(4000)});
       if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
     }catch(e){console.log("proxy fail:",e.message);}
   }
