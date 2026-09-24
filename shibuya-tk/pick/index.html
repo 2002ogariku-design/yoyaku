@@ -277,7 +277,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.1600";
+const APP_VERSION="v2026.09.24.1730";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -1085,9 +1085,17 @@ function render(){
   document.getElementById("progN").textContent=`${doneN} / ${items.length}`;
   document.getElementById("progFill").style.width=items.length?(doneN/items.length*100)+"%":"0%";
   const rest=items.length-doneN;
-  document.getElementById("progNote").innerHTML=
-    rest===0&&items.length?'<span style="color:var(--green);font-weight:700;">🎉 この店舗はすべてピック完了です</span>'
-    :`${esc(store)}　残り <b>${rest}</b>点`;
+  if(KIND==="kakaku"){
+    const withNew=items.filter(i=>i.newPrice&&i.price&&i.newPrice!==i.price).length;
+    document.getElementById("progNote").innerHTML=
+      `${esc(store)}　<b>${items.length}</b>点（確認済み ${doneN}点）`
+      +`<br><span class="muted">値下げ後の価格が入っているのは <b>${withNew}</b>点です。`
+      +`残り ${items.length-withNew}点はエクセルの「値下げ後／税込み」欄が空欄のため、変更前後を表示できません。</span>`;
+  }else{
+    document.getElementById("progNote").innerHTML=
+      rest===0&&items.length?'<span style="color:var(--green);font-weight:700;">🎉 この店舗はすべてピック完了です</span>'
+      :`${esc(store)}　残り <b>${rest}</b>点`;
+  }
 
   let show=items.filter(i=>{
     if(filter==="todo"&&checked.has(i.hinban))return false;
@@ -1174,7 +1182,7 @@ function itemHtml(i,no){
     <div class="i-body">
       <div class="i-top">
         <span class="i-no">${no}</span>
-        <span class="i-price">${i.price?yen(i.price):""}</span>
+        <span class="i-price">${i.price?yen(i.price):""}${(KIND==="kakaku"&&i.price&&!(i.newPrice&&i.newPrice!==i.price))?'<span style="font-size:10px;color:var(--t3);font-weight:600;"> 現売価</span>':""}</span>
       </div>
       <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
