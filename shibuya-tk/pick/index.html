@@ -186,7 +186,10 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 <div class="c" id="sharedCard">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
     <div id="sharedInfo" class="note" style="flex:1;">共有リストを確認中…</div>
-    <button class="btn sub2 noprint" id="reloadShared" style="padding:8px 12px;font-size:12.5px;flex-shrink:0;">🔄 更新</button>
+    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+      <button class="btn sub2 noprint" id="reloadShared" style="padding:8px 12px;font-size:12.5px;">🔄 更新</button>
+      <button class="btn noprint" id="deleteShared" style="padding:8px 12px;font-size:12.5px;background:var(--red);display:none;">🗑 削除</button>
+    </div>
   </div>
 </div>
 
@@ -267,7 +270,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.1100";
+const APP_VERSION="v2026.09.24.1400";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -661,7 +664,7 @@ async function fetchShared(){
 
 // 共有データを画面に反映する
 function applyShared(p){
-  if(!p||!p.sheets)return false;
+  if(!p||p.cleared||!p.sheets)return false;
   SHEETS=p.sheets;
   const names=Object.keys(SHEETS);
   if(!names.length)return false;
@@ -676,6 +679,7 @@ function applyShared(p){
     const el=document.getElementById(id);if(el)el.style.display=id==="foot"?"block":"block";
   });
   const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
+  const db=document.getElementById("deleteShared");if(db)db.style.display="block";
   const d=p.at?new Date(p.at):null;
   const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
   document.getElementById("sharedInfo").innerHTML=
@@ -807,6 +811,7 @@ async function readFile(file){
     try{
       await shareList(file.name);
       msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗<br><span style="color:var(--green);font-weight:700;">✓ 全員に共有しました</span>`;
+      const db2=document.getElementById("deleteShared");if(db2)db2.style.display="block";
       const d=new Date();
       document.getElementById("sharedInfo").innerHTML=
         `<span style="color:var(--green);font-weight:800;">✓ 共有リストを表示中</span><br>`
@@ -1326,6 +1331,7 @@ document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("clic
     const el=document.getElementById(id);if(el)el.style.display="none";
   });
   document.getElementById("loadCard").style.display="block";
+  const db3=document.getElementById("deleteShared");if(db3)db3.style.display="none";
   document.querySelector("#loadCard .c-title").textContent=
     `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
   document.getElementById("loadMsg").innerHTML="";
@@ -1343,6 +1349,65 @@ try{
 }catch(e){}
 document.querySelector("#loadCard .c-title").textContent=
   `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
+
+
+/* ========= 共有リストの削除 ========= */
+// 表示中の種類（撤収／在庫移動／売価修正）のリストとチェック状況を消す。
+// 誤って別の種類を消さないよう、種類名を確認文に出す。
+async function deleteSharedList(){
+  const total=Object.values(SHEETS).reduce((s,v)=>s+v.length,0);
+  if(!confirm(`${kindLabel()}の共有リスト（${total.toLocaleString()}点）を削除します。\n\n全員の画面から消え、ピック済みのチェックも消えます。\nこの操作は取り消せません。よろしいですか？`))return;
+  const btn=document.getElementById("deleteShared");
+  btn.textContent="削除中...";btn.disabled=true;
+  let err="";
+  try{
+    // リスト本体を空にする（楽天APIキーは他のツールでも使うので引き継ぐ）
+    let keep=null;
+    try{
+      const pr=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
+      if(pr.ok){const rows=await pr.json();if(rows.length&&rows[0].payload&&rows[0].payload.rkKeys)keep=rows[0].payload.rkKeys;}
+    }catch(e){}
+    const payload={cleared:true, at:new Date().toISOString(), by:myName(), sheets:{}, listId:""};
+    if(keep)payload.rkKeys=keep;
+    const r1=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+      method:"POST",
+      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({tool:TOOLKEY(),payload,updated_at:new Date().toISOString()})
+    });
+    if(!r1.ok){const t=await r1.text();throw new Error("HTTP "+r1.status+" "+t.slice(0,90));}
+    // この種類のチェック状況も消す
+    try{
+      const rc=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
+      if(rc.ok){
+        const rows=await rc.json();
+        const p=(rows.length&&rows[0].payload)?rows[0].payload:{lists:{}};
+        if(p.lists){ Object.keys(p.lists).forEach(k=>{ if(k.startsWith(KIND+":"))delete p.lists[k]; }); }
+        await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+          method:"POST",
+          headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+          body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
+        });
+      }
+    }catch(e){}
+  }catch(e){ err=(e&&e.message)||"通信失敗"; }
+  btn.textContent="🗑 削除";btn.disabled=false;
+  if(err){ alert("削除に失敗しました：\n"+err); return; }
+  // 画面を初期状態に戻す
+  try{ localStorage.removeItem(ckKey()); localStorage.removeItem(ckKey()+":marks"); }catch(e){}
+  SHEETS={};store="";listId="";checked=new Set();ckMarks={};
+  document.getElementById("list").innerHTML="";
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display="none";
+  });
+  btn.style.display="none";
+  document.getElementById("loadCard").style.display="block";
+  const ex=document.getElementById("showLoad");
+  if(ex&&ex.parentElement)ex.parentElement.remove();
+  document.getElementById("sharedInfo").innerHTML=
+    '<span class="muted">共有リストを削除しました。下からファイルを読み込むと全員に共有されます。</span>';
+  document.getElementById("loadMsg").innerHTML="";
+}
+document.getElementById("deleteShared").addEventListener("click",deleteSharedList);
 
 /* ========= 起動時：共有リストを取り込む ========= */
 async function bootShared(){
