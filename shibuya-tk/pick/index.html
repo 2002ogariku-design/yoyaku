@@ -277,7 +277,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.1730";
+const APP_VERSION="v2026.09.24.1900";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -793,7 +793,12 @@ async function readFile(file){
       }
     }
     const names=Object.keys(SHEETS);
-    if(!names.length){msg.innerHTML='<span style="color:var(--red);">品番が見つかりませんでした。ファイルを確認してください。</span>';return;}
+    if(!names.length){
+      msg.innerHTML=KIND==="kakaku"
+        ?'<span style="color:var(--red);">値下げ後の価格が入っている商品が見つかりませんでした。</span><br><span class="muted">エクセルの「値下げ後」または「税込み」欄に金額が入っている行だけを対象にしています。</span>'
+        :'<span style="color:var(--red);">品番が見つかりませんでした。ファイルを確認してください。</span>';
+      return;
+    }
     // チェック状態の保存キー（ファイル名＋総点数）
     const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
     listId="pick:"+file.name.replace(/\s/g,"")+":"+total;
@@ -883,6 +888,11 @@ function parseFlatSheet(rows){
       hinban=d.length===15?`${d.slice(0,5)}-${d.slice(5,11)}-${d.slice(11)}`:"";
     }
     if(!store||!hinban)continue;
+    // 売価修正モードでは、値下げ後の価格が入っている商品だけを対象にする
+    if(KIND==="kakaku"){
+      const np=numOf(g("newPrice")), nb=numOf(g("newBase"));
+      if(!np&&!nb)continue;
+    }
     const brand=g("brand")||g("brandEn");
     const nameParts=[brand,g("model"),g("name")].filter(Boolean);
     const specs=[g("size")&&("サイズ:"+g("size")),g("color"),g("rank")&&("ランク"+g("rank"))].filter(Boolean);
@@ -897,7 +907,8 @@ function parseFlatSheet(rows){
       info:g("dest")?("→ "+g("dest")):"", warn:"",
       dest:g("dest"), destCode:g("destCode"), buyer:g("buyer"), cond:g("cond1"),
       // 売価修正リスト用：改定後の税込価格
-      newPrice:numOf(g("newPrice")),
+      // 税込みが空で税抜だけ入っている場合は税込を計算して補う
+      newPrice:numOf(g("newPrice"))||(numOf(g("newBase"))?Math.round(numOf(g("newBase"))*1.1):0),
       newBase:numOf(g("newBase")),
       color:g("color"), rank:g("rank"), cat2:g("cat2"),
       brandName:(g("brandEn")||g("brand"))
@@ -1086,11 +1097,9 @@ function render(){
   document.getElementById("progFill").style.width=items.length?(doneN/items.length*100)+"%":"0%";
   const rest=items.length-doneN;
   if(KIND==="kakaku"){
-    const withNew=items.filter(i=>i.newPrice&&i.price&&i.newPrice!==i.price).length;
     document.getElementById("progNote").innerHTML=
-      `${esc(store)}　<b>${items.length}</b>点（確認済み ${doneN}点）`
-      +`<br><span class="muted">値下げ後の価格が入っているのは <b>${withNew}</b>点です。`
-      +`残り ${items.length-withNew}点はエクセルの「値下げ後／税込み」欄が空欄のため、変更前後を表示できません。</span>`;
+      `${esc(store)}　値下げ対象 <b>${items.length}</b>点（確認済み ${doneN}点）`
+      +(rest===0&&items.length?'<br><span style="color:var(--green);font-weight:700;">🎉 すべて確認しました</span>':"");
   }else{
     document.getElementById("progNote").innerHTML=
       rest===0&&items.length?'<span style="color:var(--green);font-weight:700;">🎉 この店舗はすべてピック完了です</span>'
@@ -1115,8 +1124,8 @@ function render(){
   const isKakaku=KIND==="kakaku";
   const brandRow=document.getElementById("brandRow"), cutRow=document.getElementById("cutRow");
   if(brandRow)brandRow.style.display=isKakaku?"block":"none";
-  if(cutRow)cutRow.style.display=isKakaku?"block":"none";
-  if(isKakaku&&brandRow&&cutRow){
+  if(cutRow)cutRow.style.display="none"; // 売価修正は値下げ対象のみ取り込むため不要
+  if(isKakaku&&brandRow){
     const m={};
     items.forEach(i=>{
       const b=(i.brandName||"").trim();
@@ -1182,7 +1191,7 @@ function itemHtml(i,no){
     <div class="i-body">
       <div class="i-top">
         <span class="i-no">${no}</span>
-        <span class="i-price">${i.price?yen(i.price):""}${(KIND==="kakaku"&&i.price&&!(i.newPrice&&i.newPrice!==i.price))?'<span style="font-size:10px;color:var(--t3);font-weight:600;"> 現売価</span>':""}</span>
+        <span class="i-price">${i.price?yen(i.price):""}</span>
       </div>
       <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
