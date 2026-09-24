@@ -43,6 +43,12 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 .seg button{flex:1;border:none;background:none;font-family:var(--font);font-size:13.5px;
   font-weight:700;color:var(--t2);padding:11px 6px;border-radius:9px;cursor:pointer;}
 .seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.i-newprice{display:inline-flex;align-items:baseline;gap:8px;margin-top:6px;background:#fff1f1;
+  border:1px solid #f3c5c5;border-radius:9px;padding:5px 10px;flex-wrap:wrap;}
+.i-newprice .old{font-size:12px;color:#9a9aa0;text-decoration:line-through;}
+.i-newprice .new{font-size:18px;font-weight:800;color:#e5484d;}
+.i-newprice .off{font-size:10.5px;font-weight:800;color:#fff;background:#e5484d;
+  border-radius:5px;padding:2px 6px;}
 .i-code{display:inline-flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;
   background:#0d2b45;border-radius:9px;padding:6px 10px;}
 .i-code .lbl{font-size:10px;font-weight:700;color:#8ac4ff;}
@@ -173,6 +179,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   <div class="seg" id="kindSeg" style="margin-top:11px;">
     <button data-k="tesshu" class="on">📦 撤収</button>
     <button data-k="idou">🔄 在庫移動</button>
+    <button data-k="kakaku">💰 売価修正</button>
   </div>
 </header>
 
@@ -260,7 +267,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.19.1600";
+const APP_VERSION="v2026.09.24.1100";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -593,7 +600,7 @@ const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
 const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
 const SB_PW_KEY="rinkan-app-pw";
 let KIND="tesshu";  // tesshu=撤収 / idou=在庫移動
-function TOOLKEY(){return KIND==="idou"?"pick-list-idou":"pick-list";}
+function TOOLKEY(){return KIND==="idou"?"pick-list-idou":(KIND==="kakaku"?"pick-list-kakaku":"pick-list");}
 // HTTPヘッダーには半角しか入れられない。日本語入力のまま打つと通信が失敗するため必ず整える。
 function sanitizePw(s){
   if(!s)return "";
@@ -731,6 +738,7 @@ let store="";
 let listId="";        // ファイル内容から作る識別子（チェック状態の保存キー）
 let checked=new Set();
 let filter="all";
+let brandPick="", cutOnly=false;
 let currentShown=[];
 
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -817,18 +825,36 @@ async function readFile(file){
 
 // 在庫表形式（1シートに全店舗・横に長い列構成）を読む。
 // 該当しなければ null を返し、従来の店舗別シート形式として処理させる。
+// エクセルの計算結果は 6050000.0000000001 のように小数が付くことがあるので、
+// 数字だけを抜くのではなく小数として読んで四捨五入する
+function numOf(v){
+  const s=String(v==null?"":v).replace(/[^0-9.\-]/g,"");
+  const n=parseFloat(s);
+  return isFinite(n)?Math.round(n):0;
+}
 function parseFlatSheet(rows){
   let hi=-1, col={};
-  const NEED={store:"店舗名称",hinban:"ハイフン品番",jan:"JANコード",dest:"移動先",destCode:"移動先コード",
-    brand:"ブランド名（カナ）",brandEn:"ブランド名称",model:"モデル",name:"品名",
-    size:"サイズ*",color:"カラー*",rank:"状態ランク",acc:"付属品",
-    price:"単品売価（税込）",cat:"小分類名称",cond1:"状態１",buyer:"バイヤー名称",
-    hinbanRaw:"品番"};
+  // ヘッダーは全角/半角の括弧や空白がファイルによって違うので、正規化して照合する
+  const nz=s=>String(s==null?"":s).replace(/[（）＊]/g,m=>({"（":"(","）":")","＊":"*"}[m])).replace(/\s/g,"").trim();
+  const NEED={
+    store:["店舗名称"], hinban:["ハイフン品番"], jan:["JANコード"],
+    dest:["移動先"], destCode:["移動先コード"],
+    brand:["ブランド名(カナ)","ブランド名（カナ）"], brandEn:["ブランド名称"],
+    model:["モデル","モデル名"], name:["品名","商品名称"],
+    size:["サイズ*","サイズ名称"], color:["カラー*","カラー2","カラー２"],
+    rank:["状態ランク"], acc:["付属品"],
+    price:["単品売価(税込)","単品売価（税込）"],
+    newBase:["値下げ後"], newPrice:["税込み","税込"],
+    cat:["小分類名称"], cat2:["中分類名称"], cond1:["状態１","状態1"],
+    buyer:["バイヤー名称"], hinbanRaw:["品番"]
+  };
   for(let i=0;i<Math.min(rows.length,10);i++){
-    const line=rows[i].map(v=>String(v==null?"":v).trim());
+    const line=rows[i].map(nz);
     if(line.includes("店舗名称")&&(line.includes("ハイフン品番")||line.includes("品番"))){
       hi=i;
-      Object.entries(NEED).forEach(([k,label])=>{const j=line.indexOf(label);if(j>=0)col[k]=j;});
+      Object.entries(NEED).forEach(([k,names])=>{
+        for(const n of names){const j=line.indexOf(nz(n));if(j>=0){col[k]=j;return;}}
+      });
       break;
     }
   }
@@ -851,13 +877,18 @@ function parseFlatSheet(rows){
     out[store]=out[store]||[];
     out[store].push({
       hinban, key:keyOf(hinban),
-      cat:g("cat")||"在庫移動",
+      cat:g("cat")||g("cat2")||"商品",
       acc:g("acc"),
       name:nameParts.join(" ")+(specs.length?"　"+specs.join(" / "):""),
-      price:Number(g("price").replace(/[^\d]/g,""))||0,
+      price:numOf(g("price")),
       // 移動先は必ず見えるようにしておく（どこへ送るかを間違えないため）
       info:g("dest")?("→ "+g("dest")):"", warn:"",
-      dest:g("dest"), destCode:g("destCode"), buyer:g("buyer"), cond:g("cond1")
+      dest:g("dest"), destCode:g("destCode"), buyer:g("buyer"), cond:g("cond1"),
+      // 売価修正リスト用：改定後の税込価格
+      newPrice:numOf(g("newPrice")),
+      newBase:numOf(g("newBase")),
+      color:g("color"), rank:g("rank"), cat2:g("cat2"),
+      brandName:(g("brandEn")||g("brand"))
     });
   }
   return Object.keys(out).length?out:null;
@@ -906,7 +937,7 @@ function parseSheet(rows){
 // ・外したチェックだけは明示的に取り消しとして送る
 // という形にして、お互いのチェックを上書きしないようにしている。
 function ckKey(){return KIND+":"+listId+":"+store;}
-function ckTool(){return (KIND==="idou"?"pick-checked-idou":"pick-checked");}
+function ckTool(){return (KIND==="idou"?"pick-checked-idou":(KIND==="kakaku"?"pick-checked-kakaku":"pick-checked"));}
 let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set(), lastLocalEdit=0;
 
 function loadChecked(){
@@ -1049,6 +1080,8 @@ function render(){
   let show=items.filter(i=>{
     if(filter==="todo"&&checked.has(i.hinban))return false;
     if(filter==="done"&&!checked.has(i.hinban))return false;
+    if(brandPick&&!(i.name||"").includes(brandPick))return false;
+    if(cutOnly&&!(i.newPrice&&i.price&&i.newPrice!==i.price))return false;
     if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc+" "+(i.warn||"")+" "+(i.info||"")+" "+(i.destCode||"")).toLowerCase().includes(q)))return false;
     return true;
   });
@@ -1057,6 +1090,27 @@ function render(){
   if(!show.length){
     el.innerHTML=`<div class="c"><div class="empty">${items.length?"該当する商品がありません":"この店舗の商品はありません"}</div></div>`;
     return;
+  }
+  // 売価修正は点数が多いので、ブランドで素早く絞れるようにする
+  const isKakaku=KIND==="kakaku";
+  document.getElementById("brandRow").style.display=isKakaku?"block":"none";
+  document.getElementById("cutRow").style.display=isKakaku?"block":"none";
+  if(isKakaku){
+    const m={};
+    items.forEach(i=>{
+      const b=(i.brandName||"").trim();
+      if(b)m[b]=(m[b]||0)+1;
+    });
+    const list=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    const bc=document.getElementById("brandChips");
+    bc.innerHTML=`<span class="pill${brandPick?"":" on"}" data-b="">すべて(${items.length})</span>`
+      +list.map(([b,n])=>`<span class="pill${brandPick===b?" on":""}" data-b="${esc(b)}">${esc(b)} ${n}</span>`).join("");
+    bc.querySelectorAll("[data-b]").forEach(el=>el.addEventListener("click",()=>{
+      brandPick=el.getAttribute("data-b")||"";render();
+    }));
+    const fc=document.getElementById("fCut");
+    fc.classList.toggle("on",cutOnly);
+    fc.onclick=()=>{cutOnly=!cutOnly;render();};
   }
   // 作業指示のある商品を先頭でまとめて知らせる
   const warns=items.filter(i=>i.warn);
@@ -1110,6 +1164,9 @@ function itemHtml(i,no){
       <div class="i-key">${esc(i.hinban)}</div>
       ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
       ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
+      ${(i.newPrice&&i.price&&i.newPrice!==i.price)?`<div class="i-newprice">
+        <span class="old">${yen(i.price)}</span><span class="new">${yen(i.newPrice)}</span>
+        <span class="off">${Math.round((1-i.newPrice/i.price)*100)}% OFF</span></div>`:""}
       ${i.info?`<div class="i-info">📍 ${esc(i.info)}</div>`:""}
       ${i.destCode?`<div class="i-code" data-copy="${esc(i.destCode)}" title="タップでコピー">
         <span class="lbl">移動先コード</span><span class="val">${esc(i.destCode)}</span><span class="cp">コピー</span></div>`:""}
@@ -1117,6 +1174,7 @@ function itemHtml(i,no){
       <div class="i-acts">
         <a class="go" href="${searchUrl(i)}" target="_blank" rel="noopener">▶ 商品ページを開く</a>
         <a href="${fallbackUrl(i)}" target="_blank" rel="noopener">🔍 検索で探す</a>
+        <a href="../story-maker/?hinban=${encodeURIComponent(i.hinban)}${i.newPrice?("&price="+i.newPrice):""}" target="_blank" rel="noopener" style="background:#5b3fc4;color:#fff;border-color:#5b3fc4;">📸 ストーリー</a>
         <button data-copy="${esc(i.hinban)}">品番をコピー</button>
       </div>
     </div>
@@ -1216,6 +1274,10 @@ function paintViewer(){
   document.getElementById("vInfo").innerHTML=
     `<b>${esc(it.hinban)}</b><br>${esc(nm||"")}`
     +(it.acc?`<br><span style="color:#ffd27a;">付属品：${esc(it.acc)}</span>`:"")
+    +((it.newPrice&&it.price&&it.newPrice!==it.price)
+       ?`<br><span style="color:#9a9aa0;text-decoration:line-through;">${yen(it.price)}</span>
+         <span style="color:#ff8a8a;font-weight:800;font-size:19px;"> ${yen(it.newPrice)}</span>
+         <span style="color:#ff8a8a;font-weight:800;"> ${Math.round((1-it.newPrice/it.price)*100)}%OFF</span>`:"")
     +(it.info?`<br><span style="color:#8ac4ff;font-weight:800;">📍 ${esc(it.info)}</span>`:"")
     +(it.destCode?`<br><span style="color:#fff;font-weight:800;">移動先コード <span style="font-size:19px;letter-spacing:.06em;">${esc(it.destCode)}</span></span>`:"")
     +(it.warn?`<br><span style="color:#ff8a8a;font-weight:800;">⚠ ${esc(it.warn)}</span>`:"")
@@ -1251,7 +1313,7 @@ document.addEventListener("keydown",e=>{
 
 /* ===== 撤収 / 在庫移動 の切り替え ===== */
 // それぞれ別のリストとして扱う（共有先・チェック状態・店舗選択を分ける）
-function kindLabel(){return KIND==="idou"?"在庫移動":"撤収";}
+function kindLabel(){return KIND==="idou"?"在庫移動":(KIND==="kakaku"?"売価修正":"撤収");}
 document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("click",async()=>{
   if(b.dataset.k===KIND)return;
   document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x===b));
@@ -1274,9 +1336,9 @@ document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("clic
 }));
 try{
   const k=localStorage.getItem("pick-kind");
-  if(k==="idou"){
-    KIND="idou";
-    document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x.dataset.k==="idou"));
+  if(k==="idou"||k==="kakaku"){
+    KIND=k;
+    document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x.dataset.k===k));
   }
 }catch(e){}
 document.querySelector("#loadCard .c-title").textContent=
