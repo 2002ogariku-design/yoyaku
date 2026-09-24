@@ -322,6 +322,16 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       </div>
       <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
+          <input type="checkbox" id="cutOn" style="width:auto;"> 🔻 値下げ表示（値下げ前 → 現在の価格）
+        </label>
+        <div id="cutRow2" style="display:none;margin-top:9px;">
+          <div class="f"><label>値下げ前の価格（税込・数字のみ）</label>
+            <input type="text" id="sOldPrice" inputmode="numeric" placeholder="95700"></div>
+          <div id="cutInfo" style="font-size:11.5px;color:var(--t3);margin-top:6px;line-height:1.6;"></div>
+        </div>
+      </div>
+      <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
           <input type="checkbox" id="loanOn" style="width:auto;"> 💳 ローン訴求を表示する（最大42回 無金利）
         </label>
         <div id="loanInfo" style="font-size:11.5px;color:var(--t3);margin-top:7px;line-height:1.6;"></div>
@@ -422,7 +432,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.1100";
+const APP_VERSION="v2026.09.24.2000";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -791,7 +801,7 @@ function updateLoanInfo(){
   el.innerHTML=`${LOAN_TIMES}回払い → <b style="color:var(--t1);">月々 ¥${loanMonthly(price).toLocaleString("ja-JP")}</b>${on?"":"（チェックを入れると画像に表示されます）"}`;
 }
 document.getElementById("loanOn").addEventListener("change",()=>{updateLoanInfo();drawStory();if(document.getElementById("captionBox").value)regenCaption();});
-document.getElementById("sPrice").addEventListener("input",updateLoanInfo);
+document.getElementById("sPrice").addEventListener("input",()=>{updateLoanInfo();updateCutInfo();});
 
 // ===== まとめて作成（値札＋商品写真をペアで一括処理） =====
 // 「値札→商品→値札→商品…」の順で選ばれた写真を2枚1組にし、
@@ -2209,10 +2219,23 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     }
     // ローン訴求（C案）：価格 → ↓ 最大42回 無金利なら → 月々◯◯ の流れで見せる
     const loan = (STORY_KIND!=="buy") && loanActive(data.price);
+    const cut = (STORY_KIND!=="buy") && cutActive(data.price);
+    if(cut){
+      // 値下げ前の価格。取り消し線を引いて「下がった」ことを見せる
+      const otxt="¥"+cutOldPrice().toLocaleString("ja-JP");
+      const os=fit(otxt, Math.round(T.priceSize*0.52), 26);
+      lines.push({t:otxt,size:os,color:"rgba(255,255,255,.62)",weight:400,strike:true,gapAfter:0.06});
+    }
     if(data.price){
       const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
-      const ps=fit(ptxt, both?Math.round(T.priceSize*0.78):(loan?Math.round(T.priceSize*0.86):T.priceSize), 38);
-      lines.push({t:ptxt,size:ps,color:"#fff",weight:wt,gapAfter:loan?0.12:0});
+      const base=both?Math.round(T.priceSize*0.78):(loan?Math.round(T.priceSize*0.86):T.priceSize);
+      const ps=fit(ptxt, base, 38);
+      lines.push({t:ptxt,size:ps,color:cut?"#ff5a5a":"#fff",weight:wt,gapAfter:loan?0.12:(cut?0.1:0)});
+      if(cut){
+        const off=cutPercent(cutOldPrice(),Number(data.price));
+        lines.push({t:off+"% OFF",size:Math.max(26,Math.round(T.priceSize*0.46)),
+                    color:"#ff5a5a",weight:wt,gapAfter:loan?0.1:0});
+      }
     }
     if(loan){
       const monthly=loanMonthly(data.price);
@@ -2257,6 +2280,15 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
         ctx.fillStyle=l.color;
         ctx.font=`${l.weight} ${l.size}px ${serif}`;
         ctx.fillText(l.t,ax,y0);
+        if(l.strike){
+          // 取り消し線（文字幅にあわせて中央の高さに引く）
+          const tw=ctx.measureText(l.t).width;
+          const th=Math.max(2,Math.round(l.size*0.07));
+          ctx.save();ctx.shadowBlur=0;ctx.fillStyle=l.color;
+          ctx.fillRect(ax,y0-Math.round(l.size*0.3),tw,th);
+          ctx.restore();
+          ctx.fillStyle=l.color;
+        }
         y0+=step[idx];
       });
       ctx.restore();
@@ -2317,6 +2349,9 @@ function clearForNext(){
   if(td2)td2.innerHTML='🏷️ 値札を追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表＋裏を追加してからスキャン</span>';
   // caption + suggestions reset
   document.getElementById("captionBox").value="";
+  const co=document.getElementById("cutOn");
+  if(co){co.checked=false;document.getElementById("sOldPrice").value="";
+    document.getElementById("cutRow2").style.display="none";updateCutInfo();}
   drawStory();
   // scroll back to top for the next item
   window.scrollTo({top:0,behavior:"smooth"});
@@ -2634,7 +2669,7 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
   }catch(e){if(e.name!=="AbortError")console.error(e);}
 });
 
-updateBrandDl();renderArchive();drawStory();updateApiBadge();updateLoanInfo();
+updateBrandDl();renderArchive();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
   if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
   // ピッキングツールから品番を渡された場合は、そのまま情報を引いて入力する
   (async()=>{
@@ -2656,6 +2691,15 @@ updateBrandDl();renderArchive();drawStory();updateApiBadge();updateLoanInfo();
       const pq=Number((sp.get("price")||"").replace(/[^\d]/g,""))||0;
       const price=pq||(info&&info.ok?info.price:0);
       if(price){document.getElementById("sPrice").value=String(price);filled.push(pq?"価格(値下げ後)":"価格");}
+      // 値下げ前の価格が渡されていれば、値下げ表示を自動で入れる
+      const oq=Number((sp.get("old")||"").replace(/[^\d]/g,""))||0;
+      if(oq&&price&&oq>price){
+        document.getElementById("sOldPrice").value=String(oq);
+        document.getElementById("cutOn").checked=true;
+        document.getElementById("cutRow2").style.display="block";
+        updateCutInfo();
+        filled.push("値下げ表示");
+      }
       if(st){
         st.innerHTML=filled.length
           ?'✓ '+filled.join("・")+'を入力しました<br><span style="font-size:12px;color:var(--t2);">商品写真を選んでください。</span>'
