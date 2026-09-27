@@ -432,7 +432,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.2000";
+const APP_VERSION="v2026.09.26.1800";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -772,6 +772,55 @@ document.getElementById("pqClear").addEventListener("click",()=>{
   const bl=document.getElementById("batchList");if(bl)bl.style.display="none";
   const bp=document.getElementById("batchProgress");if(bp)bp.style.display="none";
   document.getElementById("photoDrop").innerHTML='📷 タップして選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">複数枚まとめて選べます</span>';
+});
+
+// 画面上部に一時的な通知を出す（まとめて作成の完了案内などに使う）
+function flashSyncIndicator(msg){
+  let el=document.getElementById("flashMsg");
+  if(!el){
+    el=document.createElement("div");
+    el.id="flashMsg";
+    el.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:9999;"
+      +"background:rgba(0,0,0,.86);color:#fff;font-size:13.5px;font-weight:700;"
+      +"padding:11px 18px;border-radius:24px;max-width:90vw;text-align:center;"
+      +"box-shadow:0 4px 14px rgba(0,0,0,.25);transition:opacity .3s;";
+    document.body.appendChild(el);
+  }
+  el.textContent=msg;
+  el.style.opacity="1";
+  clearTimeout(window._flashT);
+  window._flashT=setTimeout(()=>{el.style.opacity="0";},2600);
+}
+
+/* ===== 値下げ表示（値下げ前 → 現在の価格） ===== */
+function cutOldPrice(){
+  const el=document.getElementById("sOldPrice");
+  return el?(Number((el.value||"").replace(/[^\d]/g,""))||0):0;
+}
+function cutActive(price){
+  const el=document.getElementById("cutOn");
+  const old=cutOldPrice();
+  return !!(el&&el.checked&&old>0&&Number(price)>0&&old>Number(price));
+}
+function cutPercent(old,now){ return Math.round((1-Number(now)/Number(old))*100); }
+function updateCutInfo(){
+  const el=document.getElementById("cutInfo");
+  if(!el)return;
+  const now=Number((document.getElementById("sPrice").value||"").replace(/[^\d]/g,""))||0;
+  const old=cutOldPrice();
+  if(!old){ el.textContent="値下げ前の価格を入れると、取り消し線付きで表示します。"; return; }
+  if(!now){ el.textContent="現在の価格（上の「価格」欄）も入力してください。"; return; }
+  if(old<=now){ el.innerHTML='<span style="color:var(--orange);">値下げ前の価格が現在の価格以下です。表示されません。</span>'; return; }
+  el.innerHTML=`<b>¥${old.toLocaleString("ja-JP")}</b> → <b>¥${now.toLocaleString("ja-JP")}</b>（${cutPercent(old,now)}% OFF）`;
+}
+document.getElementById("cutOn").addEventListener("change",e=>{
+  document.getElementById("cutRow2").style.display=e.target.checked?"block":"none";
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+});
+document.getElementById("sOldPrice").addEventListener("input",()=>{
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
 });
 
 // ===== ローン訴求（最大42回 無金利） =====
@@ -2456,6 +2505,16 @@ function buildBuyCaption(){
     L.push(n);
   }
   if(tag)L.push(tag);
+  // 値下げ・ローンの訴求もキャプションに載せる
+  if(cutActive(price)){
+    const o=cutOldPrice(), n=Number(price);
+    L.push("");
+    L.push(`🔻 ${o.toLocaleString("ja-JP")}円 → ${n.toLocaleString("ja-JP")}円（${cutPercent(o,n)}%OFF）`);
+  }
+  if(loanActive(price)){
+    L.push("");
+    L.push(`💳 最大${LOAN_TIMES}回払い 無金利｜月々 ¥${loanMonthly(price).toLocaleString("ja-JP")}〜`);
+  }
   L.push("");
   if(tone==="polite"){
     L.push("RINKAN渋谷店では、上記のようなお品を高価買取しております📍");
