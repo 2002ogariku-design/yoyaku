@@ -311,6 +311,9 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
     </div>
     <div style="margin-top:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--t1);cursor:pointer;margin-right:auto;">
+          <input type="checkbox" id="tagShow" checked style="width:auto;"> 画像に表示する
+        </label>
         <button type="button" id="phraseToggle" style="border:none;background:none;font-family:inherit;font-size:11.5px;font-weight:700;color:var(--t3);padding:0;cursor:pointer;display:flex;align-items:center;gap:5px;">
           <span id="phraseCaret">▸</span> 💬 よく使う文言 <span id="phraseCount" style="opacity:.6;"></span>
         </button>
@@ -365,7 +368,14 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <input type="range" id="zoomSlider" min="100" max="250" value="100" style="flex:1;max-width:240px;">
         <button class="pill" id="resetPhotoBtn" style="padding:8px 14px;font-size:13px;">リセット</button>
       </div>
-      <div style="margin-top:12px;">
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+          <span style="font-size:11.5px;color:var(--t3);font-weight:700;">🎚 明るさ・色の調整</span>
+          <button type="button" class="pill" id="adjReset" style="padding:5px 11px;font-size:11.5px;">戻す</button>
+        </div>
+        <div id="adjRows"></div>
+      </div>
+      <div style="margin-top:14px;">
         <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">✨ 画像加工</div>
         <div class="seg" id="fxSeg" style="flex-wrap:wrap;">
           <button type="button" data-fx="none" class="on">なし</button>
@@ -432,7 +442,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.26.1800";
+const APP_VERSION="v2026.09.27.1200";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -496,6 +506,44 @@ const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 let TEMPLATE="classic";      // classic | bottom | minimal | bold
 let textScale=1;             // 0.7 .. 1.4 fine-tune
 let PHOTO_FX="none";         // none | blur | spotlight | cutout
+// 写真の明るさ調整。露出（brightness）を中心に、必要な項目だけ絞って用意する。
+const ADJ_DEF={exposure:100,contrast:100,saturate:100,warmth:0,shadow:0};
+let ADJ=Object.assign({},ADJ_DEF);
+const ADJ_ROWS=[
+  ["exposure","露出",50,160,1,"%"],
+  ["contrast","コントラスト",60,160,1,"%"],
+  ["saturate","彩度",0,180,1,"%"],
+  ["warmth","色味（寒色⇔暖色）",-40,40,1,""],
+  ["shadow","暗部を持ち上げる",0,60,1,""],
+];
+function adjFilter(){
+  const f=[];
+  if(ADJ.exposure!==100)f.push(`brightness(${ADJ.exposure/100})`);
+  if(ADJ.contrast!==100)f.push(`contrast(${ADJ.contrast/100})`);
+  if(ADJ.saturate!==100)f.push(`saturate(${ADJ.saturate/100})`);
+  if(ADJ.warmth)f.push(`sepia(${Math.abs(ADJ.warmth)/100}) hue-rotate(${ADJ.warmth<0?200:0}deg)`);
+  return f.join(" ");
+}
+function adjActive(){ return ADJ_ROWS.some(([k])=>ADJ[k]!==ADJ_DEF[k]); }
+function renderAdj(){
+  const el=document.getElementById("adjRows");
+  if(!el)return;
+  el.innerHTML=ADJ_ROWS.map(([k,label,min,max,step,unit])=>`
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px;">
+      <span style="font-size:11.5px;width:106px;flex-shrink:0;color:var(--t2);">${label}</span>
+      <input type="range" data-adj="${k}" min="${min}" max="${max}" step="${step}" value="${ADJ[k]}" style="flex:1;">
+      <span style="font-size:11px;width:38px;text-align:right;font-variant-numeric:tabular-nums;color:var(--t3);"
+        data-adjv="${k}">${ADJ[k]}${unit}</span>
+    </div>`).join("");
+  el.querySelectorAll("[data-adj]").forEach(s=>s.addEventListener("input",e=>{
+    const k=e.target.getAttribute("data-adj");
+    ADJ[k]=Number(e.target.value);
+    const row=ADJ_ROWS.find(r=>r[0]===k);
+    const v=el.querySelector(`[data-adjv="${k}"]`);
+    if(v)v.textContent=ADJ[k]+(row?row[5]:"");
+    drawStory();
+  }));
+}
 let CUTOUT_BG="#ffffff";     // background color for cutout effect
 
 // Template definitions: where/how text is drawn. Each returns positions & colors.
@@ -529,6 +577,10 @@ cv.addEventListener("pointercancel",()=>{dragging=false;cv.style.cursor="grab";}
 
 document.getElementById("zoomSlider").addEventListener("input",e=>{
   photoZoom=Number(e.target.value)/100;drawStory();
+});
+document.getElementById("tagShow").addEventListener("change",()=>{drawStory();});
+document.getElementById("adjReset").addEventListener("click",()=>{
+  ADJ=Object.assign({},ADJ_DEF);renderAdj();drawStory();
 });
 document.getElementById("resetPhotoBtn").addEventListener("click",()=>{
   photoOffX=0;photoOffY=0;photoZoom=1;document.getElementById("zoomSlider").value=100;drawStory();
@@ -670,8 +722,9 @@ function pqCurrentState(){
     rank:document.getElementById("sRank").value,
     price:document.getElementById("sPrice").value,
     tag:document.getElementById("sTag").value,
+    tagShow:document.getElementById("tagShow").checked,
     tagColor:tagColor,
-    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,
+    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,adj:Object.assign({},ADJ),
   };
 }
 function pqApplyState(s){
@@ -680,10 +733,12 @@ function pqApplyState(s){
   document.getElementById("sSize").value=s.size||"";
   document.getElementById("sPrice").value=s.price||"";
   document.getElementById("sTag").value=s.tag||"📩DMにて割引可能";
+  document.getElementById("tagShow").checked=(s.tagShow!==false);
   setRank(s.rank||"");
   tagColor=s.tagColor||"#ffffff";
   photoOffX=s.offX||0;photoOffY=s.offY||0;photoZoom=s.zoom||1;
   PHOTO_FX=s.fx||"none";
+  ADJ=Object.assign({},ADJ_DEF,s.adj||{});renderAdj();
   document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx===PHOTO_FX));
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
 }
@@ -2143,7 +2198,8 @@ function drawStory(){
     size:document.getElementById("sSize").value.trim(),
     rank:document.getElementById("sRank").value.trim(),
     price:document.getElementById("sPrice").value.replace(/[^\d]/g,""),
-    tag:document.getElementById("sTag").value.trim(),
+    tag:(function(){const t=document.getElementById("tagShow");
+      return (t&&!t.checked)?"":document.getElementById("sTag").value.trim();})(),
     tagColor:tagColor
   },TEMPLATE,textScale,true);
 }
@@ -2161,6 +2217,9 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     const dx=(W-w)/2 + (data.offX||0)*maxDX;
     const dy=(H-h)/2 + (data.offY||0)*maxDY;
     const fx=PHOTO_FX;
+    // 明るさ調整はこのブロック全体に効かせる
+    const _af=adjFilter();
+    if(_af)ctx.save(), ctx.filter=_af;
     if(fx==="blur"){
       // Blurred, zoomed-out copy fills the frame; sharp photo sits on top slightly inset.
       ctx.save();ctx.filter="blur("+Math.round(W*0.03)+"px) brightness(0.9)";
@@ -2189,6 +2248,15 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
         rad.addColorStop(0,"rgba(0,0,0,0)");rad.addColorStop(1,"rgba(0,0,0,.55)");
         ctx.fillStyle=rad;ctx.fillRect(0,0,W,H);
       }
+    }
+    if(_af)ctx.restore();
+    // 暗部を持ち上げる（黒い服のディテールを出したい時に使う）
+    if(ADJ.shadow>0){
+      ctx.save();
+      ctx.globalCompositeOperation="lighten";
+      ctx.fillStyle=`rgba(255,255,255,${ADJ.shadow/100*0.45})`;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
     }
   }else{
     ctx.fillStyle="#1d1d1f";ctx.fillRect(0,0,W,H);
@@ -2386,6 +2454,7 @@ function clearForNext(){
   document.getElementById("photoControls").style.display="none";
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
   const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
+  ADJ=Object.assign({},ADJ_DEF);renderAdj();
   PHOTO_FX="none";document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx==="none"));
   document.getElementById("cutoutBgRow").style.display="none";
   document.getElementById("photoDrop").innerHTML="📷 タップして選択";
@@ -2728,7 +2797,7 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
   }catch(e){if(e.name!=="AbortError")console.error(e);}
 });
 
-updateBrandDl();renderArchive();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
+updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
   if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
   // ピッキングツールから品番を渡された場合は、そのまま情報を引いて入力する
   (async()=>{
