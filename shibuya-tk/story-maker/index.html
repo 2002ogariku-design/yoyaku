@@ -376,6 +376,17 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         <div id="adjRows"></div>
       </div>
       <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+          <span style="font-size:11.5px;color:var(--t3);font-weight:700;">📍 価格テキストの位置</span>
+          <button type="button" class="pill" id="posReset" style="padding:5px 11px;font-size:11.5px;">戻す</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span style="font-size:11.5px;width:40px;color:var(--t2);">上下</span>
+          <input type="range" id="priceYSlider" min="-420" max="260" step="4" value="0" style="flex:1;">
+          <span style="font-size:11px;width:44px;text-align:right;color:var(--t3);" id="priceYVal">0</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
         <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">✨ 画像加工</div>
         <div class="seg" id="fxSeg" style="flex-wrap:wrap;">
           <button type="button" data-fx="none" class="on">なし</button>
@@ -442,7 +453,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.27.1200";
+const APP_VERSION="v2026.09.27.1700";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -506,6 +517,7 @@ const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
 let TEMPLATE="classic";      // classic | bottom | minimal | bold
 let textScale=1;             // 0.7 .. 1.4 fine-tune
 let PHOTO_FX="none";         // none | blur | spotlight | cutout
+let PRICE_DY=0;              // 価格ブロックの上下位置（px）
 // 写真の明るさ調整。露出（brightness）を中心に、必要な項目だけ絞って用意する。
 const ADJ_DEF={exposure:100,contrast:100,saturate:100,warmth:0,shadow:0};
 let ADJ=Object.assign({},ADJ_DEF);
@@ -516,13 +528,58 @@ const ADJ_ROWS=[
   ["warmth","色味（寒色⇔暖色）",-40,40,1,""],
   ["shadow","暗部を持ち上げる",0,60,1,""],
 ];
-function adjFilter(){
-  const f=[];
-  if(ADJ.exposure!==100)f.push(`brightness(${ADJ.exposure/100})`);
-  if(ADJ.contrast!==100)f.push(`contrast(${ADJ.contrast/100})`);
-  if(ADJ.saturate!==100)f.push(`saturate(${ADJ.saturate/100})`);
-  if(ADJ.warmth)f.push(`sepia(${Math.abs(ADJ.warmth)/100}) hue-rotate(${ADJ.warmth<0?200:0}deg)`);
-  return f.join(" ");
+// canvasのfilterは古いiOS Safariで効かないため、画素を直接計算して調整する。
+// 端末に関係なく同じ結果になる。
+function filterSupported(){
+  try{const t=document.createElement("canvas").getContext("2d");t.filter="blur(2px)";return t.filter==="blur(2px)";}
+  catch(e){return false;}
+}
+const HAS_FILTER=filterSupported();
+// 調整用の変換表を作る（1画素ごとに計算せず表引きにして速くする）
+function adjLUT(){
+  const ex=ADJ.exposure/100, ct=ADJ.contrast/100, sh=ADJ.shadow/100;
+  const wr=1+Math.max(0,ADJ.warmth)/100*0.35, wb=1+Math.max(0,-ADJ.warmth)/100*0.35;
+  const wg=1+Math.abs(ADJ.warmth)/100*0.06*(ADJ.warmth>0?1:-1);
+  const mk=(mul)=>{
+    const t=new Uint8ClampedArray(256);
+    for(let i=0;i<256;i++){
+      let v=i/255;
+      if(sh>0)v=v+(1-v)*sh*0.55*(1-v);      // 暗い部分ほど持ち上げる
+      v=v*ex;                                 // 露出
+      v=(v-0.5)*ct+0.5;                       // コントラスト
+      v=v*mul;                                // 色味
+      t[i]=Math.round(Math.max(0,Math.min(1,v))*255);
+    }
+    return t;
+  };
+  return {r:mk(wr),g:mk(wg),b:mk(wb),sat:ADJ.saturate/100};
+}
+function applyAdjustments(ctx,W,H){
+  if(!adjActive())return;
+  let d;
+  try{ d=ctx.getImageData(0,0,W,H); }catch(e){ return; }
+  const p=d.data, L=adjLUT(), sat=L.sat;
+  for(let i=0;i<p.length;i+=4){
+    let r=L.r[p[i]], g=L.g[p[i+1]], b=L.b[p[i+2]];
+    if(sat!==1){
+      const y=0.299*r+0.587*g+0.114*b;
+      r=y+(r-y)*sat; g=y+(g-y)*sat; b=y+(b-y)*sat;
+    }
+    p[i]=r<0?0:r>255?255:r;
+    p[i+1]=g<0?0:g>255?255:g;
+    p[i+2]=b<0?0:b>255?255:b;
+  }
+  ctx.putImageData(d,0,0);
+}
+// ぼかしも filter に頼らず、縮小→拡大で作る
+function blurDraw(ctx,img,dw,dh,W,H){
+  const s=8;
+  const t=document.createElement("canvas");t.width=Math.max(1,Math.round(W/s));t.height=Math.max(1,Math.round(H/s));
+  const tc=t.getContext("2d");
+  tc.drawImage(img,0,0,t.width,t.height);
+  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.globalAlpha=1;ctx.drawImage(t,0,0,W,H);
+  ctx.restore();
 }
 function adjActive(){ return ADJ_ROWS.some(([k])=>ADJ[k]!==ADJ_DEF[k]); }
 function renderAdj(){
@@ -579,6 +636,15 @@ document.getElementById("zoomSlider").addEventListener("input",e=>{
   photoZoom=Number(e.target.value)/100;drawStory();
 });
 document.getElementById("tagShow").addEventListener("change",()=>{drawStory();});
+document.getElementById("priceYSlider").addEventListener("input",e=>{
+  PRICE_DY=Number(e.target.value);
+  document.getElementById("priceYVal").textContent=PRICE_DY;
+  drawStory();
+});
+document.getElementById("posReset").addEventListener("click",()=>{
+  PRICE_DY=0;document.getElementById("priceYSlider").value=0;
+  document.getElementById("priceYVal").textContent="0";drawStory();
+});
 document.getElementById("adjReset").addEventListener("click",()=>{
   ADJ=Object.assign({},ADJ_DEF);renderAdj();drawStory();
 });
@@ -724,7 +790,7 @@ function pqCurrentState(){
     tag:document.getElementById("sTag").value,
     tagShow:document.getElementById("tagShow").checked,
     tagColor:tagColor,
-    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,adj:Object.assign({},ADJ),
+    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,adj:Object.assign({},ADJ),priceDY:PRICE_DY,
   };
 }
 function pqApplyState(s){
@@ -739,6 +805,9 @@ function pqApplyState(s){
   photoOffX=s.offX||0;photoOffY=s.offY||0;photoZoom=s.zoom||1;
   PHOTO_FX=s.fx||"none";
   ADJ=Object.assign({},ADJ_DEF,s.adj||{});renderAdj();
+  PRICE_DY=s.priceDY||0;
+  const pys=document.getElementById("priceYSlider");
+  if(pys){pys.value=PRICE_DY;document.getElementById("priceYVal").textContent=PRICE_DY;}
   document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx===PHOTO_FX));
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
 }
@@ -2217,16 +2286,18 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     const dx=(W-w)/2 + (data.offX||0)*maxDX;
     const dy=(H-h)/2 + (data.offY||0)*maxDY;
     const fx=PHOTO_FX;
-    // 明るさ調整はこのブロック全体に効かせる
-    const _af=adjFilter();
-    if(_af)ctx.save(), ctx.filter=_af;
     if(fx==="blur"){
-      // Blurred, zoomed-out copy fills the frame; sharp photo sits on top slightly inset.
-      ctx.save();ctx.filter="blur("+Math.round(W*0.03)+"px) brightness(0.9)";
-      const bs=Math.max(W/data.img.width,H/data.img.height)*1.15;
-      const bw=data.img.width*bs,bh=data.img.height*bs;
-      ctx.drawImage(data.img,(W-bw)/2,(H-bh)/2,bw,bh);
-      ctx.restore();
+      // 背景をぼかして敷き、その上に元の写真を重ねる
+      if(HAS_FILTER){
+        ctx.save();ctx.filter="blur("+Math.round(W*0.03)+"px) brightness(0.9)";
+        const bs=Math.max(W/data.img.width,H/data.img.height)*1.15;
+        const bw=data.img.width*bs,bh=data.img.height*bs;
+        ctx.drawImage(data.img,(W-bw)/2,(H-bh)/2,bw,bh);
+        ctx.restore();
+      }else{
+        blurDraw(ctx,data.img,w,h,W,H);
+        ctx.save();ctx.fillStyle="rgba(0,0,0,.12)";ctx.fillRect(0,0,W,H);ctx.restore();
+      }
       ctx.drawImage(data.img,dx,dy,w,h);
     }else if(fx==="cutout"){
       // "product on solid background" look: solid bg + soft radial reveal of the photo center.
@@ -2249,15 +2320,8 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
         ctx.fillStyle=rad;ctx.fillRect(0,0,W,H);
       }
     }
-    if(_af)ctx.restore();
-    // 暗部を持ち上げる（黒い服のディテールを出したい時に使う）
-    if(ADJ.shadow>0){
-      ctx.save();
-      ctx.globalCompositeOperation="lighten";
-      ctx.fillStyle=`rgba(255,255,255,${ADJ.shadow/100*0.45})`;
-      ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
+    // 明るさ・色の調整を画素単位で適用する（文字やグラデより前に行う）
+    applyAdjustments(ctx,W,H);
   }else{
     ctx.fillStyle="#1d1d1f";ctx.fillRect(0,0,W,H);
     ctx.fillStyle="#aeaeb2";ctx.font=`500 ${Math.round(36*(W/1080))}px sans-serif`;ctx.textAlign="center";
@@ -2371,7 +2435,9 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
         if(!next)return 0;
         return Math.round(next.size*1.18 + (l.gapAfter||0)*l.size);
       });
-      const baseY=T.priceY(H);
+      // 下部テキストを出さない場合はその分だけ下に寄せて、余白が空かないようにする
+      const tagGap=(data.tag&&data.tag.trim())?0:(T.tagY(H)-T.priceY(H));
+      const baseY=T.priceY(H)+PRICE_DY+tagGap;
       let y0=baseY;
       for(let i=0;i<lines.length-1;i++) y0-=step[i];
       ctx.save();
@@ -2455,6 +2521,8 @@ function clearForNext(){
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
   const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
   ADJ=Object.assign({},ADJ_DEF);renderAdj();
+  PRICE_DY=0;
+  {const p=document.getElementById("priceYSlider");if(p){p.value=0;document.getElementById("priceYVal").textContent="0";}}
   PHOTO_FX="none";document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx==="none"));
   document.getElementById("cutoutBgRow").style.display="none";
   document.getElementById("photoDrop").innerHTML="📷 タップして選択";
