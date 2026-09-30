@@ -325,12 +325,19 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       </div>
       <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
-          <input type="checkbox" id="cutOn" style="width:auto;"> 🔻 値下げ表示（値下げ前 → 現在の価格）
+          <input type="checkbox" id="cutOn" style="width:auto;"> 🔻 値下げ表示（上の価格 → 値下げ後）
         </label>
         <div id="cutRow2" style="display:none;margin-top:9px;">
-          <div class="f"><label>値下げ前の価格（税込・数字のみ）</label>
-            <input type="text" id="sOldPrice" inputmode="numeric" placeholder="95700"></div>
-          <div id="cutInfo" style="font-size:11.5px;color:var(--t3);margin-top:6px;line-height:1.6;"></div>
+          <div class="f"><label>値下げ後の価格（税込・数字のみ）</label>
+            <input type="text" id="sNewPrice" inputmode="numeric" placeholder="88000"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center;">
+            <span style="font-size:11.5px;color:var(--t3);">かんたん設定</span>
+            <button type="button" class="pill cutp" data-off="10" style="padding:6px 11px;font-size:12px;">10%OFF</button>
+            <button type="button" class="pill cutp" data-off="20" style="padding:6px 11px;font-size:12px;">20%OFF</button>
+            <button type="button" class="pill cutp" data-off="30" style="padding:6px 11px;font-size:12px;">30%OFF</button>
+            <button type="button" class="pill cutp" data-off="50" style="padding:6px 11px;font-size:12px;">50%OFF</button>
+          </div>
+          <div id="cutInfo" style="font-size:12.5px;color:var(--t3);margin-top:8px;line-height:1.6;"></div>
         </div>
       </div>
       <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
@@ -347,6 +354,14 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 
   <div class="c" style="text-align:center;">
     <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);touch-action:none;cursor:grab;"></canvas>
+    <div id="netPhotoBox" style="display:none;margin-top:12px;background:linear-gradient(135deg,#eef7f0,#fff);
+      border:1px solid #c3e2cd;border-radius:14px;padding:13px;">
+      <div style="font-size:12.5px;font-weight:800;color:#1f7a4d;margin-bottom:8px;">
+        🖼 オンラインの商品画像が使えます</div>
+      <div id="netPhotoList" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:3px;"></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.6;">
+        タップするとその画像に差し替わります。「撮影写真」を押せば元に戻せます。</div>
+    </div>
     <div id="photoQueueBar" style="display:none;margin-top:12px;background:linear-gradient(135deg,#eef5ff,#fff);border:1px solid #b8d4f5;border-radius:14px;padding:12px 14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="font-size:13px;font-weight:800;color:#0055aa;" id="pqLabel"></div>
@@ -453,7 +468,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.27.1700";
+const APP_VERSION="v2026.09.28.1200";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -788,6 +803,8 @@ function pqCurrentState(){
     rank:document.getElementById("sRank").value,
     price:document.getElementById("sPrice").value,
     tag:document.getElementById("sTag").value,
+    cutOn:document.getElementById("cutOn").checked,
+    newPrice:document.getElementById("sNewPrice").value,
     tagShow:document.getElementById("tagShow").checked,
     tagColor:tagColor,
     offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,adj:Object.assign({},ADJ),priceDY:PRICE_DY,
@@ -800,6 +817,10 @@ function pqApplyState(s){
   document.getElementById("sPrice").value=s.price||"";
   document.getElementById("sTag").value=s.tag||"📩DMにて割引可能";
   document.getElementById("tagShow").checked=(s.tagShow!==false);
+  document.getElementById("cutOn").checked=!!s.cutOn;
+  document.getElementById("sNewPrice").value=s.newPrice||"";
+  document.getElementById("cutRow2").style.display=s.cutOn?"block":"none";
+  updateCutInfo();
   setRank(s.rank||"");
   tagColor=s.tagColor||"#ffffff";
   photoOffX=s.offX||0;photoOffY=s.offY||0;photoZoom=s.zoom||1;
@@ -916,36 +937,104 @@ function flashSyncIndicator(msg){
   window._flashT=setTimeout(()=>{el.style.opacity="0";},2600);
 }
 
-/* ===== 値下げ表示（値下げ前 → 現在の価格） ===== */
-function cutOldPrice(){
-  const el=document.getElementById("sOldPrice");
+
+/* ===== オンラインの商品画像を使う ===== */
+// 値札を読むと楽天から白背景の商品画像が取れるので、候補として出す。
+// 撮影した写真は別に持っておき、いつでも戻せるようにする。
+let NET_PICS=[], SHOT_IMG=null;
+function showNetPics(pics){
+  NET_PICS=(pics||[]).slice(0,6);
+  const box=document.getElementById("netPhotoBox"), list=document.getElementById("netPhotoList");
+  if(!box||!list)return;
+  if(!NET_PICS.length){box.style.display="none";return;}
+  box.style.display="block";
+  const shot=SHOT_IMG?`<div class="npick" data-np="shot" style="flex-shrink:0;width:64px;height:64px;border-radius:9px;
+      border:2px solid var(--line);cursor:pointer;display:flex;align-items:center;justify-content:center;
+      background:var(--card2);font-size:10px;font-weight:700;color:var(--t2);text-align:center;line-height:1.3;">撮影<br>写真</div>`:"";
+  list.innerHTML=shot+NET_PICS.map((u,i)=>`
+    <div class="npick" data-np="${i}" style="flex-shrink:0;width:64px;height:64px;border-radius:9px;overflow:hidden;
+      border:2px solid var(--line);cursor:pointer;background:#fff;">
+      <img src="${u}" style="width:100%;height:100%;object-fit:contain;" loading="lazy"></div>`).join("");
+  list.querySelectorAll("[data-np]").forEach(el=>el.addEventListener("click",()=>useNetPic(el.getAttribute("data-np"))));
+}
+function markNetPick(v){
+  document.querySelectorAll("#netPhotoList .npick").forEach(el=>{
+    el.style.borderColor=(el.getAttribute("data-np")===String(v))?"var(--green)":"var(--line)";
+  });
+}
+function useNetPic(v){
+  if(v==="shot"){
+    if(SHOT_IMG){photoImg=SHOT_IMG;photoOffX=0;photoOffY=0;markNetPick("shot");drawStory();}
+    return;
+  }
+  const u=NET_PICS[Number(v)];
+  if(!u)return;
+  const im=new Image();
+  im.crossOrigin="anonymous";   // 保存できるようにする
+  im.onload=()=>{
+    if(photoImg&&!SHOT_IMG)SHOT_IMG=photoImg;
+    photoImg=im;photoOffX=0;photoOffY=0;photoZoom=1;
+    const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+    document.getElementById("photoControls").style.display="block";
+    markNetPick(v);drawStory();
+  };
+  im.onerror=()=>{
+    const l=document.getElementById("netPhotoList");
+    if(l&&!document.getElementById("netErr")){
+      l.insertAdjacentHTML("afterend",
+        '<div id="netErr" style="color:var(--orange);font-size:11.5px;margin-top:6px;">この画像は読み込めませんでした。別の画像を選んでください。</div>');
+    }
+  };
+  im.src=u;
+}
+
+/* ===== 値下げ表示（上の価格 → 値下げ後） ===== */
+// 「価格」を値下げ前、専用欄を値下げ後として扱い、割引率は自動で計算する。
+function basePrice(){
+  const el=document.getElementById("sPrice");
   return el?(Number((el.value||"").replace(/[^\d]/g,""))||0):0;
 }
-function cutActive(price){
+function cutNewPrice(){
+  const el=document.getElementById("sNewPrice");
+  return el?(Number((el.value||"").replace(/[^\d]/g,""))||0):0;
+}
+function cutOldPrice(){ return basePrice(); }
+function cutActive(){
   const el=document.getElementById("cutOn");
-  const old=cutOldPrice();
-  return !!(el&&el.checked&&old>0&&Number(price)>0&&old>Number(price));
+  const o=basePrice(), n=cutNewPrice();
+  return !!(el&&el.checked&&o>0&&n>0&&n<o);
 }
 function cutPercent(old,now){ return Math.round((1-Number(now)/Number(old))*100); }
 function updateCutInfo(){
   const el=document.getElementById("cutInfo");
   if(!el)return;
-  const now=Number((document.getElementById("sPrice").value||"").replace(/[^\d]/g,""))||0;
-  const old=cutOldPrice();
-  if(!old){ el.textContent="値下げ前の価格を入れると、取り消し線付きで表示します。"; return; }
-  if(!now){ el.textContent="現在の価格（上の「価格」欄）も入力してください。"; return; }
-  if(old<=now){ el.innerHTML='<span style="color:var(--orange);">値下げ前の価格が現在の価格以下です。表示されません。</span>'; return; }
-  el.innerHTML=`<b>¥${old.toLocaleString("ja-JP")}</b> → <b>¥${now.toLocaleString("ja-JP")}</b>（${cutPercent(old,now)}% OFF）`;
+  const o=basePrice(), n=cutNewPrice();
+  if(!o){ el.textContent="上の「価格」を入力すると計算できます。"; return; }
+  if(!n){ el.textContent="値下げ後の価格を入れると、割引率を自動で計算します。"; return; }
+  if(n>=o){ el.innerHTML='<span style="color:var(--orange);">値下げ後の価格が元の価格以上です。表示されません。</span>'; return; }
+  const off=cutPercent(o,n), diff=o-n;
+  el.innerHTML=`<b>¥${o.toLocaleString("ja-JP")}</b> → <b style="color:var(--red);">¥${n.toLocaleString("ja-JP")}</b>`
+    +`　<b style="color:var(--red);">${off}% OFF</b>　<span class="muted">（¥${diff.toLocaleString("ja-JP")}お得）</span>`;
 }
 document.getElementById("cutOn").addEventListener("change",e=>{
   document.getElementById("cutRow2").style.display=e.target.checked?"block":"none";
   updateCutInfo();drawStory();
   if(document.getElementById("captionBox").value)regenCaption();
 });
-document.getElementById("sOldPrice").addEventListener("input",()=>{
+document.getElementById("sNewPrice").addEventListener("input",()=>{
   updateCutInfo();drawStory();
   if(document.getElementById("captionBox").value)regenCaption();
 });
+// 割引率から値下げ後の価格を求める（100円単位）
+document.querySelectorAll(".cutp").forEach(b=>b.addEventListener("click",()=>{
+  const o=basePrice();
+  if(!o){alert("先に上の「価格」を入力してください。");return;}
+  const n=Math.round(o*(1-Number(b.dataset.off)/100)/100)*100;
+  document.getElementById("sNewPrice").value=String(n);
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+}));
+
 
 // ===== ローン訴求（最大42回 無金利） =====
 // 30万円以上の商品が無金利の対象。月々の金額は価格÷42を切り上げる。
@@ -1099,6 +1188,8 @@ function batchGoto(i){
     document.getElementById("tagRefImg").src=b.data.dataUrl;
     document.getElementById("tagRefArea").style.display="block";
   }
+  SHOT_IMG=b.img||null;
+  showNetPics((b.data&&b.data.pics)||[]);
   renderBatchList();
   drawStory();
   if(document.getElementById("captionBox").value)regenCaption();
@@ -1116,6 +1207,8 @@ function batchMarkDoneAndNext(){
 }
 
 function loadPhoto(file){
+  SHOT_IMG=null;
+  {const b=document.getElementById("netPhotoBox");if(b)b.style.display="none";}
   const fr=new FileReader();
   fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
   fr.readAsDataURL(file);
@@ -1416,8 +1509,12 @@ async function rakutenLookup(hinban,url){
     const syn='<meta property="og:title" content="'+e2(it.itemName)+'">'
              +'<meta name="description" content="'+e2(it.itemCaption)+'">';
     const p=parseRakutenHtml(syn)||{};
+    // オンラインサイトの商品画像（白背景）も一緒に取っておく
+    const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+    let pics=urls(it.mediumImageUrls); if(!pics.length)pics=urls(it.smallImageUrls);
+    pics=pics.map(u=>String(u).replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
     return {ok:true,via:"api",brand:p.brand||"",size:p.size||"",rank:p.rank||"",
-            price:Number(it.itemPrice)||p.price||0,name:it.itemName||""};
+            price:Number(it.itemPrice)||p.price||0,name:it.itemName||"",pics};
   }
   // APIキーが無い端末だけ、旧来の中継サービスを試す
   if(!hasKey&&url&&/rakuten\.co\.jp/i.test(url)){
@@ -1448,6 +1545,7 @@ async function scanTagToData(file){
   if(info&&info.ok){
     out.brand=info.brand||"";out.size=info.size||"";out.rank=info.rank||"";
     if(info.price)out.price=info.price;
+    out.pics=info.pics||[];
   }
   // 値札の税込価格を優先（楽天の価格は手数料込みの場合があるため）
   if(tagPrice&&tagPrice>0)out.price=tagPrice;
@@ -1506,6 +1604,7 @@ async function scanTagQR(file, prefix){
     if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
     if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
     if(got.rank){setRank(got.rank);filled.push("ランク");}
+    if(got.pics&&got.pics.length){showNetPics(got.pics);filled.push("商品画像"+got.pics.length+"枚");}
   }
   // Price priority: TAG tax-included price is authoritative (Rakuten includes fees).
   // A tag price ALWAYS wins and is never overwritten by a Rakuten price — even across
@@ -2400,7 +2499,7 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
     }
     // ローン訴求（C案）：価格 → ↓ 最大42回 無金利なら → 月々◯◯ の流れで見せる
     const loan = (STORY_KIND!=="buy") && loanActive(data.price);
-    const cut = (STORY_KIND!=="buy") && cutActive(data.price);
+    const cut = (STORY_KIND!=="buy") && cutActive();
     if(cut){
       // 値下げ前の価格。取り消し線を引いて「下がった」ことを見せる
       const otxt="¥"+cutOldPrice().toLocaleString("ja-JP");
@@ -2408,12 +2507,13 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
       lines.push({t:otxt,size:os,color:"rgba(255,255,255,.62)",weight:400,strike:true,gapAfter:0.06});
     }
     if(data.price){
-      const ptxt="¥"+Number(data.price).toLocaleString("ja-JP")+"-(tax in)";
+      const shownPrice=cut?cutNewPrice():Number(data.price);
+      const ptxt="¥"+shownPrice.toLocaleString("ja-JP")+"-(tax in)";
       const base=both?Math.round(T.priceSize*0.78):(loan?Math.round(T.priceSize*0.86):T.priceSize);
       const ps=fit(ptxt, base, 38);
       lines.push({t:ptxt,size:ps,color:cut?"#ff5a5a":"#fff",weight:wt,gapAfter:loan?0.12:(cut?0.1:0)});
       if(cut){
-        const off=cutPercent(cutOldPrice(),Number(data.price));
+        const off=cutPercent(Number(data.price),cutNewPrice());
         lines.push({t:off+"% OFF",size:Math.max(26,Math.round(T.priceSize*0.46)),
                     color:"#ff5a5a",weight:wt,gapAfter:loan?0.1:0});
       }
@@ -2536,7 +2636,7 @@ function clearForNext(){
   // caption + suggestions reset
   document.getElementById("captionBox").value="";
   const co=document.getElementById("cutOn");
-  if(co){co.checked=false;document.getElementById("sOldPrice").value="";
+  if(co){co.checked=false;document.getElementById("sNewPrice").value="";
     document.getElementById("cutRow2").style.display="none";updateCutInfo();}
   drawStory();
   // scroll back to top for the next item
@@ -2643,8 +2743,8 @@ function buildBuyCaption(){
   }
   if(tag)L.push(tag);
   // 値下げ・ローンの訴求もキャプションに載せる
-  if(cutActive(price)){
-    const o=cutOldPrice(), n=Number(price);
+  if(cutActive()){
+    const o=Number(price), n=cutNewPrice();
     L.push("");
     L.push(`🔻 ${o.toLocaleString("ja-JP")}円 → ${n.toLocaleString("ja-JP")}円（${cutPercent(o,n)}%OFF）`);
   }
@@ -2890,7 +2990,9 @@ updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateL
       // 値下げ前の価格が渡されていれば、値下げ表示を自動で入れる
       const oq=Number((sp.get("old")||"").replace(/[^\d]/g,""))||0;
       if(oq&&price&&oq>price){
-        document.getElementById("sOldPrice").value=String(oq);
+        // 元の価格を「価格」に、値下げ後を専用欄に入れる
+        document.getElementById("sPrice").value=String(oq);
+        document.getElementById("sNewPrice").value=String(price);
         document.getElementById("cutOn").checked=true;
         document.getElementById("cutRow2").style.display="block";
         updateCutInfo();
