@@ -492,7 +492,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.29.1900";
+const APP_VERSION="v2026.09.30.1100";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -1123,10 +1123,28 @@ document.getElementById("fitTop").addEventListener("input",e=>{
   drawStory();
 });
 
+// 保存できない形で読み込まれていた画像を、中継サービス経由で読み込み直す
+async function retryTaintedPhoto(){
+  if(!NET_TAINTED)return false;
+  const u=NET_PICS[NET_CUR];
+  if(!u)return false;
+  for(const f of IMG_PROXIES){
+    const im=await tryImage(f(u),true);
+    if(im){
+      photoImg=im; NET_TAINTED=false;
+      if(typeof BULK!=="undefined"&&BULK.length&&bulkIndex>=0)BULK[bulkIndex].img=im;
+      if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=im;
+      drawStory();
+      return true;
+    }
+  }
+  return false;
+}
+
 /* ===== オンラインの商品画像を使う ===== */
 // 値札を読むと楽天から白背景の商品画像が取れるので、候補として出す。
 // 撮影した写真は別に持っておき、いつでも戻せるようにする。
-let NET_PICS=[], SHOT_IMG=null;
+let NET_PICS=[], SHOT_IMG=null, NET_CUR=-1;
 function showNetPics(pics){
   NET_PICS=(pics||[]).slice(0,6);
   const box=document.getElementById("netPhotoBox"), list=document.getElementById("netPhotoList");
@@ -1147,19 +1165,50 @@ function markNetPick(v){
     el.style.borderColor=(el.getAttribute("data-np")===String(v))?"var(--green)":"var(--line)";
   });
 }
-// 画像を1枚読み込む。CORSに対応していないサーバーもあるので、
-// まず保存できる形（crossOrigin付き）で試し、だめなら指定なしで読み込む。
-function loadNetImage(url){
+// 楽天の画像サーバーは他サイトからの読み出しを許可していないため、
+// そのまま読み込むと「表示はできるが保存できない」状態になる。
+// 許可付きで配信し直してくれる中継サービスを経由して読み込む。
+const IMG_PROXIES=[
+  u=>"https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https:\/\//,"ssl:").replace(/^http:\/\//,""))+"&w=1000&output=jpg",
+  u=>"https://wsrv.nl/?url="+encodeURIComponent(u.replace(/^https:\/\//,"ssl:").replace(/^http:\/\//,""))+"&w=1000&output=jpg",
+];
+// 一度うまくいった経路を覚えて、次からはそれを先に使う
+let IMG_ROUTE=null;
+try{ IMG_ROUTE=localStorage.getItem("story-img-route"); }catch(e){}
+
+function tryImage(url,useCors){
   return new Promise(resolve=>{
-    const tryLoad=(useCors)=>{
-      const im=new Image();
-      if(useCors)im.crossOrigin="anonymous";
-      im.onload=()=>resolve({img:im,tainted:!useCors});
-      im.onerror=()=>{ if(useCors)tryLoad(false); else resolve(null); };
-      im.src=url+(url.includes("?")?"&":"?")+"_c="+(useCors?1:0);
-    };
-    tryLoad(true);
+    const im=new Image();
+    if(useCors)im.crossOrigin="anonymous";
+    let done=false;
+    const fin=v=>{if(!done){done=true;resolve(v);}};
+    im.onload=()=>fin(im.naturalWidth>1?im:null);
+    im.onerror=()=>fin(null);
+    setTimeout(()=>fin(null),12000);
+    im.src=url;
   });
+}
+
+async function loadNetImage(url){
+  // 経路の候補：中継サービス（保存できる） → 直接（保存できない場合あり）
+  const routes=[];
+  IMG_PROXIES.forEach((f,i)=>routes.push({key:"p"+i,make:f,cors:true}));
+  routes.push({key:"direct",make:u=>u,cors:true});
+  if(IMG_ROUTE){
+    const i=routes.findIndex(r=>r.key===IMG_ROUTE);
+    if(i>0)routes.unshift(routes.splice(i,1)[0]);
+  }
+  for(const r of routes){
+    const im=await tryImage(r.make(url),r.cors);
+    if(im){
+      try{ localStorage.setItem("story-img-route",r.key); }catch(e){}
+      IMG_ROUTE=r.key;
+      return {img:im,tainted:false};
+    }
+  }
+  // どれも駄目なら、表示だけできる形で読み込む
+  const im=await tryImage(url,false);
+  return im?{img:im,tainted:true}:null;
 }
 let NET_TAINTED=false;
 function netNote(msg,color){
@@ -1186,7 +1235,7 @@ async function useNetPic(v){
   if(!res){ netNote("この画像は読み込めませんでした。別の画像を選んでください。"); return; }
   if(photoImg&&!SHOT_IMG)SHOT_IMG=photoImg;
   photoImg=res.img;photoOffX=0;photoOffY=0;photoZoom=1;
-  NET_TAINTED=res.tainted;
+  NET_TAINTED=res.tainted; NET_CUR=Number(v);
   // まとめて作成中は、その商品の写真としても覚えておく（移動しても戻らないように）
   if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=res.img;
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
@@ -3127,7 +3176,10 @@ document.getElementById("shareBtn").addEventListener("click",async()=>{
   }catch(e){
     if(e.name!=="AbortError")console.error(e);
     if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
-      alert("オンラインの商品画像は、この端末では保存できませんでした。\n\n「撮影写真」に切り替えてから保存してください。");
+      const ok=await retryTaintedPhoto();
+      alert(ok
+        ? "画像を読み込み直しました。もう一度「保存・共有」を押してください。"
+        : "この商品画像は保存できませんでした。\n\n別の画像を選ぶか、「撮影写真」に切り替えてください。");
     }
   }
 });
@@ -3212,7 +3264,10 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
   }catch(e){
     if(e.name!=="AbortError")console.error(e);
     if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
-      alert("オンラインの商品画像は、この端末では保存できませんでした。\n\n「撮影写真」に切り替えてから保存してください。");
+      const ok=await retryTaintedPhoto();
+      alert(ok
+        ? "画像を読み込み直しました。もう一度「保存・共有」を押してください。"
+        : "この商品画像は保存できませんでした。\n\n別の画像を選ぶか、「撮影写真」に切り替えてください。");
     }
   }
 });
