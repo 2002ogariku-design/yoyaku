@@ -228,6 +228,13 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
   <div id="cutRow" style="display:none;margin-top:9px;">
     <button class="pill" id="fCut">💰 値下げありのみ</button>
   </div>
+  <div id="bulkStoryRow" style="display:none;margin-top:9px;">
+    <button class="btn" id="bulkStoryBtn" style="width:100%;background:#5b3fc4;">
+      ⚡️ 表示中の商品でまとめてストーリー作成</button>
+    <div class="note" style="margin-top:6px;">
+      絞り込んだ商品の品番・値下げ価格をまとめて渡します。オンラインサイトの商品画像で作成できます。
+    </div>
+  </div>
   <div id="brandRow" style="display:none;margin-top:9px;">
     <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ブランド</div>
     <div id="brandChips" style="display:flex;flex-wrap:wrap;gap:5px;max-height:132px;overflow-y:auto;"></div>
@@ -277,7 +284,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.24.2000";
+const APP_VERSION="v2026.09.29.1200";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -1125,6 +1132,8 @@ function render(){
   const brandRow=document.getElementById("brandRow"), cutRow=document.getElementById("cutRow");
   if(brandRow)brandRow.style.display=isKakaku?"block":"none";
   if(cutRow)cutRow.style.display="none"; // 売価修正は値下げ対象のみ取り込むため不要
+  const bsr=document.getElementById("bulkStoryRow");
+  if(bsr)bsr.style.display=isKakaku?"block":"none";
   if(isKakaku&&brandRow){
     const m={};
     items.forEach(i=>{
@@ -1378,6 +1387,25 @@ try{
 document.querySelector("#loadCard .c-title").textContent=
   `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
 
+
+
+/* ===== まとめてストーリー作成 ===== */
+// 絞り込んで表示している商品の品番と値下げ価格をまとめてストーリー作成ツールに渡す。
+// URLが長くなりすぎないよう、1回あたりの件数に上限を設ける。
+const BULK_MAX=40;
+document.getElementById("bulkStoryBtn").addEventListener("click",()=>{
+  const list=(currentShown||[]).filter(i=>i.hinban);
+  if(!list.length){alert("対象の商品がありません。");return;}
+  const target=list.slice(0,BULK_MAX);
+  const param=target.map(i=>
+    [i.hinban, i.newPrice||"", (i.newPrice&&i.price&&i.price>i.newPrice)?i.price:""].join(":")
+  ).join(",");
+  const msg=list.length>BULK_MAX
+    ? `表示中の ${list.length}件のうち、先頭 ${BULK_MAX}件 でストーリー作成を始めます。\n\n残りは絞り込みを変えてから、もう一度実行してください。`
+    : `${target.length}件 でストーリー作成を始めます。`;
+  if(!confirm(msg))return;
+  window.open("../story-maker/?bulk="+encodeURIComponent(param),"_blank");
+});
 
 /* ========= 共有リストの削除 ========= */
 // 表示中の種類（撤収／在庫移動／売価修正）のリストとチェック状況を消す。
