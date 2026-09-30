@@ -468,7 +468,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.28.1200";
+const APP_VERSION="v2026.09.28.1700";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -962,30 +962,54 @@ function markNetPick(v){
     el.style.borderColor=(el.getAttribute("data-np")===String(v))?"var(--green)":"var(--line)";
   });
 }
-function useNetPic(v){
+// 画像を1枚読み込む。CORSに対応していないサーバーもあるので、
+// まず保存できる形（crossOrigin付き）で試し、だめなら指定なしで読み込む。
+function loadNetImage(url){
+  return new Promise(resolve=>{
+    const tryLoad=(useCors)=>{
+      const im=new Image();
+      if(useCors)im.crossOrigin="anonymous";
+      im.onload=()=>resolve({img:im,tainted:!useCors});
+      im.onerror=()=>{ if(useCors)tryLoad(false); else resolve(null); };
+      im.src=url+(url.includes("?")?"&":"?")+"_c="+(useCors?1:0);
+    };
+    tryLoad(true);
+  });
+}
+let NET_TAINTED=false;
+function netNote(msg,color){
+  const l=document.getElementById("netPhotoList");
+  let e=document.getElementById("netErr");
+  if(!msg){ if(e)e.remove(); return; }
+  if(!e&&l){ l.insertAdjacentHTML("afterend",'<div id="netErr"></div>'); e=document.getElementById("netErr"); }
+  if(e){ e.style.cssText="font-size:11.5px;margin-top:7px;line-height:1.6;color:"+(color||"var(--orange)"); e.innerHTML=msg; }
+}
+async function useNetPic(v){
   if(v==="shot"){
-    if(SHOT_IMG){photoImg=SHOT_IMG;photoOffX=0;photoOffY=0;markNetPick("shot");drawStory();}
+    if(SHOT_IMG){
+      photoImg=SHOT_IMG;photoOffX=0;photoOffY=0;NET_TAINTED=false;
+      if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=SHOT_IMG;
+      markNetPick("shot");netNote("");drawStory();
+    }
     return;
   }
   const u=NET_PICS[Number(v)];
   if(!u)return;
-  const im=new Image();
-  im.crossOrigin="anonymous";   // 保存できるようにする
-  im.onload=()=>{
-    if(photoImg&&!SHOT_IMG)SHOT_IMG=photoImg;
-    photoImg=im;photoOffX=0;photoOffY=0;photoZoom=1;
-    const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
-    document.getElementById("photoControls").style.display="block";
-    markNetPick(v);drawStory();
-  };
-  im.onerror=()=>{
-    const l=document.getElementById("netPhotoList");
-    if(l&&!document.getElementById("netErr")){
-      l.insertAdjacentHTML("afterend",
-        '<div id="netErr" style="color:var(--orange);font-size:11.5px;margin-top:6px;">この画像は読み込めませんでした。別の画像を選んでください。</div>');
-    }
-  };
-  im.src=u;
+  netNote("読み込み中…","var(--t3)");
+  const res=await loadNetImage(u);
+  if(!res){ netNote("この画像は読み込めませんでした。別の画像を選んでください。"); return; }
+  if(photoImg&&!SHOT_IMG)SHOT_IMG=photoImg;
+  photoImg=res.img;photoOffX=0;photoOffY=0;photoZoom=1;
+  NET_TAINTED=res.tainted;
+  // まとめて作成中は、その商品の写真としても覚えておく（移動しても戻らないように）
+  if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=res.img;
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+  document.getElementById("photoControls").style.display="block";
+  markNetPick(v);
+  netNote(res.tainted
+    ? "この画像を使っています。保存できない場合は撮影写真に切り替えてください。"
+    : "✓ この画像を使っています","var(--green)");
+  drawStory();
 }
 
 /* ===== 値下げ表示（上の価格 → 値下げ後） ===== */
@@ -2883,7 +2907,12 @@ document.getElementById("shareBtn").addEventListener("click",async()=>{
       archiveStory(brand);tick("✓ ダウンロードしました");
       pqMarkDoneAndNext();
     }
-  }catch(e){if(e.name!=="AbortError")console.error(e);}
+  }catch(e){
+    if(e.name!=="AbortError")console.error(e);
+    if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
+      alert("オンラインの商品画像は、この端末では保存できませんでした。\n\n「撮影写真」に切り替えてから保存してください。");
+    }
+  }
 });
 // 保存できた写真を「済」にして、次の未処理の写真へ自動で進む
 function pqMarkDoneAndNext(){
@@ -2962,7 +2991,12 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
     }else{
       const dl=document.createElement("a");dl.download=file.name;dl.href=a.full||a.thumb;dl.click();
     }
-  }catch(e){if(e.name!=="AbortError")console.error(e);}
+  }catch(e){
+    if(e.name!=="AbortError")console.error(e);
+    if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
+      alert("オンラインの商品画像は、この端末では保存できませんでした。\n\n「撮影写真」に切り替えてから保存してください。");
+    }
+  }
 });
 
 updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
@@ -2987,6 +3021,11 @@ updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateL
       const pq=Number((sp.get("price")||"").replace(/[^\d]/g,""))||0;
       const price=pq||(info&&info.ok?info.price:0);
       if(price){document.getElementById("sPrice").value=String(price);filled.push(pq?"価格(値下げ後)":"価格");}
+      // ピッキングから来た場合も、オンラインの商品画像を候補として出す
+      if(info&&info.ok&&info.pics&&info.pics.length){
+        showNetPics(info.pics);
+        filled.push("商品画像"+info.pics.length+"枚");
+      }
       // 値下げ前の価格が渡されていれば、値下げ表示を自動で入れる
       const oq=Number((sp.get("old")||"").replace(/[^\d]/g,""))||0;
       if(oq&&price&&oq>price){
