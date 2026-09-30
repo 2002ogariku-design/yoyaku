@@ -409,6 +409,23 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
         </div>
       </div>
       <div style="margin-top:14px;">
+        <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">🖼 写真の収め方</div>
+        <div class="seg" id="fitSeg" style="margin-bottom:12px;">
+          <button type="button" data-fit="cover" class="on">画面いっぱい</button>
+          <button type="button" data-fit="contain">全体を入れる</button>
+        </div>
+        <div id="fitRow" style="display:none;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+            <span style="font-size:11.5px;width:76px;color:var(--t2);">写真の大きさ</span>
+            <input type="range" id="fitArea" min="35" max="85" step="1" value="62" style="flex:1;">
+            <span style="font-size:11px;width:34px;text-align:right;color:var(--t3);" id="fitAreaV">62%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;">
+            <span style="font-size:11.5px;width:76px;color:var(--t2);">上下の位置</span>
+            <input type="range" id="fitTop" min="22" max="62" step="1" value="40" style="flex:1;">
+            <span style="font-size:11px;width:34px;text-align:right;color:var(--t3);" id="fitTopV">40%</span>
+          </div>
+        </div>
         <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">✨ 画像加工</div>
         <div class="seg" id="fxSeg" style="flex-wrap:wrap;">
           <button type="button" data-fx="none" class="on">なし</button>
@@ -475,7 +492,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.29.1200";
+const APP_VERSION="v2026.09.29.1900";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -810,6 +827,7 @@ function pqCurrentState(){
     rank:document.getElementById("sRank").value,
     price:document.getElementById("sPrice").value,
     tag:document.getElementById("sTag").value,
+    fit:PHOTO_FIT,fitArea:FIT_AREA,fitTop:FIT_TOP,
     cutOn:document.getElementById("cutOn").checked,
     newPrice:document.getElementById("sNewPrice").value,
     tagShow:document.getElementById("tagShow").checked,
@@ -824,6 +842,11 @@ function pqApplyState(s){
   document.getElementById("sPrice").value=s.price||"";
   document.getElementById("sTag").value=s.tag||"📩DMにて割引可能";
   document.getElementById("tagShow").checked=(s.tagShow!==false);
+  if(s.fit)setFit(s.fit,true);
+  if(s.fitArea){FIT_AREA=s.fitArea;const a=document.getElementById("fitArea");
+    if(a){a.value=Math.round(FIT_AREA*100);document.getElementById("fitAreaV").textContent=a.value+"%";}}
+  if(s.fitTop){FIT_TOP=s.fitTop;const t=document.getElementById("fitTop");
+    if(t){t.value=Math.round(FIT_TOP*100);document.getElementById("fitTopV").textContent=t.value+"%";}}
   document.getElementById("cutOn").checked=!!s.cutOn;
   document.getElementById("sNewPrice").value=s.newPrice||"";
   document.getElementById("cutRow2").style.display=s.cutOn?"block":"none";
@@ -1034,6 +1057,7 @@ function bulkGoto(i){
   const b=BULK[bulkIndex], d=b.data||{};
   photoImg=b.img||null; SHOT_IMG=null;
   photoOffX=0;photoOffY=0;photoZoom=1;
+  setFit(b.img?"contain":"cover",true);
   if(b.state){ pqApplyState(b.state); }
   else{
     document.getElementById("sBrand").value=d.brand||"";
@@ -1073,6 +1097,31 @@ function bulkMarkDoneAndNext(){
   if(n<0){ flashSyncIndicator("🎉 すべての商品を作成しました"); return; }
   setTimeout(()=>bulkGoto(n),400);
 }
+
+
+/* ===== 写真の収め方 ===== */
+// 白背景の商品画像は縦長のストーリーに合わないので、全体が入るように置けるようにする。
+let PHOTO_FIT="cover";   // cover=画面いっぱい / contain=全体を入れる
+let FIT_AREA=0.62;       // 画面の高さに対する写真の大きさ
+let FIT_TOP=0.40;        // 写真の中心をどの高さに置くか
+function setFit(v,silent){
+  PHOTO_FIT=v;
+  document.querySelectorAll("#fitSeg button").forEach(b=>b.classList.toggle("on",b.dataset.fit===v));
+  const row=document.getElementById("fitRow");
+  if(row)row.style.display=(v==="contain")?"block":"none";
+  if(!silent)drawStory();
+}
+document.querySelectorAll("#fitSeg button").forEach(b=>b.addEventListener("click",()=>setFit(b.dataset.fit)));
+document.getElementById("fitArea").addEventListener("input",e=>{
+  FIT_AREA=Number(e.target.value)/100;
+  document.getElementById("fitAreaV").textContent=e.target.value+"%";
+  drawStory();
+});
+document.getElementById("fitTop").addEventListener("input",e=>{
+  FIT_TOP=Number(e.target.value)/100;
+  document.getElementById("fitTopV").textContent=e.target.value+"%";
+  drawStory();
+});
 
 /* ===== オンラインの商品画像を使う ===== */
 // 値札を読むと楽天から白背景の商品画像が取れるので、候補として出す。
@@ -1124,6 +1173,7 @@ async function useNetPic(v){
   if(v==="shot"){
     if(SHOT_IMG){
       photoImg=SHOT_IMG;photoOffX=0;photoOffY=0;NET_TAINTED=false;
+      setFit("cover",true);
       if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=SHOT_IMG;
       markNetPick("shot");netNote("");drawStory();
     }
@@ -1141,6 +1191,7 @@ async function useNetPic(v){
   if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=res.img;
   const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
   document.getElementById("photoControls").style.display="block";
+  setFit("contain",true);   // 商品画像は全体が入る置き方が合う
   markNetPick(v);
   netNote(res.tainted
     ? "この画像を使っています。保存できない場合は撮影写真に切り替えてください。"
@@ -1368,6 +1419,7 @@ function batchMarkDoneAndNext(){
 
 function loadPhoto(file){
   SHOT_IMG=null;
+  if(typeof setFit==="function")setFit("cover",true);
   {const b=document.getElementById("netPhotoBox");if(b)b.style.display="none";}
   const fr=new FileReader();
   fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
@@ -2539,12 +2591,34 @@ function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
   const wt=T.weight||500;
   // photo
   if(data.img){
-    const s=Math.max(W/data.img.width,H/data.img.height)*(data.zoom||1);
+    // 「埋める」＝画面いっぱい（撮影写真向き）
+    // 「全体を入れる」＝商品が切れない（白背景の商品画像向き）
+    const fit=(typeof PHOTO_FIT!=="undefined")?PHOTO_FIT:"cover";
+    const base=(fit==="contain")
+      ? Math.min(W/data.img.width,(H*(FIT_AREA||0.62))/data.img.height)
+      : Math.max(W/data.img.width,H/data.img.height);
+    const s=base*(data.zoom||1);
     const w=data.img.width*s,h=data.img.height*s;
     const maxDX=Math.max(0,(w-W)/2), maxDY=Math.max(0,(h-H)/2);
     const dx=(W-w)/2 + (data.offX||0)*maxDX;
-    const dy=(H-h)/2 + (data.offY||0)*maxDY;
+    let dy=(H-h)/2 + (data.offY||0)*maxDY;
+    if(fit==="contain"){
+      // 文字が入る下側を空けて、写真は少し上寄りの中央に置く
+      dy=(H*(FIT_TOP||0.40))-h/2 + (data.offY||0)*Math.max(40,H*0.12);
+    }
     const fx=PHOTO_FX;
+    if(fit==="contain"){
+      // 余白は写真の隅の色でなじませる（白背景の画像なら白のまま）
+      let bg="#ffffff";
+      try{
+        const t=document.createElement("canvas");t.width=t.height=1;
+        const tc=t.getContext("2d",{willReadFrequently:true});
+        tc.drawImage(data.img,0,0,1,1);
+        const d=tc.getImageData(0,0,1,1).data;
+        bg=`rgb(${d[0]},${d[1]},${d[2]})`;
+      }catch(e){}
+      ctx.save();ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);ctx.restore();
+    }
     if(fx==="blur"){
       // 背景をぼかして敷き、その上に元の写真を重ねる
       if(HAS_FILTER){
