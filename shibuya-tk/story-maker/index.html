@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>RINKAN ストーリー作成</title>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root{
@@ -354,6 +355,25 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 
   <div class="c" style="text-align:center;">
     <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);touch-action:none;cursor:grab;"></canvas>
+    <div id="stockBox" style="margin-bottom:16px;background:linear-gradient(135deg,#eef5ff,#fff);
+      border:1px solid #b8d4f5;border-radius:14px;padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:800;color:#0055aa;">📦 在庫表から選んで作成</div>
+        <button type="button" class="pill" id="stockPick" style="padding:8px 13px;font-size:12.5px;background:#0055aa;color:#fff;border-color:#0055aa;">在庫表を読み込む</button>
+      </div>
+      <input type="file" id="stockIn" accept=".xlsx,.xls" style="display:none;">
+      <div id="stockInfo" class="note"></div>
+      <div id="stockFilter" style="display:none;margin-top:10px;">
+        <select id="stockStore" style="width:100%;margin-bottom:7px;"></select>
+        <input type="text" id="stockQ" placeholder="🔍 ブランド・品名・品番で検索">
+        <div id="stockBrands" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;max-height:104px;overflow-y:auto;"></div>
+        <div id="stockHits" class="note" style="margin-top:8px;"></div>
+        <div id="stockList" style="margin-top:8px;max-height:300px;overflow-y:auto;"></div>
+        <div class="row" style="margin-top:9px;">
+          <button class="btn" id="stockBulk" style="background:#0055aa;">表示中をまとめて作成</button>
+        </div>
+      </div>
+    </div>
     <div id="bulkBox" style="display:none;margin-bottom:16px;background:linear-gradient(135deg,#f3f0ff,#fff);
       border:1px solid #d6ccff;border-radius:14px;padding:14px;">
       <div style="font-size:13px;font-weight:800;color:#5b3fc4;margin-bottom:7px;">
@@ -492,7 +512,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.09.30.1800";
+const APP_VERSION="v2026.10.01.1500";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -969,10 +989,177 @@ function flashSyncIndicator(msg){
 
 
 
+
+/* ===== 在庫表から選んで作成 ===== */
+// 全店の在庫データ（3万件超）を読み込み、絞り込んでストーリーを作れるようにする。
+// 読み込んだデータは端末に保存して、次回から読み込み直さずに使える。
+let STOCK=[], STOCK_COLS=[], stockStore="", stockBrand="";
+const STOCK_KEY="story-stock-v1";
+
+const SCOL={store:1,hinban:44,brand:5,kana:6,collab:7,season:8,model:9,name:10,
+  size:11,color:12,price:16,rank:22,acc:29,list:28,cat:39,buyer:33,qty:13,cost:14,ikki:20};
+
+async function saveStock(){
+  try{
+    const body=JSON.stringify(STOCK);
+    if(typeof CompressionStream!=="undefined"){
+      const cs=new CompressionStream("gzip");
+      const blob=await new Response(new Blob([new TextEncoder().encode(body)]).stream().pipeThrough(cs)).blob();
+      const buf=new Uint8Array(await blob.arrayBuffer());
+      let bin="";const CH=0x8000;
+      for(let i=0;i<buf.length;i+=CH)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+CH));
+      localStorage.setItem(STOCK_KEY,"gz:"+btoa(bin));
+    }else{
+      localStorage.setItem(STOCK_KEY,body);
+    }
+    localStorage.setItem(STOCK_KEY+":at",new Date().toISOString());
+  }catch(e){ console.log("在庫表の保存に失敗",e); }
+}
+async function loadStockCache(){
+  try{
+    const raw=localStorage.getItem(STOCK_KEY);
+    if(!raw)return false;
+    let json=raw;
+    if(raw.startsWith("gz:")){
+      const bin=atob(raw.slice(3));
+      const buf=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+      const ds=new DecompressionStream("gzip");
+      json=await (await new Response(new Blob([buf]).stream().pipeThrough(ds)).blob()).text();
+    }
+    STOCK=JSON.parse(json);
+    return STOCK.length>0;
+  }catch(e){ return false; }
+}
+
+document.getElementById("stockPick").addEventListener("click",()=>document.getElementById("stockIn").click());
+document.getElementById("stockIn").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value="";
+  if(!f)return;
+  const info=document.getElementById("stockInfo");
+  info.textContent="読み込み中…（件数が多いので少し時間がかかります）";
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    // ヘッダー行を探す
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,20);i++){
+      const line=rows[i].map(v=>String(v||"").trim());
+      if(line.includes("店舗名称")&&line.includes("ハイフン品番")){hi=i;break;}
+    }
+    if(hi<0){info.innerHTML='<span style="color:var(--red);">在庫表の形式ではないようです。</span>';return;}
+    const H=rows[hi].map(v=>String(v||"").trim());
+    const col={};
+    Object.entries({store:"店舗名称",hinban:"ハイフン品番",brand:"ブランド名称",kana:"ブランド名（カナ）",
+      collab:"コラボブランド",season:"シーズン",model:"モデル",name:"品名",size:"サイズ*",color:"カラー*",
+      price:"単品売価（税込）",rank:"状態ランク",acc:"付属品",list:"参考定価",cat:"小分類名称",
+      buyer:"バイヤー名称",qty:"リアル在庫数量",cost:"単品原価",ikki:"100イキ（税込）"}).forEach(([k,label])=>{
+      const j=H.indexOf(label); if(j>=0)col[k]=j;
+    });
+    const num=v=>{const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));return isFinite(n)?Math.round(n):0;};
+    STOCK=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i];
+      const g=k=>col[k]!=null?String(r[col[k]]==null?"":r[col[k]]).trim():"";
+      const hb=g("hinban");
+      if(!g("store")||!/^\d{5}-\d{6}-\d{4}$/.test(hb))continue;
+      STOCK.push({st:g("store"),hb,br:g("brand")||g("kana"),ka:g("kana"),cb:g("collab"),
+        se:g("season"),mo:g("model"),nm:g("name"),sz:g("size"),co:g("color"),
+        pr:num(g("price")),rk:g("rank"),ac:g("acc"),li:num(g("list")),ct:g("cat"),
+        by:g("buyer"),qt:num(g("qty"))||1});
+    }
+    await saveStock();
+    info.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${STOCK.length.toLocaleString()}件を読み込みました</span>`;
+    setupStockFilter();
+  }catch(err){
+    info.innerHTML='<span style="color:var(--red);">読み込みに失敗しました：'+esc(err.message)+'</span>';
+  }
+});
+
+function setupStockFilter(){
+  if(!STOCK.length)return;
+  document.getElementById("stockFilter").style.display="block";
+  const stores={};
+  STOCK.forEach(r=>stores[r.st]=(stores[r.st]||0)+1);
+  const list=Object.entries(stores).sort((a,b)=>b[1]-a[1]);
+  const sel=document.getElementById("stockStore");
+  sel.innerHTML=list.map(([s,n])=>`<option value="${esc(s)}">${esc(s)}（${n.toLocaleString()}点）</option>`).join("");
+  let pref="";try{pref=localStorage.getItem("story-stock-store")||"";}catch(e){}
+  stockStore=list.some(([s])=>s===pref)?pref:(list.find(([s])=>s.includes("渋谷")&&!s.includes("SV"))||list[0])[0];
+  sel.value=stockStore;
+  renderStock();
+}
+document.getElementById("stockStore").addEventListener("change",e=>{
+  stockStore=e.target.value;stockBrand="";
+  try{localStorage.setItem("story-stock-store",stockStore);}catch(err){}
+  renderStock();
+});
+document.getElementById("stockQ").addEventListener("input",renderStock);
+
+function stockFiltered(){
+  const q=(document.getElementById("stockQ").value||"").trim().toLowerCase();
+  return STOCK.filter(r=>{
+    if(stockStore&&r.st!==stockStore)return false;
+    if(stockBrand&&r.br!==stockBrand)return false;
+    if(q&&!((r.br+" "+r.ka+" "+r.mo+" "+r.nm+" "+r.hb+" "+r.ct).toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+function renderStock(){
+  const inStore=STOCK.filter(r=>!stockStore||r.st===stockStore);
+  const bm={};
+  inStore.forEach(r=>{ if(r.br)bm[r.br]=(bm[r.br]||0)+1; });
+  const bl=Object.entries(bm).sort((a,b)=>b[1]-a[1]);
+  const bc=document.getElementById("stockBrands");
+  bc.innerHTML=`<span class="pill${stockBrand?"":" on"}" data-sb="">すべて(${inStore.length})</span>`
+    +bl.map(([b,n])=>`<span class="pill${stockBrand===b?" on":""}" data-sb="${esc(b)}">${esc(b)} ${n}</span>`).join("");
+  bc.querySelectorAll("[data-sb]").forEach(el=>el.onclick=()=>{stockBrand=el.getAttribute("data-sb")||"";renderStock();});
+
+  const hits=stockFiltered();
+  document.getElementById("stockHits").innerHTML=
+    `<b>${hits.length.toLocaleString()}件</b>が該当${hits.length>60?"（先頭60件を表示）":""}`;
+  const el=document.getElementById("stockList");
+  el.innerHTML=hits.slice(0,60).map((r,i)=>`
+    <div class="stockRow" data-si="${STOCK.indexOf(r)}" style="display:flex;gap:9px;align-items:center;
+      border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.br)}　<span class="muted" style="font-weight:400;">${esc(r.mo||r.nm||"")}</span></div>
+        <div class="muted" style="font-size:11px;">${esc(r.hb)}　size${esc(r.sz)}　${esc(r.rk)}　¥${r.pr.toLocaleString()}</div>
+      </div>
+      <button class="btn sub" style="flex:0 0 auto;padding:7px 11px;font-size:11.5px;">作成</button>
+    </div>`).join("")||'<div class="note">該当する商品がありません。</div>';
+  el.querySelectorAll(".stockRow").forEach(row=>row.addEventListener("click",()=>{
+    const r=STOCK[Number(row.dataset.si)];
+    if(r)startBulk([{hinban:r.hb,newPrice:0,oldPrice:0,stock:r}]);
+  }));
+}
+document.getElementById("stockBulk").addEventListener("click",()=>{
+  const hits=stockFiltered();
+  if(!hits.length){alert("対象の商品がありません。");return;}
+  if(!confirm(`${hits.length}件 でストーリー作成を始めます。`))return;
+  startBulk(hits.map(r=>({hinban:r.hb,newPrice:0,oldPrice:0,stock:r})));
+});
+
 /* ===== 売価修正のまとめて作成 ===== */
 // ピッキングツールから品番の一覧を受け取り、
 // 楽天の商品画像と情報を一気に集めてから、1件ずつ確認して保存していく。
 let BULK=[], bulkIndex=-1;
+
+// 共有データベースから受け取る（件数の上限なし）
+async function fetchBulkRef(token){
+  try{
+    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq.story-bulk&select=payload",{
+      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS()}});
+    if(!r.ok)return null;
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    if(!p||!Array.isArray(p.items))return null;
+    if(token&&p.token&&p.token!==token)return null;
+    return p.items.map(x=>({hinban:x.hinban,newPrice:Number(x.newPrice)||0,
+      oldPrice:Number(x.oldPrice)||0,brandHint:x.brand||"",nameHint:x.name||""}));
+  }catch(e){ return null; }
+}
 
 function bulkParam(){
   const sp=new URLSearchParams(location.search);
@@ -1004,6 +1191,17 @@ async function startBulk(list){
     try{
       const info=await rakutenLookup(b.hinban,"https://item.rakuten.co.jp/gsc-rinkan/"+b.hinban);
       b.data=info&&info.ok?info:{ok:false,reason:(info&&info.notFound)?"楽天に商品ページがありません":"情報を取得できません"};
+      // 在庫表の情報がある場合は、そちらを優先して埋める（売価・サイズ・ランクは社内の値が正しい）
+      if(b.stock){
+        const s=b.stock;
+        b.data=Object.assign({ok:true},b.data,{
+          brand:s.br||b.data.brand||"", size:s.sz||b.data.size||"",
+          rank:s.rk||b.data.rank||"", price:s.pr||b.data.price||0,
+          pics:(b.data&&b.data.pics)||[]
+        });
+        if(!b.data.pics.length&&b.data.reason)b.data.reason="写真を選んでください（楽天に画像なし）";
+        else delete b.data.reason;
+      }
       if(info&&info.ok&&info.pics&&info.pics.length){
         const r=await loadNetImage(info.pics[0]);
         if(r){ b.img=r.img; b.tainted=r.tainted; }
@@ -1064,7 +1262,7 @@ function bulkGoto(i){
     document.getElementById("sSize").value=d.size||"";
     setRank(d.rank||"");
     // 元の価格を「価格」に、値下げ後を専用欄に入れて割引表示にする
-    const base=b.oldPrice||d.price||0;
+    const base=b.oldPrice||(b.stock&&b.stock.pr)||d.price||0;
     document.getElementById("sPrice").value=base?String(base):"";
     if(b.newPrice&&base&&b.newPrice<base){
       document.getElementById("sNewPrice").value=String(b.newPrice);
@@ -3277,11 +3475,28 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
 
 updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
   if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
+  // 前回読み込んだ在庫表があれば、そのまま使えるようにする
+  loadStockCache().then(ok=>{
+    if(!ok)return;
+    let at="";try{at=localStorage.getItem(STOCK_KEY+":at")||"";}catch(e){}
+    const d=at?new Date(at):null;
+    document.getElementById("stockInfo").innerHTML=
+      `<span style="color:var(--green);font-weight:700;">✓ 在庫表 ${STOCK.length.toLocaleString()}件を読み込み済み</span>`
+      +(d?`<span class="muted">（${d.getMonth()+1}/${d.getDate()} 取り込み）</span>`:"")
+      +`<br><span class="muted">新しい在庫表に差し替えるときは、右上から読み込み直してください。</span>`;
+    setupStockFilter();
+  });
   // ピッキングツールから品番を渡された場合は、そのまま情報を引いて入力する
   (async()=>{
     try{
       const sp=new URLSearchParams(location.search);
-      // まとめて作成（売価修正から複数品番を受け取った場合）
+      // まとめて作成（売価修正から受け取った場合）
+      const ref=sp.get("bulkref");
+      if(ref){
+        const list=await fetchBulkRef(ref);
+        if(list&&list.length){ await startBulk(list); return; }
+        alert("受け取ったデータが見つかりませんでした。ピッキングツールからもう一度実行してください。");
+      }
       const bulk=bulkParam();
       if(bulk&&bulk.length){ await startBulk(bulk); return; }
       const hb=(sp.get("hinban")||"").trim();
