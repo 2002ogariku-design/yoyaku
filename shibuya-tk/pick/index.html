@@ -284,7 +284,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.29.1200";
+const APP_VERSION="v2026.10.01.1200";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -1392,19 +1392,35 @@ document.querySelector("#loadCard .c-title").textContent=
 /* ===== まとめてストーリー作成 ===== */
 // 絞り込んで表示している商品の品番と値下げ価格をまとめてストーリー作成ツールに渡す。
 // URLが長くなりすぎないよう、1回あたりの件数に上限を設ける。
-const BULK_MAX=40;
-document.getElementById("bulkStoryBtn").addEventListener("click",()=>{
+// 件数の上限をなくすため、URLに並べるのではなく共有データベースに渡す。
+// ストーリー作成ツールは受け取り番号だけで全件を読み込める。
+document.getElementById("bulkStoryBtn").addEventListener("click",async()=>{
   const list=(currentShown||[]).filter(i=>i.hinban);
   if(!list.length){alert("対象の商品がありません。");return;}
-  const target=list.slice(0,BULK_MAX);
-  const param=target.map(i=>
-    [i.hinban, i.newPrice||"", (i.newPrice&&i.price&&i.price>i.newPrice)?i.price:""].join(":")
-  ).join(",");
-  const msg=list.length>BULK_MAX
-    ? `表示中の ${list.length}件のうち、先頭 ${BULK_MAX}件 でストーリー作成を始めます。\n\n残りは絞り込みを変えてから、もう一度実行してください。`
-    : `${target.length}件 でストーリー作成を始めます。`;
-  if(!confirm(msg))return;
-  window.open("../story-maker/?bulk="+encodeURIComponent(param),"_blank");
+  if(!confirm(`${list.length}件 でストーリー作成を始めます。`))return;
+  const btn=document.getElementById("bulkStoryBtn");
+  const label=btn.textContent;
+  btn.textContent="受け渡し中...";btn.disabled=true;
+  const items=list.map(i=>({
+    hinban:i.hinban,
+    newPrice:i.newPrice||0,
+    oldPrice:(i.newPrice&&i.price&&i.price>i.newPrice)?i.price:0,
+    brand:i.brandName||"", name:i.name||""
+  }));
+  const token="bulk"+Date.now().toString(36);
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
+      method:"POST",
+      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({tool:"story-bulk",payload:{token,at:new Date().toISOString(),by:myName(),items},
+        updated_at:new Date().toISOString()})
+    });
+    if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,80));}
+    window.open("../story-maker/?bulkref="+encodeURIComponent(token),"_blank");
+  }catch(e){
+    alert("受け渡しに失敗しました：\n"+e.message);
+  }
+  btn.textContent=label;btn.disabled=false;
 });
 
 /* ========= 共有リストの削除 ========= */
