@@ -354,6 +354,10 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
   </div>
 
   <div class="c" style="text-align:center;">
+    <div id="quickSaveBar" style="display:flex;gap:7px;margin-bottom:10px;">
+      <button class="btn" id="quickSave" style="flex:1;padding:14px;font-size:15.5px;">⬇️ 保存・共有</button>
+      <button class="btn sub" id="quickNext" style="flex:0 0 auto;padding:14px 16px;font-size:14px;">次へ ▶︎</button>
+    </div>
     <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);touch-action:none;cursor:grab;"></canvas>
     <div id="stockBox" style="margin-bottom:16px;background:linear-gradient(135deg,#eef5ff,#fff);
       border:1px solid #b8d4f5;border-radius:14px;padding:14px;">
@@ -366,6 +370,11 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
       <div id="stockFilter" style="display:none;margin-top:10px;">
         <select id="stockStore" style="width:100%;margin-bottom:7px;"></select>
         <input type="text" id="stockQ" placeholder="🔍 ブランド・品名・品番で検索">
+        <div class="seg" id="stockSort" style="margin-top:7px;">
+          <button type="button" data-ss="new" class="on">新しい順</button>
+          <button type="button" data-ss="high">高い順</button>
+          <button type="button" data-ss="low">安い順</button>
+        </div>
         <div id="stockBrands" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;max-height:104px;overflow-y:auto;"></div>
         <div id="stockHits" class="note" style="margin-top:8px;"></div>
         <div id="stockList" style="margin-top:8px;max-height:300px;overflow-y:auto;"></div>
@@ -512,7 +521,7 @@ header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-sp
 </div>
 
 <script>
-const APP_VERSION="v2026.10.01.1500";
+const APP_VERSION="v2026.10.02.1200";
 
 const PHRASES=[
   // 案内・問い合わせ
@@ -990,10 +999,30 @@ function flashSyncIndicator(msg){
 
 
 
+
+/* ===== プレビュー直下の保存ボタン ===== */
+// 下まで行かずに保存できるよう、同じ処理を上でも押せるようにする。
+document.getElementById("quickSave").addEventListener("click",()=>{
+  const b=document.getElementById("dlBtn")||document.getElementById("shareBtn");
+  if(b)b.click();
+});
+document.getElementById("quickNext").addEventListener("click",()=>{
+  const b=document.getElementById("nextItemBtn");
+  if(b)b.click();
+});
+// まとめて作成中だけ「次へ」を出す
+function syncQuickBar(){
+  const n=document.getElementById("quickNext");
+  if(!n)return;
+  const multi=(typeof BULK!=="undefined"&&BULK.length)||(typeof batchItems!=="undefined"&&batchItems.length)
+            ||(typeof photoQueue!=="undefined"&&photoQueue.length>1);
+  n.style.display=multi?"block":"none";
+}
+
 /* ===== 在庫表から選んで作成 ===== */
 // 全店の在庫データ（3万件超）を読み込み、絞り込んでストーリーを作れるようにする。
 // 読み込んだデータは端末に保存して、次回から読み込み直さずに使える。
-let STOCK=[], STOCK_COLS=[], stockStore="", stockBrand="";
+let STOCK=[], STOCK_COLS=[], stockStore="", stockBrand="", stockShown=60;
 const STOCK_KEY="story-stock-v1";
 
 const SCOL={store:1,hinban:44,brand:5,kana:6,collab:7,season:8,model:9,name:10,
@@ -1091,20 +1120,31 @@ function setupStockFilter(){
   renderStock();
 }
 document.getElementById("stockStore").addEventListener("change",e=>{
-  stockStore=e.target.value;stockBrand="";
+  stockStore=e.target.value;stockBrand="";stockShown=60;
   try{localStorage.setItem("story-stock-store",stockStore);}catch(err){}
   renderStock();
 });
-document.getElementById("stockQ").addEventListener("input",renderStock);
+document.getElementById("stockQ").addEventListener("input",()=>{stockShown=60;renderStock();});
 
+let stockSort="new";
+document.querySelectorAll("#stockSort button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#stockSort button").forEach(x=>x.classList.toggle("on",x===b));
+  stockSort=b.dataset.ss;stockShown=60;renderStock();
+}));
+// 品番の中間6桁が登録日なので、そこで新しい順に並べられる
+function stockDate(hb){ const m=String(hb||"").match(/^\d{5}-(\d{6})-/); return m?m[1]:"000000"; }
 function stockFiltered(){
   const q=(document.getElementById("stockQ").value||"").trim().toLowerCase();
-  return STOCK.filter(r=>{
+  const out=STOCK.filter(r=>{
     if(stockStore&&r.st!==stockStore)return false;
     if(stockBrand&&r.br!==stockBrand)return false;
     if(q&&!((r.br+" "+r.ka+" "+r.mo+" "+r.nm+" "+r.hb+" "+r.ct).toLowerCase().includes(q)))return false;
     return true;
   });
+  if(stockSort==="high")out.sort((a,b)=>b.pr-a.pr);
+  else if(stockSort==="low")out.sort((a,b)=>a.pr-b.pr);
+  else out.sort((a,b)=>stockDate(b.hb).localeCompare(stockDate(a.hb)));
+  return out;
 }
 function renderStock(){
   const inStore=STOCK.filter(r=>!stockStore||r.st===stockStore);
@@ -1114,13 +1154,15 @@ function renderStock(){
   const bc=document.getElementById("stockBrands");
   bc.innerHTML=`<span class="pill${stockBrand?"":" on"}" data-sb="">すべて(${inStore.length})</span>`
     +bl.map(([b,n])=>`<span class="pill${stockBrand===b?" on":""}" data-sb="${esc(b)}">${esc(b)} ${n}</span>`).join("");
-  bc.querySelectorAll("[data-sb]").forEach(el=>el.onclick=()=>{stockBrand=el.getAttribute("data-sb")||"";renderStock();});
+  bc.querySelectorAll("[data-sb]").forEach(el=>el.onclick=()=>{stockBrand=el.getAttribute("data-sb")||"";stockShown=60;renderStock();});
 
   const hits=stockFiltered();
+  const total=hits.length;
+  if(stockShown>total)stockShown=Math.min(60,total);
   document.getElementById("stockHits").innerHTML=
-    `<b>${hits.length.toLocaleString()}件</b>が該当${hits.length>60?"（先頭60件を表示）":""}`;
+    `<b>${total.toLocaleString()}件</b>が該当${total>stockShown?`（${stockShown}件を表示中）`:""}`;
   const el=document.getElementById("stockList");
-  el.innerHTML=hits.slice(0,60).map((r,i)=>`
+  el.innerHTML=hits.slice(0,stockShown).map((r,i)=>`
     <div class="stockRow" data-si="${STOCK.indexOf(r)}" style="display:flex;gap:9px;align-items:center;
       border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer;">
       <div style="flex:1;min-width:0;">
@@ -1129,6 +1171,13 @@ function renderStock(){
       </div>
       <button class="btn sub" style="flex:0 0 auto;padding:7px 11px;font-size:11.5px;">作成</button>
     </div>`).join("")||'<div class="note">該当する商品がありません。</div>';
+  if(total>stockShown){
+    el.insertAdjacentHTML("beforeend",
+      `<div class="row" style="margin-top:9px;"><button class="btn sub" id="stockMore">
+        さらに表示（残り ${(total-stockShown).toLocaleString()}件）</button></div>`);
+    const mb=document.getElementById("stockMore");
+    if(mb)mb.onclick=()=>{stockShown+=100;renderStock();};
+  }
   el.querySelectorAll(".stockRow").forEach(row=>row.addEventListener("click",()=>{
     const r=STOCK[Number(row.dataset.si)];
     if(r)startBulk([{hinban:r.hb,newPrice:0,oldPrice:0,stock:r}]);
@@ -1188,25 +1237,37 @@ async function startBulk(list){
 
   const work=async i=>{
     const b=BULK[i];
+    let info=null;
     try{
-      const info=await rakutenLookup(b.hinban,"https://item.rakuten.co.jp/gsc-rinkan/"+b.hinban);
-      b.data=info&&info.ok?info:{ok:false,reason:(info&&info.notFound)?"楽天に商品ページがありません":"情報を取得できません"};
-      // 在庫表の情報がある場合は、そちらを優先して埋める（売価・サイズ・ランクは社内の値が正しい）
-      if(b.stock){
-        const s=b.stock;
-        b.data=Object.assign({ok:true},b.data,{
-          brand:s.br||b.data.brand||"", size:s.sz||b.data.size||"",
-          rank:s.rk||b.data.rank||"", price:s.pr||b.data.price||0,
-          pics:(b.data&&b.data.pics)||[]
-        });
-        if(!b.data.pics.length&&b.data.reason)b.data.reason="写真を選んでください（楽天に画像なし）";
-        else delete b.data.reason;
-      }
-      if(info&&info.ok&&info.pics&&info.pics.length){
-        const r=await loadNetImage(info.pics[0]);
-        if(r){ b.img=r.img; b.tainted=r.tainted; }
-      }
-    }catch(e){ b.data={ok:false,reason:"取得中にエラーが発生しました"}; }
+      info=await rakutenLookup(b.hinban,"https://item.rakuten.co.jp/gsc-rinkan/"+b.hinban);
+    }catch(e){ info=null; }
+    // 品番で見つからない場合、ブランドとモデル名で画像だけ探す（古い商品は品番で出ないため）
+    if((!info||!info.ok)&&b.stock&&(b.stock.br||b.stock.mo)){
+      try{
+        const kw=[b.stock.br,b.stock.mo].filter(Boolean).join(" ").slice(0,60);
+        const alt=await rakutenSearchPics(kw);
+        if(alt&&alt.length)info={ok:true,pics:alt,viaKeyword:true};
+      }catch(e){}
+    }
+    // 在庫表の情報は社内の正しい値なので、楽天の成否に関係なく必ず反映する
+    if(b.stock){
+      const s=b.stock;
+      b.data={ok:true,
+        brand:s.br||(info&&info.brand)||"",
+        size:s.sz||(info&&info.size)||"",
+        rank:s.rk||(info&&info.rank)||"",
+        price:s.pr||(info&&info.price)||0,
+        model:s.mo||"", itemName:s.nm||"", acc:s.ac||"",
+        pics:(info&&info.pics)||[]};
+      if(!b.data.pics.length)b.data.reason="写真なし（選んでください）";
+    }else{
+      b.data=(info&&info.ok)?info
+        :{ok:false,reason:(info&&info.notFound)?"楽天に商品ページがありません":"情報を取得できません"};
+    }
+    if(b.data.pics&&b.data.pics.length){
+      const r=await loadNetImage(b.data.pics[0]);
+      if(r){ b.img=r.img; b.tainted=r.tainted; }
+    }
     done++; show(); renderBulk();
     if(!started){ started=true; bulkGoto(i); }
   };
@@ -1258,9 +1319,10 @@ function bulkGoto(i){
   setFit(b.img?"contain":"cover",true);
   if(b.state){ pqApplyState(b.state); }
   else{
-    document.getElementById("sBrand").value=d.brand||"";
-    document.getElementById("sSize").value=d.size||"";
-    setRank(d.rank||"");
+    const s=b.stock||{};
+    document.getElementById("sBrand").value=d.brand||s.br||"";
+    document.getElementById("sSize").value=d.size||s.sz||"";
+    setRank(d.rank||s.rk||"");
     // 元の価格を「価格」に、値下げ後を専用欄に入れて割引表示にする
     const base=b.oldPrice||(b.stock&&b.stock.pr)||d.price||0;
     document.getElementById("sPrice").value=base?String(base):"";
@@ -1280,7 +1342,7 @@ function bulkGoto(i){
   document.getElementById("photoDrop").innerHTML=
     `📷 ${bulkIndex+1}/${BULK.length} 件目${photoImg?" ✓":"（写真を選んでください）"}`;
   showNetPics((d.pics)||[]);
-  renderBulk(); drawStory();
+  renderBulk(); drawStory(); syncQuickBar();
   if(document.getElementById("captionBox").value)regenCaption();
 }
 
@@ -1954,6 +2016,17 @@ async function _rkQuery(q){
   }
   return {err:"混雑しています"};
 }
+// ブランド名やモデル名から商品画像だけを探す（品番で見つからない商品の保険）
+async function rakutenSearchPics(keyword){
+  if(!getRakutenAppId()||!getRakutenAccessKey())return null;
+  const res=await _rkQuery("&shopCode=gsc-rinkan&keyword="+encodeURIComponent(keyword));
+  if(res.err||!res.items.length)return null;
+  const it=res.items[0];
+  const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+  let pics=urls(it.mediumImageUrls); if(!pics.length)pics=urls(it.smallImageUrls);
+  return pics.map(u=>String(u).replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
+}
+
 async function rakutenLookup(hinban,url){
   const hasKey=getRakutenAppId()&&getRakutenAccessKey();
   if(hasKey&&hinban){
@@ -3473,7 +3546,7 @@ document.getElementById("viewerShare").addEventListener("click",async()=>{
   }
 });
 
-updateBrandDl();renderArchive();renderAdj();drawStory();updateApiBadge();updateLoanInfo();updateCutInfo();
+updateBrandDl();renderArchive();renderAdj();drawStory();syncQuickBar();updateApiBadge();updateLoanInfo();updateCutInfo();
   if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
   // 前回読み込んだ在庫表があれば、そのまま使えるようにする
   loadStockCache().then(ok=>{
