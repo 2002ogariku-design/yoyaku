@@ -145,6 +145,12 @@ tr:last-child td{border-bottom:none;}
   <div class="mb">
     <h3>名前を選択</h3>
     <select id="nameSel"></select>
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;font-weight:700;color:#666;margin-bottom:6px;">共有アクセスキー</div>
+      <input type="text" id="keyInput" placeholder="キーを貼り付け" autocomplete="off"
+        style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);font-size:15px;font-family:var(--font);">
+      <div id="keyState" style="font-size:11.5px;color:#888;margin-top:5px;"></div>
+    </div>
     <div class="acts">
       <button class="cancel" id="nameCancel">キャンセル</button>
       <button class="ok" id="nameOk">決定</button>
@@ -293,7 +299,7 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-const APP_VERSION="v2026.10.05.1200";
+const APP_VERSION="v2026.10.05.1700";
 
 const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/kpi-data.json";
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
@@ -371,6 +377,12 @@ function openName(force){
   document.getElementById("nameSel").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");
   const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSel").value=c;
   document.getElementById("nameCancel").style.display=force?"none":"";
+  // キーの状態を見せる（入れ替えもできるようにする）
+  let cur="";try{cur=localStorage.getItem(TK)||"";}catch(e){}
+  const ki=document.getElementById("keyInput"), ks=document.getElementById("keyState");
+  if(ki){ ki.value=""; ki.placeholder=cur?"設定済み（変更する場合のみ入力）":"キーを貼り付け"; }
+  if(ks)ks.textContent=cur?"✓ キーは設定済みです":"⚠ キーが未設定です。入力しないと保存できません。";
+  if(ks)ks.style.color=cur?"#1f7a4d":"#b5303a";
   document.getElementById("nameOv").style.display="flex";
 }
 function closeName(){document.getElementById("nameOv").style.display="none";}
@@ -379,17 +391,38 @@ function ensureName(force){
     if(getName()&&!force){r(getName());return;}
     openName(force);
     const b=document.getElementById("nameOk");
-    const h=()=>{setName(document.getElementById("nameSel").value);updBadge();closeName();b.removeEventListener("click",h);r(getName());};
+    const h=()=>{
+      setName(document.getElementById("nameSel").value);
+      const ki=document.getElementById("keyInput");
+      const kv=ki?String(ki.value||"").trim():"";
+      if(kv){ try{localStorage.setItem(TK,kv)}catch(e){} }
+      updBadge();closeName();b.removeEventListener("click",h);r(getName());
+    };
     b.addEventListener("click",h);
   });
 }
 
 // GH
 let ghSha=null, records=[];
+// 店内は電波が不安定なことがあるので、何度か試す
+async function fetchRetry(url,opt,tries){
+  tries=tries||3;
+  let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(s=>setTimeout(s,600*(i+1))); }
+  }
+  throw last||new Error("network");
+}
 async function ghGet(){
   const t=getToken();
   if(!t){ err("共有アクセスキーが未設定です。右上の「👤」から設定するか、画面を再読み込みして入力してください。"); return []; }
-  const r=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
+  let r;
+  try{
+    r=await fetchRetry(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
+  }catch(e){
+    throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください");
+  }
   if(r.status===401){
     try{localStorage.removeItem(TK)}catch(e){}
     const nt=String(prompt("キーが無効です。新しいキーを入力：")||"").trim();
@@ -411,10 +444,13 @@ async function ghGet(){
 async function ghSet(arr){
   const t=getToken();if(!t)throw new Error("共有アクセスキーが未設定です");
   for(let a=0;a<4;a++){
-    try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}
+    try{const h=await fetchRetry(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}
     const body={message:"kpi "+new Date().toISOString(),content:u2b(JSON.stringify(arr))};
     if(ghSha)body.sha=ghSha;
-    const r=await fetch(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    let r;
+    try{
+      r=await fetchRetry(GH_API,{method:"PUT",headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    }catch(e){ throw new Error("通信できませんでした。入力内容は残してあります"); }
     if(r.ok){ghSha=(await r.json()).content.sha;return;}
     if(r.status===409&&a<3){await new Promise(r=>setTimeout(r,500+a*500));continue;}
     throw new Error("保存失敗 "+r.status);
@@ -899,7 +935,20 @@ document.getElementById("reloadToday").addEventListener("click",async function()
   setInsightPeriodDefault();
   document.getElementById("insightAuto").addEventListener("click",setInsightPeriodDefault);
   await ensureName(true);
-  try{records=await ghGet()||[];}catch(e){err("読み込み失敗："+e.message);}
+  try{records=await ghGet()||[];}
+  catch(e){
+    err("読み込み失敗："+e.message);
+    const el=document.getElementById("errBanner");
+    if(el&&!document.getElementById("retryBtn")){
+      el.insertAdjacentHTML("beforeend",
+        ' <button id="retryBtn" style="margin-left:8px;padding:5px 12px;border-radius:8px;border:1px solid currentColor;background:#fff;font-family:var(--font);font-size:12.5px;font-weight:700;">再試行</button>');
+      document.getElementById("retryBtn").addEventListener("click",async()=>{
+        clrErr();
+        try{ records=await ghGet()||[]; renderToday(); renderCharts(); }
+        catch(e2){ err("読み込み失敗："+e2.message); }
+      });
+    }
+  }
   renderToday();
   renderCharts();
   // 入力途中だったものがあれば戻す
