@@ -293,7 +293,7 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1500";
+const APP_VERSION="v2026.10.05.1200";
 
 const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/kpi-data.json";
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
@@ -333,7 +333,18 @@ const INSIGHT_FIELDS=[
 ];
 const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...INSIGHT_FIELDS];
 
-function getToken(){let t;try{t=localStorage.getItem(TK)}catch(e){}if(!t){t=prompt("共有アクセスキーを入力してください");if(t){try{localStorage.setItem(TK,t.trim())}catch(e){}t=t.trim()}}return t}
+// キーが未入力・キャンセルされても落ちないようにする（null を返さない）
+function getToken(){
+  let t="";
+  try{t=localStorage.getItem(TK)||"";}catch(e){}
+  t=String(t||"").trim();
+  if(!t){
+    const inp=prompt("共有アクセスキーを入力してください");
+    t=String(inp||"").trim();
+    if(t){try{localStorage.setItem(TK,t)}catch(e){}}
+  }
+  return t;
+}
 function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
 function setName(n){try{localStorage.setItem(SK,n)}catch(e){}}
 function updBadge(){document.getElementById("badge").textContent=getName()?`👤 ${getName()}`:"👤 名前を設定";}
@@ -376,15 +387,29 @@ function ensureName(force){
 // GH
 let ghSha=null, records=[];
 async function ghGet(){
-  const t=getToken();if(!t)return[];
+  const t=getToken();
+  if(!t){ err("共有アクセスキーが未設定です。右上の「👤」から設定するか、画面を再読み込みして入力してください。"); return []; }
   const r=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});
-  if(r.status===401){try{localStorage.removeItem(TK)}catch(e){}const nt=prompt("キーが無効です。新しいキーを入力：");if(nt){try{localStorage.setItem(TK,nt.trim())}catch(e){}}return ghGet();}
+  if(r.status===401){
+    try{localStorage.removeItem(TK)}catch(e){}
+    const nt=String(prompt("キーが無効です。新しいキーを入力：")||"").trim();
+    if(!nt){ err("キーが未入力のため読み込めませんでした。"); return []; }
+    try{localStorage.setItem(TK,nt)}catch(e){}
+    return ghGet();
+  }
   if(r.status===404){ghSha=null;return[];}
   if(!r.ok)throw new Error("HTTP "+r.status);
-  const d=await r.json();ghSha=d.sha;return JSON.parse(b2u(d.content)||"[]");
+  const d=await r.json();ghSha=d.sha;
+  if(!d.content){
+    // まれに content が返らないので、生データで取り直す
+    const raw=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github.raw"}});
+    if(!raw.ok)throw new Error("HTTP "+raw.status);
+    return JSON.parse((await raw.text())||"[]");
+  }
+  return JSON.parse(b2u(d.content)||"[]");
 }
 async function ghSet(arr){
-  const t=getToken();if(!t)throw new Error("キー未設定");
+  const t=getToken();if(!t)throw new Error("共有アクセスキーが未設定です");
   for(let a=0;a<4;a++){
     try{const h=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:{"Authorization":`Bearer ${t}`,"Accept":"application/vnd.github+json"}});if(h.ok)ghSha=(await h.json()).sha;else if(h.status===404)ghSha=null;}catch(e){}
     const body={message:"kpi "+new Date().toISOString(),content:u2b(JSON.stringify(arr))};
@@ -497,6 +522,7 @@ async function doSave(){
     const t=document.getElementById("saveTick");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
     ALL_FIELDS.forEach(f=>{vals[f.key]=0;document.getElementById("v_"+f.key).textContent=f.isAmt?"¥0":"0";});
     document.querySelectorAll(".amt-input").forEach(i=>i.value="");
+    clearDraft();   // 保存できたので控えは不要
   }catch(e){console.error(e);err("保存失敗："+e.message);}
   finally{btn.textContent="保存する";btn.disabled=false;}
 }
@@ -876,7 +902,68 @@ document.getElementById("reloadToday").addEventListener("click",async function()
   try{records=await ghGet()||[];}catch(e){err("読み込み失敗："+e.message);}
   renderToday();
   renderCharts();
+  // 入力途中だったものがあれば戻す
+  if(restoreDraft()){
+    const el=document.getElementById("errBanner");
+    if(el){
+      el.style.display="block";
+      el.style.background="#eef7f0";el.style.borderColor="#c3e2cd";el.style.color="#1f7a4d";
+      el.textContent="入力途中の内容を復元しました。保存するとこの控えは消えます。";
+      setTimeout(()=>{el.style.display="none";el.style.background="";el.style.borderColor="";el.style.color="";},6000);
+    }
+  }
 })();
+
+
+/* ===== 入力中の内容を自動で控える ===== */
+// 他のアプリを開いて戻ると入力が消えてしまうため、
+// 端末内に下書きを残して、戻ってきたときに復元する。
+const DRAFT_KEY="tk-draft";
+function draftSnapshot(){
+  const di=document.getElementById("inDate");
+  const d={date:di?di.value:"",vals:{},amts:{},at:Date.now()};
+  Object.keys(vals).forEach(k=>{ if(Number(vals[k])>0)d.vals[k]=Number(vals[k]); });
+  document.querySelectorAll(".amt-input").forEach(el=>{
+    if(el.value!==""&&Number(el.value)>0)d.amts[el.id.replace(/^amt_/,"")]=el.value;
+  });
+  return d;
+}
+function saveDraft(){
+  try{
+    const d=draftSnapshot();
+    if(Object.keys(d.vals).length||Object.keys(d.amts).length)
+      localStorage.setItem(DRAFT_KEY,JSON.stringify(d));
+    else localStorage.removeItem(DRAFT_KEY);
+  }catch(e){}
+}
+function clearDraft(){ try{localStorage.removeItem(DRAFT_KEY)}catch(e){} }
+function restoreDraft(){
+  let d=null;
+  try{ d=JSON.parse(localStorage.getItem(DRAFT_KEY)||"null"); }catch(e){}
+  if(!d)return false;
+  const di=document.getElementById("inDate");
+  // 当日ぶんの控えだけ戻す（古いものは使わない）
+  if(d.date&&di&&d.date!==di.value)return false;
+  let n=0;
+  Object.entries(d.vals||{}).forEach(([k,v])=>{
+    if(Number(v)>0){
+      vals[k]=Number(v);
+      const el=document.getElementById("v_"+k);
+      if(el)el.textContent=String(Number(v));
+      n++;
+    }
+  });
+  Object.entries(d.amts||{}).forEach(([k,v])=>{
+    const inp=document.getElementById("amt_"+k);
+    if(inp&&v!==""){ inp.value=v; inp.dispatchEvent(new Event("input",{bubbles:true})); n++; }
+  });
+  return n>0;
+}
+// 入力のたび・画面を離れるたびに控える
+document.addEventListener("input",saveDraft,true);
+document.addEventListener("click",()=>setTimeout(saveDraft,0),true);
+document.addEventListener("visibilitychange",()=>{ if(document.hidden)saveDraft(); });
+window.addEventListener("pagehide",saveDraft);
 
 /* ===== バージョン表示 & 更新チェック ===== */
 (function(){
