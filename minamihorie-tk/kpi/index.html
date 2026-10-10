@@ -195,6 +195,11 @@ tr:last-child td{border-bottom:none;}
     <div class="sg" id="sgStore"></div>
   </div>
 
+  <div class="c">
+    <div class="c-title">📸 個人インスタ</div>
+    <div class="sg" id="sgInsta"></div>
+  </div>
+
   <button class="save-btn" id="saveBtn">保存する</button>
   <div class="save-tick" id="saveTick">✓ 保存しました</div>
 </div>
@@ -226,8 +231,9 @@ tr:last-child td{border-bottom:none;}
       <button id="xlsxMonth" style="border:none;background:#217346;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer;touch-action:manipulation;">⬇ エクセルに書き出す</button>
     </div>
     <!-- sub-tabs: store tasks / instagram / insight -->
-    <div class="subtabs" id="monthSubtabs" style="display:none;">
+    <div class="subtabs" id="monthSubtabs">
       <button class="subtab on" data-sub="store">🏬 店頭タスク</button>
+      <button class="subtab" data-sub="insta">📱 インスタ</button>
     </div>
     <div class="chip-row" id="monthChips"></div>
     <div id="monthStorePane">
@@ -249,8 +255,10 @@ tr:last-child td{border-bottom:none;}
 <!-- ===== CHARTS ===== -->
 <div class="vw" id="vw-chart">
   <div class="c">
-    <div class="ctabs" style="display:none;">
+    <div class="ctabs">
       <button class="ctab on" data-ct="store">店頭</button>
+      <button class="ctab" data-ct="insta">📸 個人</button>
+      
     </div>
     <div class="cpanel on" id="cp-store">
       <div class="toolbar">
@@ -260,6 +268,15 @@ tr:last-child td{border-bottom:none;}
       </div>
       <canvas id="chStore" height="140"></canvas>
     </div>
+    <div class="cpanel" id="cp-insta">
+      <div class="toolbar">
+        <select id="mInsta"></select>
+        <select id="rInsta"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select>
+        <select id="dInsta"><option value="total">全体</option><option value="staff">担当者別</option></select>
+      </div>
+      <canvas id="chInsta" height="140"></canvas>
+    </div>
+    
   <div class="c">
     <div class="c-title">🏆 ランキング</div>
     <div class="toolbar">
@@ -280,7 +297,7 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-const APP_VERSION="v2026.10.10.1700";
+const APP_VERSION="v2026.10.10.1730";
 
 const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="minamihorie-tk/kpi-data.json";
 const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
@@ -288,7 +305,7 @@ const TK="mh-gh-token",SK="mh-staffname";
 // スタッフ名は共有データ（kpi-data.json）に保存され、アプリ内から追加・削除できる
 let STAFF=[];
 const esc=v=>String(v==null?"":v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const AMT=new Set();  // 金額で入れる項目は無し
+const AMT=new Set(["instaSaleAmount"]);
 const COLORS=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
 
 Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
@@ -299,13 +316,19 @@ const STORE_FIELDS=[
   {key:"salesPitch",label:"販売営業",color:""},
   {key:"kaitoriPitch",label:"買取営業",color:""},
   {key:"line",label:"LINE",color:""},
-  {key:"personalInsta",label:"個人インスタ",color:"pink"},
+  {key:"personalInsta",label:"個人インスタ",color:""},
   {key:"kaitori",label:"買取概算",color:""},
   {key:"kobutsu",label:"古物",color:""},
   {key:"review",label:"口コミ",color:""},
 ];
-// 南堀江はインスタ内訳・インサイトの記録なし
-const INSTA_FIELDS=[];
+const INSTA_FIELDS=[
+  {key:"instaSaleClients",label:"販売 客数",color:"orange"},
+  {key:"instaSaleItems",label:"販売 点数",color:"orange"},
+  {key:"instaSaleAmount",label:"販売 金額",color:"orange",isAmt:true},
+  {key:"instaBuyClients",label:"買取 客数",color:"green"},
+  {key:"instaBuyItems",label:"買取 点数",color:"green"},
+];
+// 南堀江はインサイトの記録なし
 const INSIGHT_FIELDS=[];
 const ALL_FIELDS=[...STORE_FIELDS,...INSTA_FIELDS,...INSIGHT_FIELDS];
 
@@ -716,6 +739,7 @@ function renderRank(){
 }
 function renderCharts(){
   trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value);
+  trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value);
   renderRank();
 }
 
@@ -723,13 +747,17 @@ function renderCharts(){
 document.getElementById("badge").addEventListener("click",()=>openName(false));
 document.getElementById("nameCancel").addEventListener("click",closeName);
 document.getElementById("saveBtn").addEventListener("click",doSave);
-// 項目のプルダウンは STORE_FIELDS から作る
+// 項目のプルダウンは定義から作る（項目を変えてもズレない）
 (function fillMetricSelects(){
-  const opts=STORE_FIELDS.map(f=>`<option value="${f.key}">${f.label}</option>`).join("");
-  document.getElementById("mStore").innerHTML=opts;
-  document.getElementById("rkM").innerHTML=opts;
+  const o=f=>`<option value="${f.key}">${f.label}</option>`;
+  document.getElementById("mStore").innerHTML=STORE_FIELDS.map(o).join("");
+  document.getElementById("mInsta").innerHTML=INSTA_FIELDS.map(o).join("");
+  document.getElementById("rkM").innerHTML=
+    `<optgroup label="店頭">${STORE_FIELDS.map(o).join("")}</optgroup>`+
+    `<optgroup label="個人インスタ">${INSTA_FIELDS.map(o).join("")}</optgroup>`;
 })();
 ["mStore","rStore","dStore"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chStore",document.getElementById("mStore").value,Number(document.getElementById("rStore").value),document.getElementById("dStore").value)));
+["mInsta","rInsta","dInsta"].forEach(id=>document.getElementById(id).addEventListener("change",()=>trend("chInsta",document.getElementById("mInsta").value,Number(document.getElementById("rInsta").value),document.getElementById("dInsta").value)));
 ["rkM","rkR"].forEach(id=>document.getElementById(id).addEventListener("change",renderRank));
 
 // ===== MONTHLY =====
@@ -743,7 +771,7 @@ let monthSub = "store"; // which sub-tab is active in the monthly view
 function renderMonth(){
   document.getElementById("monthLabel").textContent=`${currentMonth.getFullYear()}年${currentMonth.getMonth()+1}月`;
   renderMonthStore();
-  // 南堀江はインスタ・インサイトの記録なし
+  renderMonthInsta();
 }
 
 // ---- 店頭タスク (summed totals per person are meaningful here) ----
@@ -885,7 +913,7 @@ document.getElementById("monthNext").addEventListener("click",()=>{currentMonth=
 
 // CSV export — matches the Excel column order for easy transcription
 // ===== 月別集計をエクセルに書き出す =====
-// 「店頭タスク」「日別明細」をシート分けして出力する。
+// 「店頭タスク」「インスタ」「日別明細」をシート分けして出力する。
 document.getElementById("xlsxMonth").addEventListener("click",()=>{
   const mr=monthRecords();
   if(!mr.length){alert("この月のデータがありません。");return;}
@@ -907,13 +935,32 @@ document.getElementById("xlsxMonth").addEventListener("click",()=>{
     XLSX.utils.book_append_sheet(wb,ws,"店頭タスク");
   }
 
+  // --- 2. インスタ（人ごとの合計＋合計行） ---
+  {
+    const map={};
+    mr.forEach(r=>{ if(!map[r.staff])map[r.staff]={}; INSTA_FIELDS.forEach(f=>{map[r.staff][f.key]=(map[r.staff][f.key]||0)+(r[f.key]||0);}); });
+    const names=Object.keys(map).filter(n=>INSTA_FIELDS.some(f=>map[n][f.key])).sort((a,b)=>(map[b].instaSaleAmount||0)-(map[a].instaSaleAmount||0));
+    const aoa=[[ym+" インスタ"],[],["名前",...INSTA_FIELDS.map(f=>f.label)]];
+    names.forEach(n=>aoa.push([n,...INSTA_FIELDS.map(f=>map[n][f.key]||0)]));
+    aoa.push(["合計",...INSTA_FIELDS.map(f=>names.reduce((s,n)=>s+(map[n][f.key]||0),0))]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    setW(ws,[14,...INSTA_FIELDS.map(f=>f.isAmt?15:12)]);
+    // 金額列は3桁区切りにする
+    const amtIdx=INSTA_FIELDS.map((f,i)=>f.isAmt?i+1:-1).filter(i=>i>=0);
+    for(let r=3;r<3+names.length+1;r++){
+      amtIdx.forEach(ci=>{const a=XLSX.utils.encode_cell({r,c:ci});if(ws[a])ws[a].z="#,##0";});
+    }
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:INSTA_FIELDS.length}}];
+    XLSX.utils.book_append_sheet(wb,ws,"インスタ");
+  }
+
   // --- 4. 日別明細（全項目・元データ） ---
   {
     const rows=mr.slice().sort((a,b)=>a.date<b.date?-1:1);
     const aoa=[[ym+" 日別明細"],[],["日付","名前",...ALL_FIELDS.map(f=>f.label)]];
     rows.forEach(r=>aoa.push([r.date, r.staff, ...ALL_FIELDS.map(f=>r[f.key]||0)]));
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    setW(ws,[12,14,...ALL_FIELDS.map(()=>13)]);
+    setW(ws,[12,14,...ALL_FIELDS.map(f=>f.isAmt?15:13)]);
     ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:ALL_FIELDS.length+1}}];
     ws["!freeze"]={xSplit:2,ySplit:3};
     XLSX.utils.book_append_sheet(wb,ws,"日別明細");
@@ -927,11 +974,10 @@ document.getElementById("csvToday").addEventListener("click",()=>{
   const date=document.getElementById("inDate").value||today();
   const td=records.filter(r=>r.date===date);
   if(!td.length){alert("この日のデータがありません");return;}
-  const head=["名前",...STORE_FIELDS.map(f=>f.label)];
+  const COLS=[...STORE_FIELDS,...INSTA_FIELDS];
+  const head=["名前",...COLS.map(f=>f.label)];
   const lines=[head.join(",")];
-  td.forEach(r=>{
-    lines.push([r.staff,...STORE_FIELDS.map(f=>r[f.key]||0)].join(","));
-  });
+  td.forEach(r=>{ lines.push([r.staff,...COLS.map(f=>r[f.key]||0)].join(",")); });
   const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download=`タスク集計_南堀江_${date}.csv`;a.click();
@@ -958,6 +1004,7 @@ document.getElementById("reloadToday").addEventListener("click",async function()
   document.getElementById("inDate").addEventListener("change",()=>{setInsightPeriodDefault();renderToday();});
   updBadge();
   buildSteppers("sgStore",STORE_FIELDS);
+  buildSteppers("sgInsta",INSTA_FIELDS);
   // default insight period = the latest available 2-day window (day-3 to day-2)
   setInsightPeriodDefault();
   await ensureName(true);
