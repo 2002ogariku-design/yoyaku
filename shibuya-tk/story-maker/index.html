@@ -1198,11 +1198,7 @@ let BULK=[], bulkIndex=-1;
 // 共有データベースから受け取る（件数の上限なし）
 async function fetchBulkRef(token){
   try{
-    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq.story-bulk&select=payload",{
-      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS()}});
-    if(!r.ok)return null;
-    const rows=await r.json();
-    const p=rows.length?rows[0].payload:null;
+    const p=await shareGetS("story-bulk");
     if(!p||!Array.isArray(p.items))return null;
     if(token&&p.token&&p.token!==token)return null;
     return p.items.map(x=>({hinban:x.hinban,newPrice:Number(x.newPrice)||0,
@@ -2611,16 +2607,71 @@ document.querySelectorAll("#kindSeg button").forEach(b=>{
     drawStory();
   });
 });
+/* ========= 共有ファイル（ピッキングツールと同じ場所を読む） ========= */
+// Supabaseが無料プランで勝手に止まるため、GitHub上のJSONファイルに移した。
+const GH_PICK_API="https://api.github.com/repos/2002ogariku-design/yoyaku/contents/shibuya-tk/pick-data.json";
+const GH_TK_S="tk-gh-token";   // タスク集計・ピッキングと同じキー
+let ghShaS=null;
+function peekKeyS(){try{return String(localStorage.getItem(GH_TK_S)||"").trim();}catch(e){return"";}}
+function getKeyS(){
+  let t=peekKeyS();
+  if(!t){
+    t=String(prompt("共有アクセスキーを入力してください\n（タスク集計・ピッキングと同じキーです）")||"").trim();
+    if(t){try{localStorage.setItem(GH_TK_S,t);}catch(e){}}
+  }
+  return t;
+}
+function ghHeadersS(t){return {"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json","Content-Type":"application/json"};}
+function u2bS(x){return btoa(unescape(encodeURIComponent(x)));}
+function b2uS(b){return decodeURIComponent(escape(atob(String(b).replace(/\n/g,""))));}
+async function ghRetryS(url,opt,tries){
+  tries=tries||3; let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(r=>setTimeout(r,600*(i+1))); }
+  }
+  throw last||new Error("通信できませんでした");
+}
+async function ghAllS(){
+  const t=getKeyS(); if(!t)throw new Error("共有アクセスキーが未設定です");
+  const r=await ghRetryS(`${GH_PICK_API}?ts=${Date.now()}`,{headers:ghHeadersS(t)});
+  if(r.status===404){ghShaS=null;return {};}
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const d=await r.json(); ghShaS=d.sha;
+  let txt="";
+  if(d.content)txt=b2uS(d.content);
+  else{
+    const raw=await ghRetryS(`${GH_PICK_API}?ts=${Date.now()}`,{headers:Object.assign(ghHeadersS(t),{"Accept":"application/vnd.github.raw"})});
+    if(!raw.ok)throw new Error("HTTP "+raw.status);
+    txt=await raw.text();
+  }
+  try{ return JSON.parse(txt||"{}")||{}; }catch(e){ return {}; }
+}
+async function shareGetS(tool){ const all=await ghAllS(); return all[tool]||null; }
+async function sharePutS(tool,payload){
+  const t=getKeyS(); if(!t)throw new Error("共有アクセスキーが未設定です");
+  let lastErr=null;
+  for(let a=0;a<4;a++){
+    const all=await ghAllS();
+    all[tool]=(typeof payload==="function")?payload(all[tool]||null):payload;
+    const body={message:"story "+tool+" "+new Date().toISOString(),content:u2bS(JSON.stringify(all))};
+    if(ghShaS)body.sha=ghShaS;
+    const r=await ghRetryS(GH_PICK_API,{method:"PUT",headers:ghHeadersS(t),body:JSON.stringify(body)});
+    if(r.ok){ try{ghShaS=(await r.json()).content.sha;}catch(e){} return; }
+    if(r.status===409&&a<3){ await new Promise(x=>setTimeout(x,400+a*500)); continue; }
+    let m=""; try{ m=(await r.clone().json()).message||""; }catch(e){}
+    lastErr=new Error("保存失敗 "+r.status+(m?"："+m:""));
+    break;
+  }
+  throw lastErr||new Error("保存に失敗しました");
+}
+
 /* ========= 楽天APIキーの共有 ========= */
 // 端末ごとに入力させないよう共有DBに置き、誰か一人が設定すれば全員が使えるようにする。
 const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
 async function loadRakutenKeysShared(){
   try{
-    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{
-      headers:{"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS()}});
-    if(!r.ok)return;
-    const rows=await r.json();
-    const p=rows.length?rows[0].payload:null;
+    const p=await shareGetS(RK_SHARE_TOOL);
     const kk=p&&p.rkKeys;
     if(kk&&kk.appId&&kk.accessKey){
       try{
@@ -2634,18 +2685,11 @@ async function loadRakutenKeysShared(){
 // 既存の共有先の中にキーを入れる。他の内容は消さないよう引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
   try{
-    const hdr={"apikey":SB_KEY_S,"Authorization":"Bearer "+SB_KEY_S,"x-app-password":getPwS(),
-      "Content-Type":"application/json"};
-    const r=await fetch(SB_URL_S+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:hdr});
-    let p={};
-    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload)p=rows[0].payload;}
-    p.rkKeys={appId,accessKey,at:new Date().toISOString()};
-    const res=await fetch(SB_URL_S+"/rest/v1/app_data?on_conflict=tool",{
-      method:"POST",
-      headers:Object.assign({},hdr,{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:p,updated_at:new Date().toISOString()})
+    await sharePutS(RK_SHARE_TOOL,cur=>{
+      const p=cur||{};
+      p.rkKeys={appId,accessKey,at:new Date().toISOString()};
+      return p;
     });
-    if(!res.ok){const t=await res.text();return {ok:false,err:"HTTP "+res.status+" "+t.slice(0,120)};}
     return {ok:true};
   }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }

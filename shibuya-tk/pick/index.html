@@ -284,7 +284,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.10.01.1200";
+const APP_VERSION="v2026.10.18.1400";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -610,33 +610,85 @@ async function expandImages(baseUrls){
   return out.length?out:found;
 }
 
-/* ========= 共有（Supabase） ========= */
-// 朝に誰かがファイルを読み込めば、撤収担当は開くだけで同じリストが見える。
-// ファイルそのものではなく、解析済みのデータだけを共有するので軽い。
-const SB_URL="https://laystqwmucuuvqtztloy.supabase.co";
-const SB_KEY="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
-const SB_PW_KEY="rinkan-app-pw";
+/* ========= 共有（GitHubのファイル） ========= */
+// Supabaseの無料プランは放置で自動停止してしまい、朝いきなり共有が死ぬため、
+// タスク集計ツールと同じ「リポジトリ内のJSONファイル」方式に移した。止まる概念がない。
+// 保存先: shibuya-tk/pick-data.json
+// 中身  : {"pick-list":{...},"pick-list-idou":{...},"pick-checked":{...}, ...}
+const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku",GH_PATH="shibuya-tk/pick-data.json";
+const GH_API=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+// タスク集計と同じ保存先。どちらかでキーを入れれば両方で使える。
+const GH_TK="tk-gh-token";
+let ghSha=null;
 let KIND="tesshu";  // tesshu=撤収 / idou=在庫移動
 function TOOLKEY(){return KIND==="idou"?"pick-list-idou":(KIND==="kakaku"?"pick-list-kakaku":"pick-list");}
-// HTTPヘッダーには半角しか入れられない。日本語入力のまま打つと通信が失敗するため必ず整える。
-function sanitizePw(s){
-  if(!s)return "";
-  let t=String(s).replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
-  return t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
-}
-function getAppPw(){
-  let p;try{p=sessionStorage.getItem(SB_PW_KEY);}catch(e){}
-  p=sanitizePw(p);
-  if(!p){
-    const raw=prompt("共有パスワードを入力してください（半角英数字）");
-    p=sanitizePw(raw);
-    if(p){try{sessionStorage.setItem(SB_PW_KEY,p);}catch(e){}}
+
+function peekKey(){try{return String(localStorage.getItem(GH_TK)||"").trim();}catch(e){return"";}}
+function getKey(){
+  let t=peekKey();
+  if(!t){
+    t=String(prompt("共有アクセスキーを入力してください\n（タスク集計ツールと同じキーです）")||"").trim();
+    if(t){try{localStorage.setItem(GH_TK,t);}catch(e){}}
   }
-  return p||"";
+  return t;
 }
-function clearAppPw(){try{sessionStorage.removeItem(SB_PW_KEY);}catch(e){}}
-function sbHeaders(){return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,
-  "x-app-password":getAppPw(),"Content-Type":"application/json"};}
+function clearKey(){try{localStorage.removeItem(GH_TK);}catch(e){}}
+function ghHeaders(t){return {"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json","Content-Type":"application/json"};}
+function u2b(x){return btoa(unescape(encodeURIComponent(x)));}
+function b2u(b){return decodeURIComponent(escape(atob(String(b).replace(/\n/g,""))));}
+// 店内は電波が不安定なので何度か試す
+async function ghRetry(url,opt,tries){
+  tries=tries||3; let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(r=>setTimeout(r,600*(i+1))); }
+  }
+  throw last||new Error("通信できませんでした");
+}
+// 共有ファイル全体を読む
+async function ghAll(){
+  const t=getKey(); if(!t)throw new Error("共有アクセスキーが未設定です");
+  let r;
+  try{ r=await ghRetry(`${GH_API}?ts=${Date.now()}`,{headers:ghHeaders(t)}); }
+  catch(e){ throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください"); }
+  if(r.status===401)throw new Error("共有アクセスキーが拒否されました（401）。期限切れかもしれません");
+  if(r.status===403)throw new Error("このキーには権限がありません（403）");
+  if(r.status===404){ghSha=null;return {};}   // ファイルがまだ無い＝初回
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const d=await r.json(); ghSha=d.sha;
+  let txt="";
+  if(d.content)txt=b2u(d.content);
+  else{
+    const raw=await ghRetry(`${GH_API}?ts=${Date.now()}`,{headers:Object.assign(ghHeaders(t),{"Accept":"application/vnd.github.raw"})});
+    if(!raw.ok)throw new Error("HTTP "+raw.status);
+    txt=await raw.text();
+  }
+  try{ return JSON.parse(txt||"{}")||{}; }catch(e){ return {}; }
+}
+async function shareGet(tool){ const all=await ghAll(); return all[tool]||null; }
+// 1項目だけ差し替える。payload に関数を渡すと「最新の値」を受け取って作れるので、
+// 同時に複数人が触ってもお互いの更新を消さずに済む。
+async function sharePut(tool,payload){
+  const t=getKey(); if(!t)throw new Error("共有アクセスキーが未設定です");
+  let lastErr=null;
+  for(let a=0;a<4;a++){
+    const all=await ghAll();
+    all[tool]=(typeof payload==="function")?payload(all[tool]||null):payload;
+    const body={message:"pick "+tool+" "+new Date().toISOString(),content:u2b(JSON.stringify(all))};
+    if(ghSha)body.sha=ghSha;
+    let r;
+    try{ r=await ghRetry(GH_API,{method:"PUT",headers:ghHeaders(t),body:JSON.stringify(body)}); }
+    catch(e){ throw new Error("通信できませんでした。入力内容は残してあります"); }
+    if(r.ok){ try{ghSha=(await r.json()).content.sha;}catch(e){} return; }
+    if(r.status===409&&a<3){ await new Promise(x=>setTimeout(x,400+a*500)); continue; }  // 誰かと同時＝取り直して再試行
+    if(r.status===401)throw new Error("共有アクセスキーが拒否されました（401）。期限切れかもしれません");
+    let m=""; try{ m=(await r.clone().json()).message||""; }catch(e){}
+    if(r.status===403)throw new Error("書き込み権限がありません（403）"+(m?"："+m:""));
+    lastErr=new Error("保存失敗 "+r.status+(m?"："+m:""));
+    break;
+  }
+  throw lastErr||new Error("保存に失敗しました（混み合っています）");
+}
 
 function myName(){
   let n="";try{n=localStorage.getItem("pick-staff")||"";}catch(e){}
@@ -650,31 +702,16 @@ function myName(){
 async function shareList(fileName){
   // 既存のペイロードにある楽天APIキーを消さないよう引き継ぐ
   let keep=null;
-  try{
-    const pr=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
-    if(pr.ok){const rows=await pr.json();if(rows.length&&rows[0].payload&&rows[0].payload.rkKeys)keep=rows[0].payload.rkKeys;}
-  }catch(e){}
+  try{ const cur=await shareGet(TOOLKEY()); if(cur&&cur.rkKeys)keep=cur.rkKeys; }catch(e){}
   const payload={
     file:fileName, at:new Date().toISOString(), by:myName(),
     sheets:SHEETS, listId:listId
   };
   if(keep)payload.rkKeys=keep;
-  const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-    method:"POST",
-    headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify({tool:TOOLKEY(),payload,updated_at:new Date().toISOString()})
-  });
-  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
-  if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,90));}
+  await sharePut(TOOLKEY(),payload);
 }
 
-async function fetchShared(){
-  const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
-  if(r.status===401||r.status===403){clearAppPw();throw new Error("共有パスワードが正しくありません");}
-  if(!r.ok)throw new Error("HTTP "+r.status);
-  const rows=await r.json();
-  return rows.length?rows[0].payload:null;
-}
+async function fetchShared(){ return await shareGet(TOOLKEY()); }
 
 // 共有データを画面に反映する
 function applyShared(p){
@@ -716,10 +753,7 @@ async function loadRakutenKeysShared(){
   if(rkLoaded)return;
   rkLoaded=true;
   try{
-    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:sbHeaders()});
-    if(!r.ok)return;
-    const rows=await r.json();
-    const p=rows.length?rows[0].payload:null;
+    const p=await shareGet(RK_SHARE_TOOL);
     const kk=p&&p.rkKeys;
     // 既にこの端末でキーが設定されている場合は上書きしない。
     // 誤ったキーが共有されると、動いている端末まで壊れてしまうため。
@@ -736,16 +770,11 @@ async function loadRakutenKeysShared(){
 // リストを共有し直してもキーが消えないよう、書き込み時は必ず引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
   try{
-    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+RK_SHARE_TOOL+"&select=payload",{headers:sbHeaders()});
-    let p={};
-    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload)p=rows[0].payload;}
-    p.rkKeys={appId,accessKey,at:new Date().toISOString(),by:myName()};
-    const res=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-      method:"POST",
-      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:RK_SHARE_TOOL,payload:p,updated_at:new Date().toISOString()})
+    await sharePut(RK_SHARE_TOOL,cur=>{
+      const p=cur||{};
+      p.rkKeys={appId,accessKey,at:new Date().toISOString(),by:myName()};
+      return p;
     });
-    if(!res.ok){const t=await res.text();return {ok:false,err:"HTTP "+res.status+" "+t.slice(0,120)};}
     return {ok:true};
   }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
 }
@@ -1027,10 +1056,7 @@ function mergeMarks(remote){
 async function pullChecked(){
   if(!listId)return;
   try{
-    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
-    if(!r.ok)return;
-    const rows=await r.json();
-    const p=rows.length?rows[0].payload:null;
+    const p=await shareGet(ckTool());
     if(!p||!p.lists)return;
     const mine=p.lists[ckKey()];
     if(!mine)return;
@@ -1048,9 +1074,8 @@ async function pushChecked(){
   if(!listId)return;
   try{
     // 送る直前にも取り込み、他の人の操作を消さないようにする
-    const r=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
-    let p={lists:{}};
-    if(r.ok){const rows=await r.json();if(rows.length&&rows[0].payload&&rows[0].payload.lists)p=rows[0].payload;}
+    let p=await shareGet(ckTool());
+    if(!p||!p.lists)p={lists:{}};
     const k=ckKey();
     const cur=p.lists[k]||{};
     const remote=cur.marks||{};
@@ -1067,12 +1092,8 @@ async function pushChecked(){
         .forEach(o=>keep[o.x]=p.lists[o.x]);
       p.lists=keep;
     }
-    const res=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-      method:"POST",
-      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
-    });
-    if(res.ok){render();showCkStatus(myName(),new Date().toISOString());}
+    await sharePut(ckTool(),p);
+    render();showCkStatus(myName(),new Date().toISOString());
   }catch(e){}
 }
 function showCkStatus(by,at){
@@ -1409,13 +1430,7 @@ document.getElementById("bulkStoryBtn").addEventListener("click",async()=>{
   }));
   const token="bulk"+Date.now().toString(36);
   try{
-    const r=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-      method:"POST",
-      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:"story-bulk",payload:{token,at:new Date().toISOString(),by:myName(),items},
-        updated_at:new Date().toISOString()})
-    });
-    if(!r.ok){const t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,80));}
+    await sharePut("story-bulk",{token,at:new Date().toISOString(),by:myName(),items});
     window.open("../story-maker/?bulkref="+encodeURIComponent(token),"_blank");
   }catch(e){
     alert("受け渡しに失敗しました：\n"+e.message);
@@ -1435,31 +1450,17 @@ async function deleteSharedList(){
   try{
     // リスト本体を空にする（楽天APIキーは他のツールでも使うので引き継ぐ）
     let keep=null;
-    try{
-      const pr=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+TOOLKEY()+"&select=payload",{headers:sbHeaders()});
-      if(pr.ok){const rows=await pr.json();if(rows.length&&rows[0].payload&&rows[0].payload.rkKeys)keep=rows[0].payload.rkKeys;}
-    }catch(e){}
+    try{ const cur=await shareGet(TOOLKEY()); if(cur&&cur.rkKeys)keep=cur.rkKeys; }catch(e){}
     const payload={cleared:true, at:new Date().toISOString(), by:myName(), sheets:{}, listId:""};
     if(keep)payload.rkKeys=keep;
-    const r1=await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-      method:"POST",
-      headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({tool:TOOLKEY(),payload,updated_at:new Date().toISOString()})
-    });
-    if(!r1.ok){const t=await r1.text();throw new Error("HTTP "+r1.status+" "+t.slice(0,90));}
+    await sharePut(TOOLKEY(),payload);
     // この種類のチェック状況も消す
     try{
-      const rc=await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+ckTool()+"&select=payload",{headers:sbHeaders()});
-      if(rc.ok){
-        const rows=await rc.json();
-        const p=(rows.length&&rows[0].payload)?rows[0].payload:{lists:{}};
+      await sharePut(ckTool(),cur=>{
+        const p=cur||{lists:{}};
         if(p.lists){ Object.keys(p.lists).forEach(k=>{ if(k.startsWith(KIND+":"))delete p.lists[k]; }); }
-        await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool",{
-          method:"POST",
-          headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates,return=minimal"}),
-          body:JSON.stringify({tool:ckTool(),payload:p,updated_at:new Date().toISOString()})
-        });
-      }
+        return p;
+      });
     }catch(e){}
   }catch(e){ err=(e&&e.message)||"通信失敗"; }
   btn.textContent="🗑 削除";btn.disabled=false;
