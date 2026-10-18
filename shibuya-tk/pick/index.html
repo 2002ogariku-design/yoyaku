@@ -188,6 +188,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
     <div id="sharedInfo" class="note" style="flex:1;">共有リストを確認中…</div>
     <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
       <button class="btn sub2 noprint" id="reloadShared" style="padding:8px 12px;font-size:12.5px;">🔄 更新</button>
+      <button class="btn sub2 noprint" id="shareKeyBtn" style="padding:8px 12px;font-size:12.5px;">🔑 共有キー</button>
       <button class="btn noprint" id="deleteShared" style="padding:8px 12px;font-size:12.5px;background:var(--red);display:none;">🗑 削除</button>
     </div>
   </div>
@@ -284,7 +285,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.10.18.1400";
+const APP_VERSION="v2026.10.18.1410";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -651,8 +652,9 @@ async function ghAll(){
   let r;
   try{ r=await ghRetry(`${GH_API}?ts=${Date.now()}`,{headers:ghHeaders(t)}); }
   catch(e){ throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください"); }
-  if(r.status===401)throw new Error("共有アクセスキーが拒否されました（401）。期限切れかもしれません");
-  if(r.status===403)throw new Error("このキーには権限がありません（403）");
+  // 401＝キーが通らない。保存したままだと何度やっても同じなので捨てて、次に入力し直せるようにする
+  if(r.status===401){clearKey();throw new Error("共有アクセスキーが拒否されました（401）。期限切れの可能性があります。「🔑 共有キー」から入れ直してください");}
+  if(r.status===403)throw new Error("このキーには権限がありません（403）。「🔑 共有キー」から入れ直してください");
   if(r.status===404){ghSha=null;return {};}   // ファイルがまだ無い＝初回
   if(!r.ok)throw new Error("HTTP "+r.status);
   const d=await r.json(); ghSha=d.sha;
@@ -666,6 +668,23 @@ async function ghAll(){
   try{ return JSON.parse(txt||"{}")||{}; }catch(e){ return {}; }
 }
 async function shareGet(tool){ const all=await ghAll(); return all[tool]||null; }
+
+// キーが通るかどうかだけを確かめる（読み取りと書き込みを別々に見る）
+async function testKey(t){
+  const lines=["キーの長さ："+t.length+"文字（"+t.slice(0,7)+"…"+t.slice(-4)+"）"];
+  let r;
+  try{ r=await fetch("https://api.github.com/user?ts="+Date.now(),{headers:ghHeaders(t)}); }
+  catch(e){ return {ok:false,msg:lines.join("\n")+"\n✕ 通信できませんでした："+e.message}; }
+  if(r.status===401)return {ok:false,msg:lines.join("\n")+"\n✕ キーが拒否されました（401）。\n期限切れか、貼り付けが崩れています。新しいキーを作り直してください。"};
+  lines.push("① キー自体：OK（"+r.status+"）");
+  try{
+    const r2=await fetch(`${GH_API}?ts=${Date.now()}`,{headers:ghHeaders(t)});
+    if(r2.status===404)lines.push("② 共有ファイル：まだ無し（正常。最初の共有で作られます）");
+    else if(r2.ok)lines.push("② 共有ファイルの読み取り：OK");
+    else return {ok:false,msg:lines.join("\n")+"\n✕ リポジトリを読めません（"+r2.status+"）。キーの権限を確認してください。"};
+  }catch(e){ return {ok:false,msg:lines.join("\n")+"\n✕ 通信できませんでした："+e.message}; }
+  return {ok:true,msg:lines.join("\n")+"\n✓ 使えます。"};
+}
 // 1項目だけ差し替える。payload に関数を渡すと「最新の値」を受け取って作れるので、
 // 同時に複数人が触ってもお互いの更新を消さずに済む。
 async function sharePut(tool,payload){
@@ -681,7 +700,7 @@ async function sharePut(tool,payload){
     catch(e){ throw new Error("通信できませんでした。入力内容は残してあります"); }
     if(r.ok){ try{ghSha=(await r.json()).content.sha;}catch(e){} return; }
     if(r.status===409&&a<3){ await new Promise(x=>setTimeout(x,400+a*500)); continue; }  // 誰かと同時＝取り直して再試行
-    if(r.status===401)throw new Error("共有アクセスキーが拒否されました（401）。期限切れかもしれません");
+    if(r.status===401){clearKey();throw new Error("共有アクセスキーが拒否されました（401）。期限切れの可能性があります。「🔑 共有キー」から入れ直してください");}
     let m=""; try{ m=(await r.clone().json()).message||""; }catch(e){}
     if(r.status===403)throw new Error("書き込み権限がありません（403）"+(m?"："+m:""));
     lastErr=new Error("保存失敗 "+r.status+(m?"："+m:""));
@@ -1506,6 +1525,29 @@ async function bootShared(){
     info.innerHTML='<span style="color:var(--orange);">共有リストを読み込めませんでした：'+esc(e.message)+'</span>';
   }
 }
+// 共有キーの入れ直し
+document.getElementById("shareKeyBtn").addEventListener("click",async()=>{
+  const cur=peekKey();
+  const raw=prompt(
+    (cur?"いま設定されているキー："+cur.slice(0,7)+"…"+cur.slice(-4)+"（"+cur.length+"文字）\n\n":"キーはまだ設定されていません。\n\n")
+    +"共有アクセスキーを貼り付けてください。\n（タスク集計ツールと同じキーです）\n\n空のままOKを押すと、今のキーを消します。",
+    "");
+  if(raw===null)return;                       // キャンセル
+  const t=String(raw).trim();
+  if(!t){ clearKey(); alert("キーを消しました。次に共有するときに入力を求められます。"); return; }
+  const btn=document.getElementById("shareKeyBtn");
+  btn.textContent="確認中...";btn.disabled=true;
+  const chk=await testKey(t);
+  btn.textContent="🔑 共有キー";btn.disabled=false;
+  if(chk.ok){
+    try{localStorage.setItem(GH_TK,t);}catch(e){}
+    alert(chk.msg+"\n\n保存しました。画面を更新します。");
+    location.reload();
+  }else{
+    alert(chk.msg+"\n\n保存しませんでした。");
+  }
+});
+
 document.getElementById("reloadShared").addEventListener("click",async()=>{
   const b=document.getElementById("reloadShared");
   b.textContent="更新中...";b.disabled=true;
