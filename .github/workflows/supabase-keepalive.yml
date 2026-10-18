@@ -1,0 +1,54 @@
+# Supabaseの無料プランは7日間アクセスがないとプロジェクトが自動停止し、
+# 朝いきなり共有が使えなくなる。毎日1回だけ軽い問い合わせを投げて起こしておく。
+#
+# ・1日1回で十分（停止までの猶予は7日）
+# ・実際にデータベースへ届くクエリを投げる。単にURLを叩くだけでは「利用中」と見なされない
+# ・落ちていたらこのワークフローが失敗し、GitHubからメールが届く（スタッフより先に気づける）
+
+name: Supabase keepalive
+
+on:
+  schedule:
+    # 毎日 03:17 UTC（日本時間 12:17）。
+    # 0分ちょうどは世界中の予約が集中して遅れるため、わざとずらしている。
+    - cron: "17 3 * * *"
+  workflow_dispatch:        # 手動でも実行できる
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: データベースに問い合わせて起こす
+        env:
+          SB_URL: https://laystqwmucuuvqtztloy.supabase.co
+          # このキーは公開用（publishable）。ツールのHTMLにも元から書かれているもの。
+          SB_KEY: sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5
+        run: |
+          set -u
+          ok=0
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/body.txt -w "%{http_code}" --max-time 45 \
+              -H "apikey: $SB_KEY" \
+              -H "Authorization: Bearer $SB_KEY" \
+              "$SB_URL/rest/v1/app_data?select=tool&limit=1" || echo "000")
+
+            echo "試行 $i: HTTP $code"
+
+            # 200=読めた / 401・403=認証で弾かれた（＝DBまでは生きている）
+            case "$code" in
+              200|401|403) ok=1; break ;;
+            esac
+
+            echo "  応答: $(head -c 200 /tmp/body.txt)"
+            # 起動直後は数十秒かかることがあるので、間を空けて再試行する
+            [ "$i" -lt 3 ] && sleep 45
+          done
+
+          if [ "$ok" -eq 1 ]; then
+            echo "✓ Supabaseは応答している"
+          else
+            echo "✗ Supabaseが応答しない（504やタイムアウト）。"
+            echo "  ダッシュボードを確認してください："
+            echo "  https://supabase.com/dashboard/project/laystqwmucuuvqtztloy"
+            exit 1
+          fi
