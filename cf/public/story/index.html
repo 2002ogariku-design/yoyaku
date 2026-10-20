@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>公式インスタ分析｜RINKAN渋谷</title>
+<script src="/lib/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --bg:#f5f5f7;--card:#fff;--card2:#f9f9fb;--line:#e8e8ed;--line2:#d2d2d7;
+  --t1:#1d1d1f;--t2:#6e6e73;--t3:#aeaeb2;
+  --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--pink:#ff2d55;--purple:#af52de;--teal:#5ac8fa;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--t1);font-family:var(--font);font-size:15px;
+  padding-bottom:calc(66px + env(safe-area-inset-bottom));}
+.w{max-width:720px;margin:0 auto;padding:16px 16px 30px;}
+.hd{display:flex;justify-content:space-between;align-items:center;padding:10px 0 18px;}
+.hd h1{font-size:26px;font-weight:800;letter-spacing:-.02em;}
+.hd .sub{font-size:13px;color:var(--t2);margin-top:2px;}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--t1);cursor:pointer;font-family:var(--font);}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 .5px 1px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);}
+.c-title{font-size:13px;font-weight:700;color:var(--t2);margin-bottom:14px;}
+.sep{height:1px;background:var(--line);margin:14px 0;}
+
+/* pulse */
+.pulse{background:linear-gradient(135deg,#007aff,#5856d6);border-radius:16px;padding:22px 18px;color:#fff;margin-bottom:12px;}
+.pulse .lbl{font-size:11px;opacity:.7;letter-spacing:.1em;}
+.pulse .num{font-size:38px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;}
+.pulse .delta{display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:10px;margin-left:12px;}
+.pulse .delta.up{background:rgba(52,199,89,.2);}
+.pulse .delta.dn{background:rgba(255,59,48,.2);}
+.pulse .delta.fl{background:rgba(255,255,255,.15);}
+.pulse .date{font-size:11px;opacity:.6;margin-top:6px;}
+
+/* kpi grid */
+.kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+@media(max-width:520px){.kgrid{grid-template-columns:repeat(2,1fr);}}
+.kcard{background:var(--card);border-radius:14px;padding:14px 10px;text-align:center;box-shadow:0 .5px 1px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);}
+.kcard .kn{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;}
+.kcard .kl{font-size:10px;color:var(--t3);margin-top:3px;}
+
+/* forms */
+.fg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+@media(max-width:420px){.fg{grid-template-columns:1fr;}}
+.fg .full{grid-column:1/-1;}
+.f label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:5px;}
+.f input,.f select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:16px;font-family:var(--font);color:var(--t1);}
+.f input:focus,.f select:focus{outline:none;border-color:var(--blue);}
+.seg{display:flex;background:var(--card2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;}
+.seg button{flex:1;border:none;background:none;color:var(--t2);font-size:12.5px;font-weight:600;padding:9px 4px;border-radius:8px;cursor:pointer;font-family:var(--font);}
+.seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.save-btn{width:100%;padding:16px;border-radius:14px;border:none;background:var(--blue);color:#fff;font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:14px;}
+.save-btn:disabled{opacity:.4;}
+.save-tick{text-align:center;font-size:14px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;}
+
+/* post items */
+.pi{padding:12px 0;border-bottom:1px solid var(--line);}
+.pi:last-child{border-bottom:none;}
+.pi .top{display:flex;justify-content:space-between;align-items:flex-start;}
+.pi .brand{font-size:14px;font-weight:700;}
+.pi .item{font-size:12px;color:var(--t2);}
+.pi .del{background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;}
+.pi .del:hover{color:var(--red);}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--card2);color:var(--t2);}
+.chip.hot{background:#fff0f3;color:var(--pink);}
+.chip.win{background:#eafbf0;color:var(--green);}
+.mrow{display:flex;gap:12px;margin-top:6px;font-size:11.5px;color:var(--t2);font-variant-numeric:tabular-nums;}
+.mrow b{color:var(--t1);}
+
+/* chart tabs */
+.ctabs{display:flex;background:var(--card2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;}
+.ctab{flex:1;text-align:center;padding:8px 4px;font-size:12px;font-weight:600;color:var(--t2);border-radius:8px;cursor:pointer;font-family:var(--font);border:none;background:none;white-space:nowrap;}
+.ctab.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.cpanel{display:none;}.cpanel.on{display:block;}
+.tbar{display:flex;gap:6px;margin-bottom:10px;}
+.tbar select{padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:12px;color:var(--t1);font-family:var(--font);}
+
+/* list filters */
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+@media(max-width:420px){.filters{grid-template-columns:1fr;}}
+.filters input,.filters select{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card2);font-size:14px;font-family:var(--font);color:var(--t1);}
+
+/* bottom nav */
+#nav{position:fixed;left:0;right:0;bottom:0;z-index:40;
+  height:calc(66px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+  background:rgba(255,255,255,.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:.5px solid var(--line2);display:flex;}
+#nav button{flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:600;color:var(--t3);font-family:var(--font);}
+#nav button.on{color:var(--blue);}
+#nav button .ico{font-size:22px;}
+.vw{display:none;}.vw.on{display:block;}
+
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:60;align-items:center;justify-content:center;}
+.mb{background:#fff;border-radius:18px;padding:24px;max-width:320px;width:88%;}
+.mb h3{font-size:17px;font-weight:800;margin-bottom:14px;}
+.mb select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font-size:16px;margin-bottom:16px;font-family:var(--font);background:var(--card2);}
+.mb .acts{display:flex;gap:8px;justify-content:flex-end;}
+.mb .acts button{padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);border:none;}
+.mb .acts .cancel{background:var(--card2);color:var(--t2);}
+.mb .acts .ok{background:var(--blue);color:#fff;}
+#errB{display:none;background:#fff0f0;border:1px solid #fecaca;color:var(--red);border-radius:12px;padding:12px;margin-bottom:12px;font-size:13px;}
+.empty{text-align:center;padding:28px;color:var(--t3);font-size:13px;}
+
+#verBadge{position:fixed;right:8px;bottom:8px;z-index:9999;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;font-family:inherit;
+  letter-spacing:.02em;cursor:pointer;user-select:none;line-height:1.4;}
+#verBadge:active{background:rgba(0,0,0,.85);}
+</style>
+</head>
+<body>
+
+<div class="ov" id="nameOv">
+  <div class="mb"><h3>名前を選択</h3><select id="nameSel"></select>
+    <div class="acts"><button class="cancel" id="nameCancel">キャンセル</button><button class="ok" id="nameOk">決定</button></div>
+  </div>
+</div>
+
+<div class="w">
+<div class="hd">
+  <div><h1>公式インスタ分析</h1><div class="sub" id="dayLabel"></div></div>
+  <button class="pill" id="badge">👤 —</button>
+</div>
+<div id="errB"></div>
+
+<!-- DASHBOARD -->
+<div class="vw on" id="vw-dash">
+  <div class="pulse" id="pulseCard">
+    <div class="lbl">FOLLOWERS</div>
+    <div class="num" id="pNum">—</div>
+    <div class="date" id="pDate">データを記録するとここに表示されます</div>
+  </div>
+  <div class="c" id="paceCard" style="display:none;">
+    <div class="c-title">📊 今月のペース</div>
+    <div id="paceBody"></div>
+  </div>
+  <div class="kgrid" id="kpiGrid"></div>
+  <div class="c"><div class="c-title">フォロワー推移</div>
+    <div class="tbar"><select id="folR"><option value="14">14日</option><option value="30" selected>30日</option><option value="90">90日</option></select></div>
+    <canvas id="chFol" height="130"></canvas>
+  </div>
+  <div class="c"><div class="c-title">リーチ / プロフィール訪問</div><canvas id="chReach" height="130"></canvas></div>
+  <div class="c"><div class="c-title">販売・買取実績（インスタ経由）</div><canvas id="chSales" height="130"></canvas></div>
+  <div class="c"><div class="c-title">投稿分析</div>
+    <div class="ctabs">
+      <button class="ctab on" data-ap="brand">ブランド</button>
+      <button class="ctab" data-ap="cat">カテゴリ</button>
+      <button class="ctab" data-ap="price">価格帯</button>
+      <button class="ctab" data-ap="best">ベスト</button>
+    </div>
+    <div class="cpanel on" id="ap-brand"><canvas id="chBrand" height="170"></canvas></div>
+    <div class="cpanel" id="ap-cat"><canvas id="chCat" height="150"></canvas></div>
+    <div class="cpanel" id="ap-price"><canvas id="chPrice" height="150"></canvas></div>
+    <div class="cpanel" id="ap-best"><div id="bestList"></div></div>
+  </div>
+</div>
+
+<!-- RECORD -->
+<div class="vw" id="vw-rec">
+  <div class="seg" id="recSeg">
+    <button class="on" data-m="insight">📊 日次インサイト</button>
+    <button data-m="post">📸 投稿の記録</button>
+  </div>
+  <div class="c" id="fInsight">
+    <div class="c-title">アカウント数値の記録</div>
+    <p style="font-size:12px;color:var(--t2);margin:0 0 12px;line-height:1.5;">当日のインサイトは確定していないため、<b>実際に見られる最新2日間</b>の数字を入力し、その対象期間を選んでください。</p>
+    <div style="background:var(--card2);border-radius:12px;padding:12px 14px;margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600;color:var(--t2);">📅 対象期間</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <input type="date" id="iFrom" style="flex:1;min-width:130px;">
+        <span style="color:var(--t3);">〜</span>
+        <input type="date" id="iTo" style="flex:1;min-width:130px;">
+        <button type="button" id="iAuto" style="border:none;background:#fff;color:var(--blue,#0071e3);font-family:inherit;font-size:12px;font-weight:700;padding:9px 12px;border-radius:9px;cursor:pointer;white-space:nowrap;">最新2日間</button>
+      </div>
+    </div>
+    <div class="fg">
+      <div class="f"><label>フォロワー数</label><input type="number" min="0" id="iF" placeholder="27000"></div>
+      <div class="f"><label>リーチ</label><input type="number" min="0" id="iR" placeholder="0"></div>
+      <div class="f"><label>インプレッション</label><input type="number" min="0" id="iI" placeholder="0"></div>
+      <div class="f"><label>プロフィールアクセス</label><input type="number" min="0" id="iP" placeholder="0"></div>
+      <div class="f"><label>ウェブサイトタップ</label><input type="number" min="0" id="iW" placeholder="0"></div>
+      <div class="f"><label>DM件数</label><input type="number" min="0" id="iD" placeholder="0"></div>
+    </div>
+    <div class="sep"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.1em;margin-bottom:10px;">インスタ経由の実績</div>
+    <div class="fg">
+      <div class="f"><label>販売 客数</label><input type="number" min="0" id="iSC" placeholder="0"></div>
+      <div class="f"><label>販売 点数</label><input type="number" min="0" id="iSI" placeholder="0"></div>
+      <div class="f"><label>販売 金額（円）</label><input type="number" min="0" id="iSA" placeholder="0"></div>
+      <div class="f"><label>買取 客数</label><input type="number" min="0" id="iBC" placeholder="0"></div>
+      <div class="f"><label>買取 点数</label><input type="number" min="0" id="iBI" placeholder="0"></div>
+      <div class="f"><label>買取 金額（円）</label><input type="number" min="0" id="iBA" placeholder="0"></div>
+    </div>
+    <button class="save-btn" id="saveI">インサイトを記録</button>
+    <div class="save-tick" id="tickI">✓ 記録しました</div>
+  </div>
+  <div class="c" id="fPost" style="display:none;">
+    <div class="c-title">投稿・ストーリーの記録</div>
+    <div class="fg">
+      <div class="f"><label>📅 日付</label><input type="date" id="pDt"></div>
+      <div class="f"><label>種類</label><select id="pTy"><option>ストーリー</option><option>フィード</option><option>リール</option></select></div>
+      <div class="f"><label>ブランド *</label><input type="text" id="pBr" placeholder="HERMES" list="bDl"></div>
+      <div class="f"><label>カテゴリ *</label><select id="pCa"><option value="">選択...</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select></div>
+      <div class="f full"><label>商品名</label><input type="text" id="pNm" placeholder="シェーヌダンクル TGM"></div>
+      <div class="f"><label>価格帯</label><select id="pPr"><option value="">選択...</option><option>〜3万</option><option>3〜5万</option><option>5〜10万</option><option>10〜30万</option><option>30〜50万</option><option>50万〜</option></select></div>
+      <div class="f"><label>閲覧数</label><input type="number" min="0" id="pVw" placeholder="0"></div>
+      <div class="f"><label>いいね</label><input type="number" min="0" id="pLk" placeholder="0"></div>
+      <div class="f"><label>保存</label><input type="number" min="0" id="pSv" placeholder="0"></div>
+      <div class="f"><label>コメント</label><input type="number" min="0" id="pCm" placeholder="0"></div>
+      <div class="f"><label>シェア</label><input type="number" min="0" id="pSh" placeholder="0"></div>
+      <div class="f"><label>問い合わせ</label><select id="pIq"><option value="なし">なし</option><option value="販売問合">販売</option><option value="買取問合">買取</option><option value="詳細問合">詳細DM</option></select></div>
+      <div class="f"><label>成果</label><select id="pCv"><option value="なし">なし</option><option value="取り置き">取り置き</option><option value="来店">来店</option><option value="郵送販売">郵送販売</option><option value="買取成立">買取成立</option></select></div>
+      <div class="f full"><label>備考</label><input type="text" id="pNo" placeholder=""></div>
+    </div>
+    <button class="save-btn" id="saveP">投稿を記録</button>
+    <div class="save-tick" id="tickP">✓ 記録しました</div>
+    <datalist id="bDl"></datalist>
+  </div>
+</div>
+
+<!-- LIST -->
+<div class="vw" id="vw-list">
+  <div class="c">
+    <div class="c-title">投稿一覧<button class="pill" id="refreshBtn" style="float:right;font-size:12px;padding:5px 12px;">🔄</button></div>
+    <div class="filters">
+      <input type="text" id="qS" placeholder="🔍 ブランド・商品名で検索">
+      <select id="qC"><option value="">カテゴリ：すべて</option><option>アクセサリー</option><option>アパレル</option><option>バッグ</option><option>シューズ</option><option>時計</option><option>その他</option></select>
+    </div>
+    <div id="postList"></div>
+  </div>
+  <div class="c"><div class="c-title">日次インサイト履歴</div><div id="insList"></div></div>
+</div>
+
+<!-- MONTHLY -->
+<div class="vw" id="vw-month">
+  <div class="c">
+    <div class="c-title">📅 月別集計</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+      <button class="pill" id="imPrev" style="padding:8px 14px;">◀</button>
+      <span id="imLabel" style="font-size:18px;font-weight:800;flex:1;text-align:center;"></span>
+      <button class="pill" id="imNext" style="padding:8px 14px;">▶</button>
+    </div>
+    <div class="kgrid" id="imKpis"></div>
+    <div class="c-title" style="margin-top:14px;">日次インサイト推移</div>
+    <canvas id="chImFol" height="120"></canvas>
+    <div style="margin-top:14px;"><canvas id="chImReach" height="120"></canvas></div>
+    <div style="margin-top:14px;"><canvas id="chImSales" height="120"></canvas></div>
+    <div class="c-title" style="margin-top:14px;">投稿実績</div>
+    <div class="chip-row" id="imPostChips"></div>
+    <div id="imPostList"></div>
+  </div>
+</div>
+
+<!-- STORY CREATION -->
+<div class="vw" id="vw-story">
+  <div class="c">
+    <div class="c-title">📸 ストーリー画像を作成</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <div class="f"><label>商品写真</label></div>
+        <div id="photoDrop" style="border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;">📷 タップして選択</div>
+        <input type="file" id="photoIn" accept="image/*" style="display:none;">
+      </div>
+      <div>
+        <div class="f"><label>🏷️ 値札QR → 商品ページリンク</label></div>
+        <div id="tagDrop" style="border:2px dashed var(--line);border-radius:12px;padding:28px 10px;text-align:center;cursor:pointer;color:var(--t3);font-size:12px;">🏷️ 値札のQRを撮影/選択</div>
+        <input type="file" id="tagIn" accept="image/*" style="display:none;">
+        <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
+      </div>
+    </div>
+    <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札を見ながら入力してください</div>
+      <img id="tagRefImg" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+    </div>
+    <div class="fg">
+      <div class="f"><label>ブランド</label><input type="text" id="sBrand" placeholder="AMIRI" list="sBrandDl"></div>
+      <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="54"></div>
+      <div class="f"><label>ランク</label>
+        <select id="sRank" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:16px;font-family:var(--font);">
+          <option value="">選択...</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+        </select>
+      </div>
+      <div class="f"><label>価格（税込・数字のみ）</label><input type="number" id="sPrice" placeholder="172480"></div>
+      <div class="f full"><label>下部テキスト</label><input type="text" id="sTag" value="📩DMにて割引可能"></div>
+    </div>
+    <datalist id="sBrandDl"></datalist>
+    <button class="save-btn" id="genBtn" style="background:var(--t1);">プレビューを更新</button>
+  </div>
+
+  <div class="c" style="text-align:center;">
+    <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:60vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);"></canvas>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;">
+      <button class="pill" id="shareBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:12px 24px;font-size:15px;">📤 保存・共有</button>
+      <button class="pill" id="dlBtn" style="padding:12px 18px;font-size:14px;">💾 DL</button>
+    </div>
+    <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📁 作成アーカイブ</div>
+    <div id="archiveList"><div class="empty">まだ作成した画像はありません</div></div>
+  </div>
+</div>
+
+</div>
+
+<div id="nav">
+  <button class="on" data-v="dash"><span class="ico">📊</span>分析</button>
+  <button data-v="rec"><span class="ico">✏️</span>記録</button>
+  <button data-v="month"><span class="ico">📅</span>月別</button>
+  <button data-v="story"><span class="ico">📸</span>作成</button>
+  <button data-v="list"><span class="ico">📋</span>一覧</button>
+</div>
+
+<script>
+const APP_VERSION="cf-v2026.10.20.1830";
+
+const API="/api", STORE="shibuya";
+const TK="tk-gh-token",SK="tk-staffname";
+let ME=null;
+const STAFF=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝","北林倭","吉野あんり"];
+const CC=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
+Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
+
+// 鍵は廃止。Cloudflare Access がログインを保証する。
+function getToken(){ return "access"; }
+function getName(){try{return localStorage.getItem(SK)||""}catch(e){return""}}
+function setName(n){try{localStorage.setItem(SK,n)}catch(e){}}
+function updBadge(){document.getElementById("badge").textContent=getName()?`👤 ${getName()}`:"👤 —";}
+function err(m){document.getElementById("errB").style.display="block";document.getElementById("errB").textContent=m;}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function today(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function nf(n){return Number(n||0).toLocaleString("ja-JP");}
+function u2b(s){return btoa(unescape(encodeURIComponent(s)))}
+function b2u(b){return decodeURIComponent(escape(atob(b.replace(/\n/g,""))))}
+function dl(d){const t=new Date(),r=[];for(let i=d-1;i>=0;i--){const x=new Date(t);x.setDate(x.getDate()-i);r.push(`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`);}return r;}
+
+function openName(f){document.getElementById("nameSel").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSel").value=c;document.getElementById("nameCancel").style.display=f?"none":"";document.getElementById("nameOv").style.display="flex";}
+function closeName(){document.getElementById("nameOv").style.display="none";}
+function ensureName(f){return new Promise(r=>{if(getName()&&!f){r(getName());return;}openName(f);const b=document.getElementById("nameOk");const h=()=>{setName(document.getElementById("nameSel").value);updBadge();closeName();b.removeEventListener("click",h);r(getName());};b.addEventListener("click",h);});}
+
+let ghSha=null, DB={insights:[],posts:[]};
+async function ghGet(){
+  const r=await fetch(`${API}/insta?store=${STORE}&ts=${Date.now()}`,{headers:{"Accept":"application/json"}});
+  if(r.status===401||r.status===403){ location.reload(); return {insights:[],posts:[]}; }
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d=await r.json();
+  return {insights:d.insights||[], posts:d.posts||[]};
+}
+// 全体を書き戻すのをやめ、変更した1件だけを送る。
+async function apiPost(payload){
+  const r=await fetch(`${API}/insta?store=${STORE}`,{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  if(r.status===401||r.status===403){ location.reload(); return; }
+  if(!r.ok) throw new Error("保存失敗 "+r.status+" "+(await r.text()).slice(0,120));
+  return await r.json().catch(()=>({}));
+}
+
+// nav
+document.querySelectorAll("#nav button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.querySelectorAll(".vw").forEach(v=>v.classList.remove("on"));document.getElementById("vw-"+b.dataset.v).classList.add("on");if(b.dataset.v==="dash")renderDash();if(b.dataset.v==="month")renderImMonth();});});
+document.querySelectorAll("#recSeg button").forEach(b=>{b.addEventListener("click",()=>{document.querySelectorAll("#recSeg button").forEach(x=>x.classList.remove("on"));b.classList.add("on");document.getElementById("fInsight").style.display=b.dataset.m==="insight"?"":"none";document.getElementById("fPost").style.display=b.dataset.m==="post"?"":"none";});});
+document.querySelectorAll(".ctab").forEach(b=>{b.addEventListener("click",()=>{b.closest(".c").querySelectorAll(".ctab").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".c").querySelectorAll(".cpanel").forEach(p=>p.classList.remove("on"));document.getElementById("ap-"+b.dataset.ap).classList.add("on");});});
+
+// save insight
+document.getElementById("saveI").addEventListener("click",async()=>{
+  const name=await ensureName(false);if(!name)return;
+  const from=document.getElementById("iFrom").value;
+  const to=document.getElementById("iTo").value;
+  if(!from||!to){alert("対象期間（開始日と終了日）を選んでください");return;}
+  if(from>to){alert("開始日が終了日より後になっています");return;}
+  // date = 期間の終了日（グラフ・並び順の基準）。期間そのものも保存する。
+  const e={date:to,insightFrom:from,insightTo:to,followers:Number(document.getElementById("iF").value)||0,reach:Number(document.getElementById("iR").value)||0,impressions:Number(document.getElementById("iI").value)||0,profileVisits:Number(document.getElementById("iP").value)||0,webTaps:Number(document.getElementById("iW").value)||0,dm:Number(document.getElementById("iD").value)||0,saleClients:Number(document.getElementById("iSC").value)||0,saleItems:Number(document.getElementById("iSI").value)||0,saleAmount:Number(document.getElementById("iSA").value)||0,buyClients:Number(document.getElementById("iBC").value)||0,buyItems:Number(document.getElementById("iBI").value)||0,buyAmount:Number(document.getElementById("iBA").value)||0,by:name,savedAt:new Date().toISOString()};
+  if(!e.followers){alert("フォロワー数を入力してください");return;}
+  const btn=document.getElementById("saveI");btn.textContent="保存中...";btn.disabled=true;
+  try{await apiPost({kind:"insight",value:e});DB=await ghGet();const t=document.getElementById("tickI");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["iF","iR","iI","iP","iW","iD","iSC","iSI","iSA","iBC","iBI","iBA"].forEach(id=>document.getElementById(id).value="");setInsightPeriodDefault();renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="インサイトを記録";btn.disabled=false;}
+});
+
+// save post
+document.getElementById("saveP").addEventListener("click",async()=>{
+  const name=await ensureName(false);if(!name)return;
+  const br=document.getElementById("pBr").value.trim(),ca=document.getElementById("pCa").value;
+  if(!br||!ca){alert("ブランドとカテゴリは必須");return;}
+  const e={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),date:document.getElementById("pDt").value||today(),type:document.getElementById("pTy").value,brand:br,category:ca,itemName:document.getElementById("pNm").value.trim(),priceRange:document.getElementById("pPr").value,views:Number(document.getElementById("pVw").value)||0,likes:Number(document.getElementById("pLk").value)||0,saves:Number(document.getElementById("pSv").value)||0,comments:Number(document.getElementById("pCm").value)||0,shares:Number(document.getElementById("pSh").value)||0,inquiry:document.getElementById("pIq").value,conversion:document.getElementById("pCv").value,note:document.getElementById("pNo").value.trim(),by:name,savedAt:new Date().toISOString()};
+  const btn=document.getElementById("saveP");btn.textContent="保存中...";btn.disabled=true;
+  try{await apiPost({kind:"post",value:e});DB=await ghGet();const t=document.getElementById("tickP");t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);["pBr","pNm","pNo","pVw","pLk","pSv","pCm","pSh"].forEach(id=>document.getElementById(id).value="");["pCa","pPr"].forEach(id=>document.getElementById(id).value="");document.getElementById("pIq").value="なし";document.getElementById("pCv").value="なし";updBrandDl();renderDash();}catch(x){err("保存失敗："+x.message);}finally{btn.textContent="投稿を記録";btn.disabled=false;}
+});
+
+async function delPost(id){if(!confirm("削除しますか？"))return;try{await apiPost({kind:"deletePost",id:id});DB=await ghGet();renderPosts();renderDash();}catch(x){err(x.message);}}
+function updBrandDl(){document.getElementById("bDl").innerHTML=[...new Set(DB.posts.map(p=>p.brand).filter(Boolean))].sort().map(b=>`<option value="${esc(b)}">`).join("");}
+
+// dashboard
+let CH={};function kill(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+function renderPulse(){
+  const ins=[...DB.insights].sort((a,b)=>a.date<b.date?-1:1);
+  if(!ins.length){document.getElementById("pNum").textContent="—";document.getElementById("pDate").textContent="データを記録するとここに表示されます";return;}
+  const last=ins[ins.length-1],prev=ins.length>1?ins[ins.length-2]:null;
+  document.getElementById("pNum").innerHTML=nf(last.followers)+(prev?`<span class="delta ${last.followers>prev.followers?"up":last.followers<prev.followers?"dn":"fl"}">${last.followers>=prev.followers?"+":""}${nf(last.followers-prev.followers)}</span>`:"");
+  document.getElementById("pDate").textContent=`${(last.insightFrom&&last.insightTo)?`${last.insightFrom} 〜 ${last.insightTo}`:last.date}${prev?` (前回比)`:""}`; 
+}
+// ===== 今月のペース =====
+// 記録済みの実績から、月末時点の着地見込みを推計する。
+// 「今日までの実績 ÷ 経過日数 × その月の日数」で算出し、
+// 記録が飛んでいる日があっても実績のある日数で割って偏りを抑える。
+function renderPace(){
+  const card=document.getElementById("paceCard");
+  const body=document.getElementById("paceBody");
+  if(!card||!body)return;
+  const now=new Date();
+  const y=now.getFullYear(), m=now.getMonth()+1;
+  const ym=`${y}-${String(m).padStart(2,"0")}`;
+  const daysInMonth=new Date(y,m,0).getDate();
+  const dayNow=now.getDate();
+
+  const cur=DB.insights.filter(i=>String(i.date||"").startsWith(ym));
+  if(!cur.length){card.style.display="none";return;}
+  card.style.display="block";
+
+  // 前月の実績（比較用）
+  const pm=new Date(y,m-2,1);
+  const pym=`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,"0")}`;
+  const prev=DB.insights.filter(i=>String(i.date||"").startsWith(pym));
+  const sum=(arr,k)=>arr.reduce((s,i)=>s+(Number(i[k])||0),0);
+
+  // フォロワーは累積値なので、増加数で見る
+  const sorted=[...cur].sort((a,b)=>a.date<b.date?-1:1);
+  const folGain=sorted.length>1?(sorted[sorted.length-1].followers-sorted[0].followers):0;
+
+  const metrics=[
+    {k:"saleAmount",label:"販売金額",yen:true,color:"var(--green)"},
+    {k:"buyAmount", label:"買取金額",yen:true,color:"var(--blue)"},
+    {k:"saleItems", label:"販売点数",color:"var(--green)"},
+    {k:"buyItems",  label:"買取点数",color:"var(--blue)"},
+    {k:"dm",        label:"DM件数"},
+    {k:"profileVisits",label:"プロフ訪問"},
+  ];
+  const fmt=(v,yen)=>yen?("¥"+nf(Math.round(v))):nf(Math.round(v));
+  // 記録がある日数で割る（未記録日で薄まらないようにする）
+  const recDays=new Set(cur.map(i=>i.date)).size;
+  const基準日数=Math.max(recDays,1);
+
+  const rows=metrics.map(mt=>{
+    const actual=sum(cur,mt.k);
+    if(!actual&&!sum(prev,mt.k))return "";
+    const perDay=actual/基準日数;
+    const projected=perDay*daysInMonth;
+    const prevTotal=sum(prev,mt.k);
+    const vsPrev=prevTotal>0?Math.round((projected-prevTotal)/prevTotal*100):null;
+    const pct=prevTotal>0?Math.min(100,Math.round(projected/prevTotal*100)):null;
+    return `<div style="padding:11px 0;border-top:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+        <span style="font-size:12.5px;font-weight:700;">${mt.label}</span>
+        <span style="font-size:11.5px;color:var(--t3);">現在 <b style="color:${mt.color||"var(--t1)"};">${fmt(actual,mt.yen)}</b></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:4px;">
+        <span style="font-size:11.5px;color:var(--t3);">月末見込み</span>
+        <span style="font-size:16px;font-weight:800;color:${mt.color||"var(--t1)"};">${fmt(projected,mt.yen)}</span>
+      </div>
+      ${prevTotal>0?`<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="flex:1;height:6px;background:var(--card2);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${vsPrev>=0?"var(--green)":"var(--orange)"};"></div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${vsPrev>=0?"var(--green)":"var(--orange)"};white-space:nowrap;">
+          前月比 ${vsPrev>=0?"+":""}${vsPrev}%</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--t3);margin-top:3px;">前月実績 ${fmt(prevTotal,mt.yen)}</div>`:""}
+    </div>`;
+  }).filter(Boolean).join("");
+
+  body.innerHTML=`
+    <div style="font-size:11.5px;color:var(--t2);line-height:1.6;margin-bottom:6px;">
+      ${y}年${m}月 ${dayNow}日時点 ／ 記録 ${recDays}日分から月末（${daysInMonth}日）を推計
+    </div>
+    ${folGain?`<div style="background:var(--card2);border-radius:10px;padding:11px 13px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span style="font-size:12.5px;font-weight:700;">フォロワー増加</span>
+        <span style="font-size:11.5px;color:var(--t3);">現在 <b>${folGain>=0?"+":""}${nf(folGain)}</b></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;">
+        <span style="font-size:11.5px;color:var(--t3);">月末見込み</span>
+        <span style="font-size:16px;font-weight:800;color:${folGain>=0?"var(--green)":"var(--orange)"};">
+          ${folGain>=0?"+":""}${nf(Math.round(folGain/基準日数*daysInMonth))}</span>
+      </div>
+    </div>`:""}
+    ${rows||'<div class="muted" style="padding:10px 0;">まだ推計できる実績がありません。</div>'}
+    <div style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.6;">
+      ※ 記録済みの日数から1日あたりを出し、月末までを推計しています。記録日数が少ないうちは振れ幅が大きくなります。
+    </div>`;
+}
+
+function renderKpis(){
+  const days=dl(7),ins7=DB.insights.filter(i=>days.includes(i.date)),posts7=DB.posts.filter(p=>days.includes(p.date));
+  const reachAvg=ins7.length?Math.round(ins7.reduce((s,i)=>s+i.reach,0)/ins7.length):0;
+  const profSum=ins7.reduce((s,i)=>s+i.profileVisits,0);
+  const inq=posts7.filter(p=>p.inquiry&&p.inquiry!=="なし").length;
+  const rate=posts7.length?Math.round(inq/posts7.length*100):0;
+  const saleAmt=ins7.reduce((s,i)=>s+(i.saleAmount||0),0);
+  const buyAmt=ins7.reduce((s,i)=>s+(i.buyAmount||0),0);
+  document.getElementById("kpiGrid").innerHTML=`
+    <div class="kcard"><div class="kn">${posts7.length}</div><div class="kl">投稿数 / 7日</div></div>
+    <div class="kcard"><div class="kn">${nf(reachAvg)}</div><div class="kl">平均リーチ</div></div>
+    <div class="kcard"><div class="kn">${rate}%</div><div class="kl">問合せ率</div></div>
+    <div class="kcard"><div class="kn">${nf(profSum)}</div><div class="kl">プロフ訪問</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--green);">¥${nf(saleAmt)}</div><div class="kl">販売金額 / 7日</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--blue);">¥${nf(buyAmt)}</div><div class="kl">買取金額 / 7日</div></div>
+  `;
+}
+function renderFolChart(){kill("chFol");const days=Number(document.getElementById("folR").value),list=dl(days),map={};DB.insights.forEach(i=>map[i.date]=i);let last=null;const data=list.map(d=>{if(map[d]){last=map[d].followers;return last;}return last;});CH["chFol"]=new Chart(document.getElementById("chFol"),{type:"line",data:{labels:list.map(d=>d.slice(5)),datasets:[{data,borderColor:CC[0],backgroundColor:"rgba(0,122,255,.06)",fill:true,tension:.35,pointRadius:2,spanGaps:true}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function renderReachChart(){kill("chReach");const list=dl(Number(document.getElementById("folR").value)),map={};DB.insights.forEach(i=>map[i.date]=i);CH["chReach"]=new Chart(document.getElementById("chReach"),{type:"bar",data:{labels:list.map(d=>d.slice(5)),datasets:[{label:"リーチ",data:list.map(d=>map[d]?map[d].reach:0),backgroundColor:"rgba(0,122,255,.25)",borderColor:CC[0],borderWidth:1,borderRadius:4},{label:"プロフ訪問",data:list.map(d=>map[d]?map[d].profileVisits:0),backgroundColor:"rgba(255,45,85,.2)",borderColor:CC[1],borderWidth:1,borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function renderSalesChart(){kill("chSales");const list=dl(Number(document.getElementById("folR").value)),map={};DB.insights.forEach(i=>map[i.date]=i);CH["chSales"]=new Chart(document.getElementById("chSales"),{type:"bar",data:{labels:list.map(d=>d.slice(5)),datasets:[{label:"販売金額",data:list.map(d=>map[d]?(map[d].saleAmount||0):0),backgroundColor:"rgba(52,199,89,.25)",borderColor:CC[3],borderWidth:1,borderRadius:4},{label:"買取金額",data:list.map(d=>map[d]?(map[d].buyAmount||0):0),backgroundColor:"rgba(0,122,255,.2)",borderColor:CC[0],borderWidth:1,borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});}
+function eng(p){return(p.likes||0)+(p.saves||0)*2+(p.comments||0)*2+(p.shares||0);}
+function renderBrand(){kill("chBrand");const m={};DB.posts.forEach(p=>{if(!m[p.brand])m[p.brand]={n:0,inq:0};m[p.brand].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.brand].inq++;});const top=Object.entries(m).sort((a,b)=>b[1].n-a[1].n).slice(0,12);CH["chBrand"]=new Chart(document.getElementById("chBrand"),{type:"bar",data:{labels:top.map(t=>t[0]),datasets:[{label:"投稿",data:top.map(t=>t[1].n),backgroundColor:"rgba(0,122,255,.25)",borderColor:CC[0],borderWidth:1,borderRadius:4},{label:"問合",data:top.map(t=>t[1].inq),backgroundColor:"rgba(255,45,85,.2)",borderColor:CC[1],borderWidth:1,borderRadius:4}]},options:{responsive:true,indexAxis:"y",plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderCat(){kill("chCat");const m={};DB.posts.forEach(p=>{const c=p.category||"不明";if(!m[c])m[c]={n:0,inq:0,conv:0};m[c].n++;if(p.inquiry&&p.inquiry!=="なし")m[c].inq++;if(p.conversion&&p.conversion!=="なし")m[c].conv++;});const ks=Object.keys(m);CH["chCat"]=new Chart(document.getElementById("chCat"),{type:"bar",data:{labels:ks,datasets:[{label:"投稿",data:ks.map(k=>m[k].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:ks.map(k=>m[k].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4},{label:"成果",data:ks.map(k=>m[k].conv),backgroundColor:"rgba(52,199,89,.25)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderPrice(){kill("chPrice");const O=["〜3万","3〜5万","5〜10万","10〜30万","30〜50万","50万〜"],m={};O.forEach(o=>m[o]={n:0,inq:0});DB.posts.forEach(p=>{if(p.priceRange&&m[p.priceRange]){m[p.priceRange].n++;if(p.inquiry&&p.inquiry!=="なし")m[p.priceRange].inq++;}});CH["chPrice"]=new Chart(document.getElementById("chPrice"),{type:"bar",data:{labels:O,datasets:[{label:"投稿",data:O.map(o=>m[o].n),backgroundColor:"rgba(0,122,255,.25)",borderRadius:4},{label:"問合",data:O.map(o=>m[o].inq),backgroundColor:"rgba(255,45,85,.2)",borderRadius:4}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+function renderBest(){const scored=[...DB.posts].map(p=>({...p,score:eng(p)+(p.inquiry!=="なし"?10:0)+(p.conversion!=="なし"?20:0)})).sort((a,b)=>b.score-a.score).slice(0,8);const el=document.getElementById("bestList");if(!scored.length){el.innerHTML='<div class="empty">投稿を記録するとランキング表示</div>';return;}el.innerHTML=scored.map((p,i)=>`<div class="pi"><div class="top"><div><span style="color:var(--orange);font-weight:800;margin-right:6px;">${i+1}</span><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div></div><div class="chips"><span class="chip">${p.date}</span>${p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div><div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span></div></div>`).join("");}
+function renderDash(){renderPulse();renderPace();renderKpis();renderFolChart();renderReachChart();renderSalesChart();renderBrand();renderCat();renderPrice();renderBest();}
+
+// list
+function renderPosts(){const q=(document.getElementById("qS").value||"").toLowerCase(),cat=document.getElementById("qC").value;let list=[...DB.posts].reverse();if(q)list=list.filter(p=>[p.brand,p.itemName,p.note].join(" ").toLowerCase().includes(q));if(cat)list=list.filter(p=>p.category===cat);const el=document.getElementById("postList");if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.slice(0,50).map(p=>`<div class="pi"><div class="top"><div><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><button class="del" onclick="delPost('${p.id}')">✕</button></div><div class="chips"><span class="chip">${p.date}</span><span class="chip">${esc(p.type)}</span>${p.priceRange?`<span class="chip">${esc(p.priceRange)}</span>`:""}${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div>${(p.views||p.likes)?`<div class="mrow"><span>👁 <b>${nf(p.views)}</b></span><span>❤️ <b>${nf(p.likes)}</b></span><span>🔖 <b>${nf(p.saves)}</b></span><span>💬 <b>${nf(p.comments)}</b></span></div>`:""}</div>`).join("");}
+function renderInsights(){const el=document.getElementById("insList"),list=[...DB.insights].reverse().slice(0,30);if(!list.length){el.innerHTML='<div class="empty">記録なし</div>';return;}el.innerHTML=list.map(i=>`<div class="pi"><div class="top"><span class="brand">${(i.insightFrom&&i.insightTo)?`${i.insightFrom} 〜 ${i.insightTo}`:i.date}</span>${(i.insightFrom&&i.insightTo)?'<span style="font-size:10px;color:var(--t3);font-weight:600;">対象期間</span>':""}</div><div class="mrow" style="flex-wrap:wrap;gap:8px;">  <span>👥 <b>${nf(i.followers)}</b></span><span>📡 <b>${nf(i.reach)}</b></span><span>👁 <b>${nf(i.impressions)}</b></span><span>🚪 <b>${nf(i.profileVisits)}</b></span><span>✉️ <b>${nf(i.dm)}</b></span></div>${(i.saleClients||i.buyClients)?`<div class="mrow" style="flex-wrap:wrap;gap:8px;margin-top:4px;"><span style="color:var(--green);">💰販売 <b>${i.saleClients||0}客/${i.saleItems||0}点/¥${nf(i.saleAmount||0)}</b></span><span style="color:var(--blue);">🔄買取 <b>${i.buyClients||0}客/${i.buyItems||0}点/¥${nf(i.buyAmount||0)}</b></span></div>`:""}</div>`).join("");}
+
+document.getElementById("badge").addEventListener("click",()=>openName(false));
+document.getElementById("nameCancel").addEventListener("click",closeName);
+document.getElementById("refreshBtn").addEventListener("click",async()=>{try{DB=await ghGet();updBrandDl();renderDash();renderPosts();renderInsights();}catch(e){err(e.message);}});
+document.getElementById("folR").addEventListener("change",()=>{renderFolChart();renderReachChart();renderSalesChart();});
+["qS","qC"].forEach(id=>document.getElementById(id).addEventListener(id==="qS"?"input":"change",renderPosts));
+
+// ===== MONTHLY =====
+let imMonth=new Date();
+function imMonthStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
+function renderImMonth(){
+  const m=imMonthStr(imMonth);
+  document.getElementById("imLabel").textContent=`${imMonth.getFullYear()}年${imMonth.getMonth()+1}月`;
+  const ins=DB.insights.filter(i=>i.date&&i.date.startsWith(m));
+  const posts=DB.posts.filter(p=>p.date&&p.date.startsWith(m));
+
+  // KPIs for the month
+  const folStart=ins.length?ins[0].followers:0;
+  const folEnd=ins.length?ins[ins.length-1].followers:0;
+  const folDiff=folEnd-folStart;
+  const reachTotal=ins.reduce((s,i)=>s+i.reach,0);
+  const profTotal=ins.reduce((s,i)=>s+i.profileVisits,0);
+  const dmTotal=ins.reduce((s,i)=>s+i.dm,0);
+  const saleTotal=ins.reduce((s,i)=>s+(i.saleAmount||0),0);
+  const buyTotal=ins.reduce((s,i)=>s+(i.buyAmount||0),0);
+  const inqPosts=posts.filter(p=>p.inquiry&&p.inquiry!=="なし").length;
+
+  document.getElementById("imKpis").innerHTML=`
+    <div class="kcard"><div class="kn">${nf(folEnd)}</div><div class="kl">フォロワー（月末）</div></div>
+    <div class="kcard"><div class="kn" style="color:${folDiff>=0?"var(--green)":"var(--red)"};">${folDiff>=0?"+":""}${nf(folDiff)}</div><div class="kl">フォロワー増減</div></div>
+    <div class="kcard"><div class="kn">${nf(reachTotal)}</div><div class="kl">リーチ合計</div></div>
+    <div class="kcard"><div class="kn">${nf(profTotal)}</div><div class="kl">プロフ訪問合計</div></div>
+    <div class="kcard"><div class="kn">${nf(dmTotal)}</div><div class="kl">DM合計</div></div>
+    <div class="kcard"><div class="kn">${posts.length}</div><div class="kl">投稿数</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--green);">¥${nf(saleTotal)}</div><div class="kl">販売金額</div></div>
+    <div class="kcard"><div class="kn" style="color:var(--blue);">¥${nf(buyTotal)}</div><div class="kl">買取金額</div></div>
+  `;
+
+  // daily charts
+  const year=imMonth.getFullYear(),mon=imMonth.getMonth();
+  const daysInMonth=new Date(year,mon+1,0).getDate();
+  const dayDates=[];for(let d=1;d<=daysInMonth;d++)dayDates.push(`${year}-${String(mon+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+  const dayLabels=dayDates.map(d=>d.slice(8));
+  const insMap={};ins.forEach(i=>insMap[i.date]=i);
+
+  kill("chImFol");
+  let lastFol=null;
+  CH["chImFol"]=new Chart(document.getElementById("chImFol"),{type:"line",
+    data:{labels:dayLabels,datasets:[{label:"フォロワー",data:dayDates.map(d=>{if(insMap[d]){lastFol=insMap[d].followers;return lastFol;}return lastFol;}),borderColor:CC[0],backgroundColor:"rgba(0,122,255,.06)",fill:true,tension:.35,pointRadius:2,spanGaps:true}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  kill("chImReach");
+  CH["chImReach"]=new Chart(document.getElementById("chImReach"),{type:"bar",
+    data:{labels:dayLabels,datasets:[
+      {label:"リーチ",data:dayDates.map(d=>insMap[d]?insMap[d].reach:0),backgroundColor:"rgba(0,122,255,.25)",borderRadius:3},
+      {label:"プロフ訪問",data:dayDates.map(d=>insMap[d]?insMap[d].profileVisits:0),backgroundColor:"rgba(255,45,85,.2)",borderRadius:3}
+    ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  kill("chImSales");
+  CH["chImSales"]=new Chart(document.getElementById("chImSales"),{type:"bar",
+    data:{labels:dayLabels,datasets:[
+      {label:"販売金額",data:dayDates.map(d=>insMap[d]?(insMap[d].saleAmount||0):0),backgroundColor:"rgba(52,199,89,.25)",borderRadius:3},
+      {label:"買取金額",data:dayDates.map(d=>insMap[d]?(insMap[d].buyAmount||0):0),backgroundColor:"rgba(0,122,255,.2)",borderRadius:3}
+    ]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+nf(v)}},x:{ticks:{maxRotation:0,autoSkip:true}}}}});
+
+  // post summary
+  const catMap={};posts.forEach(p=>{const c=p.category||"不明";catMap[c]=(catMap[c]||0)+1;});
+  document.getElementById("imPostChips").innerHTML=
+    `<span class="kchip">投稿数 <b>${posts.length}</b></span>`+
+    `<span class="kchip pk">問合あり <b>${inqPosts}</b></span>`+
+    Object.entries(catMap).map(([k,v])=>`<span class="kchip">${esc(k)} <b>${v}</b></span>`).join("");
+  document.getElementById("imPostList").innerHTML=posts.length?
+    posts.slice().reverse().slice(0,20).map(p=>`<div class="pi"><div class="top"><span class="brand">${esc(p.brand)}</span>${p.itemName?`<span class="item"> — ${esc(p.itemName)}</span>`:""}</div><div class="chips"><span class="chip">${p.date}</span>${p.inquiry&&p.inquiry!=="なし"?`<span class="chip hot">${esc(p.inquiry)}</span>`:""}${p.conversion&&p.conversion!=="なし"?`<span class="chip win">${esc(p.conversion)}</span>`:""}</div></div>`).join(""):
+    '<div class="empty">この月の投稿記録なし</div>';
+}
+document.getElementById("imPrev").addEventListener("click",()=>{imMonth=new Date(imMonth.getFullYear(),imMonth.getMonth()-1,1);renderImMonth();});
+document.getElementById("imNext").addEventListener("click",()=>{imMonth=new Date(imMonth.getFullYear(),imMonth.getMonth()+1,1);renderImMonth();});
+
+// ===== STORY CREATION =====
+let photoImg=null, storyArchive=[];
+try{storyArchive=JSON.parse(localStorage.getItem("story-archive")||"[]");}catch(e){}
+const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
+
+// photo drop
+const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
+pd.addEventListener("click",()=>pi.click());
+pi.addEventListener("change",e=>{if(e.target.files[0])loadPhoto(e.target.files[0]);pi.value="";});
+["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
+pd.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPhoto(f);});
+
+function loadPhoto(file){
+  const fr=new FileReader();
+  fr.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{photoImg=img;pd.innerHTML="📷 選択済み ✓";drawStory();};
+    img.src=e.target.result;
+  };
+  fr.readAsDataURL(file);
+}
+
+// QR code scan from tag photo
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files[0])scanTagQR(e.target.files[0]);ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)scanTagQR(f);});
+
+async function scanTagQR(file){
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🔍 QRコードを読み取り中...";
+  status.style.color="var(--blue)";
+  td2.innerHTML="🏷️ 読み取り中...";
+
+  // Show tag photo as reference
+  const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
+  document.getElementById("tagRefImg").src=dataUrl;
+  document.getElementById("tagRefArea").style.display="block";
+
+  // Scan QR code from image
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+  const canvas=document.createElement("canvas");
+  canvas.width=img.width;canvas.height=img.height;
+  const ctx2=canvas.getContext("2d");
+  ctx2.drawImage(img,0,0);
+  const imageData=ctx2.getImageData(0,0,canvas.width,canvas.height);
+  // Try multiple resolutions for better detection
+  let qr=null;
+  const sizes=[canvas.width, 1500, 1000, 600];
+  for(const sz of sizes){
+    if(qr)break;
+    const scale=sz/Math.max(img.width,img.height);
+    const sw=Math.round(img.width*scale), sh=Math.round(img.height*scale);
+    const tc=document.createElement("canvas");tc.width=sw;tc.height=sh;
+    const tctx=tc.getContext("2d");
+    tctx.drawImage(img,0,0,sw,sh);
+    // Also try with inverted colors
+    const td3=tctx.getImageData(0,0,sw,sh);
+    qr=jsQR(td3.data,sw,sh);
+    if(!qr){
+      // Try with increased contrast
+      const d=td3.data;
+      for(let i=0;i<d.length;i+=4){
+        let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        g=g>128?255:0;
+        d[i]=g;d[i+1]=g;d[i+2]=g;
+      }
+      tctx.putImageData(td3,0,0);
+      qr=jsQR(tctx.getImageData(0,0,sw,sh).data,sw,sh);
+    }
+  }
+
+  if(!qr||!qr.data){
+    td2.innerHTML="🏷️ QR検出できず（値札を見て入力）";
+    status.textContent="⚠ QRコードが見つかりません。QRコードが大きく写るように撮り直してください。";
+    status.style.color="var(--red)";
+    setTimeout(()=>{status.style.display="none";},4000);
+    return;
+  }
+
+  console.log("QR data:",qr.data);
+  const url=qr.data;
+
+  // Check if it's a Rakuten URL
+  if(url.includes("item.rakuten.co.jp")){
+    td2.innerHTML="🏷️ QR成功 → 商品情報を取得中...";
+    status.textContent="🔍 楽天ページから商品情報を取得中...";
+    status.style.color="var(--blue)";
+    const got=await fetchRakuten(url);
+    if(got.ok){
+      const filled=[];
+      if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
+      if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
+      if(got.rank){const sel=document.getElementById("sRank");if([...sel.options].some(o=>o.value===got.rank)){sel.value=got.rank;filled.push("ランク");}}
+      // Read tax-included price from the TAG photo (overrides Rakuten price)
+      status.textContent="🔍 値札から税込価格を読み取り中...";
+      const tagPrice=await ocrTagPrice(dataUrl);
+      if(tagPrice){document.getElementById("sPrice").value=String(tagPrice);filled.push("価格(値札)");}
+      else if(got.price){document.getElementById("sPrice").value=String(got.price);filled.push("価格");}
+      drawStory();
+      td2.innerHTML="🏷️ 自動入力完了 ✓";
+      status.innerHTML=(filled.length?'✓ '+filled.join("・")+'を自動入力しました（確認してください）':'⚠ 情報を読み取れませんでした')+'<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを開いて確認</a>';
+      status.style.color=filled.length?"var(--green)":"var(--orange)";
+    }else{
+      td2.innerHTML="🏷️ 自動取得できず";
+      status.innerHTML='⚠ 楽天ページを自動取得できませんでした。<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:14px;text-decoration:underline;">👆 楽天ページを開く</a><br><span style="font-size:11px;color:var(--t2);">値札を見ながら入力してください</span>';
+      status.style.color="var(--orange)";
+    }
+    status.style.display="block";
+  }else{
+    status.textContent="QR内容: "+url;
+    td2.innerHTML="🏷️ QR読み取り完了";
+    setTimeout(()=>{status.style.display="none";},5000);
+  }
+}
+
+// OCR the tax-included price from the RINKAN tag photo
+// Tax-included = the comma-formatted price on a line WITHOUT "exc.tax"
+async function ocrTagPrice(dataUrl){
+  try{
+    const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+    const cx=Math.round(img.width*0.40), cy=Math.round(img.height*0.10);
+    const cw=Math.round(img.width*0.58), ch=Math.round(img.height*0.55);
+    const cv=document.createElement("canvas");
+    const sc=2;
+    cv.width=cw*sc;cv.height=ch*sc;
+    const cx2=cv.getContext("2d");
+    cx2.drawImage(img,cx,cy,cw,ch,0,0,cw*sc,ch*sc);
+    const idd=cx2.getImageData(0,0,cv.width,cv.height);const d=idd.data;
+    for(let i=0;i<d.length;i+=4){let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g=g>135?255:0;d[i]=d[i+1]=d[i+2]=g;}
+    cx2.putImageData(idd,0,0);
+    const res=await Tesseract.recognize(cv,"eng",{tessedit_char_whitelist:"0123456789,.exctaxRANKSEO:¥ "});
+    const text=res.data.text;
+    console.log("Tag price OCR:",JSON.stringify(text));
+    // Only accept comma-formatted numbers (real prices like 181,500), reject model numbers like 000000078
+    const taxIncluded=[], allPrices=[];
+    for(const ln of text.split("\n")){
+      const isExTax=/exc|tax/i.test(ln);
+      const priceNums=[...ln.matchAll(/(\d{1,3},\d{3})/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+      for(const n of priceNums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+    }
+    console.log("taxIncluded:",taxIncluded,"all:",allPrices);
+    if(taxIncluded.length)return Math.max(...taxIncluded);
+    if(allPrices.length)return Math.max(...allPrices);
+    return 0;
+  }catch(e){console.log("tag OCR error:",e);return 0;}
+}
+
+// Fetch Rakuten product page and extract info (brand-English, size, rank, price)
+async function fetchRakuten(url){
+  const proxies=[
+    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u)
+  ];
+  let html2="";
+  for(const mk of proxies){
+    try{
+      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(9000)});
+      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
+    }catch(e){console.log("proxy fail:",e.message);}
+  }
+  if(!html2)return{ok:false};
+
+  const out={ok:true,brand:"",size:"",rank:"",price:0};
+
+  // Gather title from multiple sources (og:title is usually cleanest)
+  let title="";
+  const ogT=html2.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+  if(ogT)title=ogT[1];
+  if(!title){const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);if(tM)title=tM[1];}
+  title=title.replace(/【楽天市場】/g,"").replace(/｜.*$/,"").trim();
+  console.log("Rakuten title:",title);
+
+  // Also grab full product name area for pattern matching (title + description)
+  let searchText=title;
+  const descM=html2.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  if(descM)searchText+=" "+descM[1];
+
+  // RANK: RINKAN uses "#rinkan*X" format
+  const rkM=html2.match(/#rinkan\*([SABCD])/i)||searchText.match(/#rinkan\*([SABCD])/i)||searchText.match(/rinkan[*＊]?\s*([SABCD])\b/i);
+  if(rkM)out.rank=rkM[1].toUpperCase();
+
+  // SIZE: "サイズ:XX" format
+  const szM=searchText.match(/サイズ[:：]\s*([A-Za-z0-9.\/]+)/);
+  if(szM&&szM[1].length<=6)out.size=szM[1];
+
+  // BRAND (English): RINKAN title starts with "カタカナ英語ブランド Englishブランド ..."
+  // Use known-brand dictionary for clean names
+  const brandMap={
+    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
+    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
+    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
+    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
+    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
+    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
+    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
+    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
+    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
+    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
+    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
+    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
+    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING"
+  };
+  // Match leading katakana brand
+  for(const[jp,en]of Object.entries(brandMap)){
+    if(title.startsWith(jp)){out.brand=en;break;}
+  }
+  // Fallback: extract English text right after leading Japanese brand word
+  if(!out.brand){
+    const bM=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+([A-Za-z][A-Za-z'&.\- ]{1,30}?)(?=[\s　]+[A-Z0-9]{2,}[\s　]|[\s　]+サイズ|[\s　]*[\u3040-\u30FF\u4E00-\u9FFF]|[\s　]*$)/);
+    if(bM)out.brand=bM[1].trim();
+    else{
+      // Last resort: first Latin phrase in title
+      const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
+      if(eng)out.brand=eng[0];
+    }
+  }
+
+  // PRICE: try JSON-LD first, then patterns
+  try{
+    const lds=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for(const m of lds){
+      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
+      const arr=Array.isArray(data)?data:[data];
+      for(const d of arr){
+        const off=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
+        if(off&&off.price){const p=Number(String(off.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
+      }
+    }
+  }catch(e){}
+  if(!out.price){
+    const pats=[/itemprice["'\s:]*(\d[\d,]{3,})/i,/税込[^\d]{0,6}(\d[\d,]{3,})/,/"price"\s*:\s*"?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
+    for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
+  }
+
+  return out;
+}
+
+function drawStory(){
+  const W=1080,H=1920;
+  cx.clearRect(0,0,W,H);
+  if(photoImg){
+    const s=Math.max(W/photoImg.width,H/photoImg.height);
+    const w=photoImg.width*s,h=photoImg.height*s;
+    cx.drawImage(photoImg,(W-w)/2,(H-h)/2,w,h);
+  }else{
+    cx.fillStyle="#1d1d1f";cx.fillRect(0,0,W,H);
+    cx.fillStyle="#aeaeb2";cx.font="500 36px sans-serif";cx.textAlign="center";
+    cx.fillText("写真を選択してください",W/2,H/2);cx.textAlign="left";
+  }
+  const g1=cx.createLinearGradient(0,0,0,500);
+  g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");
+  cx.fillStyle=g1;cx.fillRect(0,0,W,500);
+  const g2=cx.createLinearGradient(0,H-560,0,H);
+  g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,"rgba(0,0,0,.5)");
+  cx.fillStyle=g2;cx.fillRect(0,H-560,W,560);
+  cx.fillStyle="#fff";cx.shadowColor="rgba(0,0,0,.5)";cx.shadowBlur=16;
+  const serif="'Hiragino Mincho ProN','Yu Mincho',serif";
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  let y=220;
+  if(brand){cx.font=`500 72px ${serif}`;cx.fillText(brand,70,y);y+=86;}
+  if(size){cx.font=`500 58px ${serif}`;cx.fillText("size:"+size,70,y);y+=74;}
+  if(rank){cx.font=`500 58px ${serif}`;cx.fillText("RANK:"+rank,70,y);}
+  if(price){cx.font=`500 74px ${serif}`;cx.fillText("¥"+Number(price).toLocaleString("ja-JP")+"-(tax in)",70,H-280);}
+  if(tag){cx.font=`500 58px ${serif}`;const tw=cx.measureText(tag).width;cx.fillText(tag,W-tw-60,H-200);}
+  cx.shadowBlur=0;
+}
+document.getElementById("genBtn").addEventListener("click",drawStory);
+["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
+document.getElementById("sRank").addEventListener("change",drawStory);
+function updateBrandDl(){
+  const brands=[...new Set([...DB.posts.map(p=>p.brand),...storyArchive.map(a=>a.brand)].filter(Boolean))].sort();
+  document.getElementById("sBrandDl").innerHTML=brands.map(b=>`<option value="${esc(b)}">`).join("");
+}
+
+// share (1-tap save on iOS)
+document.getElementById("shareBtn").addEventListener("click",async()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const fname=`story_${brand}_${Date.now()}.png`;
+  try{
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const file=new File([blob],fname,{type:"image/png"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:fname});
+      archiveStory(brand);
+      const t=document.getElementById("shareTick");t.textContent="✓ 共有しました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+    }else{
+      // fallback: download
+      const a=document.createElement("a");a.download=fname;a.href=cv.toDataURL("image/png");a.click();
+      archiveStory(brand);
+      const t=document.getElementById("shareTick");t.textContent="✓ ダウンロードしました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+    }
+  }catch(e){if(e.name!=="AbortError")console.error(e);}
+});
+document.getElementById("dlBtn").addEventListener("click",()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const a=document.createElement("a");a.download=`story_${brand}_${Date.now()}.png`;a.href=cv.toDataURL("image/png");a.click();
+  archiveStory(brand);
+});
+
+function archiveStory(brand){
+  const thumb=document.createElement("canvas");
+  thumb.width=108;thumb.height=192;
+  thumb.getContext("2d").drawImage(cv,0,0,108,192);
+  storyArchive.unshift({
+    brand,
+    date:today(),
+    thumb:thumb.toDataURL("image/jpeg",0.6),
+    by:getName()
+  });
+  if(storyArchive.length>30)storyArchive=storyArchive.slice(0,30);
+  try{localStorage.setItem("story-archive",JSON.stringify(storyArchive));}catch(e){}
+  renderArchive();
+}
+function renderArchive(){
+  const el=document.getElementById("archiveList");
+  if(!storyArchive.length){el.innerHTML='<div class="empty">まだ作成した画像はありません</div>';return;}
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;">'+
+    storyArchive.map(a=>`<div style="text-align:center;">
+      <img src="${a.thumb}" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+      <div style="font-size:9.5px;color:var(--t3);margin-top:3px;">${esc(a.brand)}<br>${a.date}</div>
+    </div>`).join("")+'</div>';
+}
+
+// インサイト対象期間のデフォルト：前日〜2日前（当日はまだ確定しないため）
+function setInsightPeriodDefault(){
+  const d=new Date();
+  const to=new Date(d);to.setDate(d.getDate()-1);      // 前日
+  const from=new Date(d);from.setDate(d.getDate()-2);  // 2日前
+  const f=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+  document.getElementById("iFrom").value=f(from);
+  document.getElementById("iTo").value=f(to);
+}
+document.getElementById("iAuto").addEventListener("click",setInsightPeriodDefault);
+
+(async function(){
+  document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
+  setInsightPeriodDefault();document.getElementById("pDt").value=today();
+  updBadge();await ensureName(true);
+  try{DB=await ghGet();}catch(e){err("読み込み失敗："+e.message);}
+  updBrandDl();renderDash();renderPosts();renderInsights();renderArchive();drawStory();updateBrandDl();
+})();
+
+/* ===== バージョン表示 & 更新チェック ===== */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";
+  b.textContent=APP_VERSION;
+  b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{
+    // キャッシュを回避して強制的に読み直す
+    const u=new URL(location.href);
+    u.searchParams.set("v",Date.now());
+    location.replace(u.toString());
+  });
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>
