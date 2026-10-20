@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 楽天APIは「許可されたウェブサイト」を照合するため、送信元の情報が必要。
+     ブラウザによって既定で送られないことがあるので明示する。 -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>ピッキングツール | RINKAN渋谷</title>
+<script src="/lib/xlsx.full.min.js"></script>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  --bg:#f5f5f7; --card:#fff; --card2:#f0f0f3; --line:#e3e3e8;
+  --t1:#1d1d1f; --t2:#4a4a4f; --t3:#8e8e93;
+  --blue:#0071e3; --green:#34c759; --orange:#ff9500; --red:#e5484d; --gold:#b8860b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);font-family:var(--font);color:var(--t1);
+  font-size:15px;line-height:1.5;padding-bottom:90px;}
+.wrap{max-width:820px;margin:0 auto;padding:16px 14px 0;}
+header{margin-bottom:14px;}
+.eyebrow{font-size:11px;font-weight:800;color:var(--blue);letter-spacing:.09em;}
+h1{font-size:25px;font-weight:800;margin:2px 0 3px;letter-spacing:-.02em;}
+.sub{font-size:12.5px;color:var(--t3);}
+.c{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.c-title{font-size:13px;font-weight:800;color:var(--t2);margin-bottom:11px;}
+.drop{border:2px dashed #c7c7cc;border-radius:14px;padding:26px 14px;text-align:center;
+  color:var(--t3);cursor:pointer;font-weight:700;font-size:14px;background:var(--card2);}
+.drop:active{border-color:var(--blue);color:var(--blue);}
+select,input[type=text]{width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--line);
+  background:var(--card2);font-size:15px;font-family:var(--font);color:var(--t1);}
+select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
+.btn{border:none;border-radius:11px;padding:11px 17px;font-family:var(--font);
+  font-size:14px;font-weight:700;cursor:pointer;background:var(--t1);color:#fff;}
+.btn.sub2{background:var(--card2);color:var(--t1);}
+.btn.blue{background:var(--blue);color:#fff;}
+.seg{display:flex;gap:5px;background:var(--card2);padding:4px;border-radius:12px;}
+.seg button{flex:1;border:none;background:none;font-family:var(--font);font-size:13.5px;
+  font-weight:700;color:var(--t2);padding:11px 6px;border-radius:9px;cursor:pointer;}
+.seg button.on{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.i-newprice{display:inline-flex;align-items:baseline;gap:8px;margin-top:6px;background:#fff1f1;
+  border:1px solid #f3c5c5;border-radius:9px;padding:5px 10px;flex-wrap:wrap;}
+.i-newprice .old{font-size:12px;color:#9a9aa0;text-decoration:line-through;}
+.i-newprice .new{font-size:18px;font-weight:800;color:#e5484d;}
+.i-newprice .off{font-size:10.5px;font-weight:800;color:#fff;background:#e5484d;
+  border-radius:5px;padding:2px 6px;}
+.i-code{display:inline-flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;
+  background:#0d2b45;border-radius:9px;padding:6px 10px;}
+.i-code .lbl{font-size:10px;font-weight:700;color:#8ac4ff;}
+.i-code .val{font-size:17px;font-weight:800;color:#fff;letter-spacing:.06em;
+  font-variant-numeric:tabular-nums;}
+.i-code .cp{font-size:9.5px;font-weight:700;color:#8ac4ff;border:1px solid #2c5f8f;
+  border-radius:5px;padding:2px 5px;}
+.i-info{display:inline-block;font-size:11.5px;font-weight:800;color:#0055aa;background:#e7f1ff;
+  border-radius:7px;padding:3px 9px;margin-top:6px;}
+.i-warn{display:block;font-size:12px;font-weight:800;color:#fff;background:#e5484d;
+  border-radius:8px;padding:7px 10px;margin-top:7px;line-height:1.45;}
+.warn-banner{background:#fff4f4;border:1.5px solid #e5484d;border-radius:12px;
+  padding:12px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#a3161b;}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:8px 14px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;font-family:var(--font);}
+.pill.on{background:var(--t1);color:#fff;border-color:var(--t1);}
+
+/* progress */
+.prog{display:flex;align-items:center;gap:11px;}
+.prog-bar{flex:1;height:9px;background:var(--card2);border-radius:5px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--green);transition:width .25s;}
+.prog-n{font-size:15px;font-weight:800;white-space:nowrap;}
+
+/* item card */
+.cat-head{font-size:12.5px;font-weight:800;color:var(--t2);margin:16px 0 8px;
+  display:flex;align-items:center;gap:8px;}
+.cat-head .n{font-size:11px;font-weight:700;color:var(--t3);}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:13px 14px;margin-bottom:9px;display:flex;gap:12px;align-items:flex-start;
+  transition:background .15s,opacity .15s;}
+.item.done{opacity:.5;background:#f7fbf8;border-color:#cfe9d6;}
+.chk{width:30px;height:30px;border-radius:9px;border:2px solid var(--line);background:#fff;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:17px;color:#fff;font-weight:900;margin-top:2px;}
+.chk.on{background:var(--green);border-color:var(--green);}
+.i-body{flex:1;min-width:0;}
+.i-thumb{width:74px;height:74px;border-radius:10px;background:var(--card2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;margin-top:2px;}
+@media(max-width:400px){.i-thumb{width:60px;height:60px;}}
+.i-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
+.i-no{font-size:11px;font-weight:800;color:var(--t3);}
+.i-price{font-size:14px;font-weight:800;white-space:nowrap;}
+.i-key{font-size:21px;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  line-height:1.2;margin:3px 0 1px;}
+.i-hin{font-size:11.5px;color:var(--t3);font-variant-numeric:tabular-nums;}
+.i-name{font-size:13px;color:var(--t2);margin-top:5px;line-height:1.45;
+  word-break:break-word;}
+.i-acc{display:inline-block;font-size:11px;font-weight:800;color:#8a5a00;
+  background:#fff3d6;border-radius:6px;padding:3px 8px;margin-top:6px;}
+.i-acts{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;}
+.i-acts button,.i-acts a{border:1px solid var(--line);background:#fff;color:var(--t1);
+  border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:700;
+  font-family:var(--font);cursor:pointer;text-decoration:none;display:inline-block;}
+.i-acts .go{background:var(--blue);color:#fff;border-color:var(--blue);}
+.empty{text-align:center;color:var(--t3);padding:30px 10px;font-size:14px;}
+
+/* sticky footer */
+.foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:11px 14px;z-index:50;}
+.foot-in{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:12px;}
+#verBadge{position:fixed;right:8px;bottom:78px;z-index:60;background:rgba(0,0,0,.62);
+  color:#fff;font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;cursor:pointer;}
+.note{font-size:11.5px;color:var(--t3);line-height:1.6;}
+
+/* ===== スマホ最適化 ===== */
+.i-thumb{position:relative;}
+.i-thumb.has{cursor:zoom-in;}
+.th-n{position:absolute;right:3px;bottom:3px;background:rgba(0,0,0,.66);color:#fff;
+  font-size:10px;font-weight:800;padding:1px 5px;border-radius:7px;}
+/* 拡大ビューア */
+.viewer{display:none;position:fixed;inset:0;z-index:200;background:#000;
+  flex-direction:column;}
+.viewer.on{display:flex;}
+.v-bar{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  background:rgba(0,0,0,.9);}
+.v-x{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:50%;
+  width:38px;height:38px;font-size:17px;flex-shrink:0;cursor:pointer;}
+.v-title{flex:1;min-width:0;color:#fff;font-size:13px;font-weight:800;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.v-chk{background:#34c759;color:#fff;border:none;border-radius:10px;padding:9px 13px;
+  font-size:13px;font-weight:800;font-family:var(--font);flex-shrink:0;cursor:pointer;}
+.v-chk.off{background:rgba(255,255,255,.16);}
+.v-stage{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;}
+.v-stage img{min-width:100%;width:100%;height:100%;object-fit:contain;scroll-snap-align:center;
+  background:#000;}
+.v-count{color:#fff;font-size:12px;font-weight:800;margin-right:8px;}
+.v-hint{color:rgba(255,255,255,.55);font-size:10.5px;text-align:center;padding:0 0 6px;}
+.v-dots{display:flex;gap:6px;justify-content:center;padding:8px;}
+.v-dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);}
+.v-dots i.on{background:#fff;}
+.v-info{color:#fff;font-size:12.5px;line-height:1.55;padding:0 16px 10px;text-align:center;
+  max-height:23vh;overflow-y:auto;}
+.v-info b{font-size:15px;}
+.v-nav{display:flex;gap:8px;padding:8px 12px calc(env(safe-area-inset-bottom) + 12px);
+  background:rgba(0,0,0,.9);}
+.v-nav button,.v-nav a{flex:1;text-align:center;background:rgba(255,255,255,.14);color:#fff;
+  border:none;border-radius:11px;padding:13px 8px;font-size:13.5px;font-weight:700;
+  font-family:var(--font);text-decoration:none;cursor:pointer;}
+.v-nav a{background:#0071e3;}
+/* 一覧をスマホで見やすく */
+@media(max-width:520px){
+  .wrap{padding:12px 10px 0;}
+  h1{font-size:22px;}
+  .c{padding:13px;border-radius:14px;}
+  .item{padding:11px;gap:10px;}
+  .i-thumb{width:88px;height:88px;}
+  .i-key{font-size:18px;}
+  .i-name{font-size:12.5px;-webkit-line-clamp:3;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;}
+  .i-acts button,.i-acts a{padding:9px 11px;font-size:12px;}
+  .chk{width:34px;height:34px;}
+}
+
+@media print{
+  .foot,#verBadge,.drop,.i-acts,.c.noprint{display:none!important;}
+  body{background:#fff;padding:0;}
+  .item{break-inside:avoid;page-break-inside:avoid;border:1px solid #ccc;}
+  .i-key{font-size:22px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">RINKAN SHIBUYA</div>
+  <h1>ピッキングツール</h1>
+  <div class="sub">写真をタップで拡大・スワイプで切替。チェックしながらピック</div>
+  <div class="seg" id="kindSeg" style="margin-top:11px;">
+    <button data-k="tesshu" class="on">📦 撤収</button>
+    <button data-k="idou">🔄 在庫移動</button>
+    <button data-k="kakaku">💰 売価修正</button>
+  </div>
+</header>
+
+<div class="c" id="sharedCard">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+    <div id="sharedInfo" class="note" style="flex:1;">共有リストを確認中…</div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+      <button class="btn sub2 noprint" id="reloadShared" style="padding:8px 12px;font-size:12.5px;">🔄 更新</button>
+      <button class="btn noprint" id="deleteShared" style="padding:8px 12px;font-size:12.5px;background:var(--red);display:none;">🗑 削除</button>
+    </div>
+  </div>
+</div>
+
+<div class="c noprint" id="loadCard">
+  <div class="c-title">📥 ピッキングリストを読み込む（全員に共有されます）</div>
+  <div class="drop" id="drop">📄 エクセルファイルを選択<br>
+    <span style="font-size:11px;font-weight:500;">店舗ピッキングリスト（チャットワークで届くファイル）</span></div>
+  <input type="file" id="fileIn" accept=".xlsx,.xls" style="display:none;">
+  <div id="loadMsg" class="note" style="margin-top:10px;"></div>
+</div>
+
+<div class="c noprint" id="storeCard" style="display:none;">
+  <div class="c-title">🏬 店舗を選ぶ</div>
+  <select id="storeSel"></select>
+</div>
+
+<div class="c" id="progCard" style="display:none;">
+  <div class="prog">
+    <div class="prog-n" id="progN">0 / 0</div>
+    <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    <button class="btn sub2 noprint" id="resetChk" style="padding:8px 12px;font-size:12.5px;">リセット</button>
+  </div>
+  <div class="note" id="progNote" style="margin-top:9px;"></div>
+  <div class="note noprint" id="ckStatus" style="margin-top:8px;"></div>
+  <div class="note noprint" id="imgStatus" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
+</div>
+
+<div class="c noprint" id="filterCard" style="display:none;">
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+    <button class="pill on" id="fAll">すべて</button>
+    <button class="pill" id="fTodo">未ピックのみ</button>
+    <button class="pill" id="fDone">ピック済み</button>
+    <button class="pill" id="printBtn" style="margin-left:auto;">🖨 印刷</button>
+  </div>
+  <input type="text" id="q" placeholder="🔍 品番・商品名・ブランドで絞り込み" style="margin-top:10px;">
+  <div id="cutRow" style="display:none;margin-top:9px;">
+    <button class="pill" id="fCut">💰 値下げありのみ</button>
+  </div>
+  <div id="bulkStoryRow" style="display:none;margin-top:9px;">
+    <button class="btn" id="bulkStoryBtn" style="width:100%;background:#5b3fc4;">
+      ⚡️ 表示中の商品でまとめてストーリー作成</button>
+    <div class="note" style="margin-top:6px;">
+      絞り込んだ商品の品番・値下げ価格をまとめて渡します。オンラインサイトの商品画像で作成できます。
+    </div>
+  </div>
+  <div id="brandRow" style="display:none;margin-top:9px;">
+    <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">ブランド</div>
+    <div id="brandChips" style="display:flex;flex-wrap:wrap;gap:5px;max-height:132px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<div id="list"></div>
+
+<div class="c noprint" id="setCard" style="display:none;">
+  <div class="c-title">⚙️ 検索リンクの設定</div>
+  <div class="note" style="margin-bottom:9px;">
+    「商品ページを開く」で開くURLです。<code>{HINBAN}</code> の位置に品番が入ります。<br>
+    楽天の仕様が変わって開けなくなったら、実際に使えたURLを貼り替えてください。
+  </div>
+  <input type="text" id="tpl" placeholder="https://...{KEY}...">
+  <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;">
+    <button class="btn sub2" id="tplSave" style="font-size:12.5px;">保存</button>
+    <button class="btn sub2" id="tplA" style="font-size:12.5px;">商品ページ直リンク（推奨）</button>
+    <button class="btn sub2" id="tplB" style="font-size:12.5px;">ショップ内検索</button>
+  </div>
+</div>
+</div>
+
+
+<div class="viewer" id="viewer">
+  <div class="v-bar">
+    <button class="v-x" id="vClose">✕</button>
+    <div class="v-title" id="vTitle"></div>
+    <button class="v-chk" id="vChk">✓ ピック</button>
+  </div>
+  <div class="v-stage" id="vStage"></div>
+  <div class="v-dots" id="vDots"></div>
+  <div class="v-hint">横スワイプで写真を切替・ピンチで拡大できます</div>
+  <div class="v-info" id="vInfo"></div>
+  <div class="v-nav">
+    <button id="vPrevItem">◀ 前の商品</button>
+    <a id="vOpen" target="_blank" rel="noopener">楽天で見る</a>
+    <button id="vNextItem">次の商品 ▶</button>
+  </div>
+</div>
+
+<div class="foot noprint" id="foot" style="display:none;">
+  <div class="foot-in">
+    <button class="btn blue" id="nextTodo" style="flex:1;">▶ 次の未ピックへ</button>
+    <button class="btn sub2" id="toggleSet" style="padding:11px 14px;">⚙️</button>
+  </div>
+</div>
+
+<script>
+const APP_VERSION="cf-v2026.10.20.1900";
+
+/* ========= 設定 ========= */
+// 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
+// 仕様変更に備えて、画面から差し替えられるようにしている。
+const TPL_KEY="pick-url-tpl";
+// 商品ページへ直リンク。RINKANの楽天は品番がそのまま商品URLになっているため、
+// 検索も絞り込みも不要で一発で開ける（売り切れ商品でも開ける）。
+const TPL_A="https://item.rakuten.co.jp/gsc-rinkan/{HINBAN}/";
+// 予備：ショップ内を品番で検索（売り切れを含む）
+const TPL_B="https://search.rakuten.co.jp/search/inshop-mall/{HINBAN}/-/f.0-sid.gsc-rinkan";
+function getTpl(){
+  try{return localStorage.getItem(TPL_KEY)||TPL_A;}catch(e){return TPL_A;}
+}
+function setTpl(v){try{localStorage.setItem(TPL_KEY,v);}catch(e){}}
+// {HINBAN}=品番そのまま / {KEY}=末尾7桁（旧テンプレ互換）
+function searchUrl(item){
+  return getTpl()
+    .replace("{HINBAN}",encodeURIComponent(item.hinban))
+    .replace("{KEY}",encodeURIComponent(item.key));
+}
+// 予備リンク：ショップ全体を品番で検索
+function fallbackUrl(item){
+  return "https://search.rakuten.co.jp/search/mall/"+encodeURIComponent(item.hinban)+"/?f=0";
+}
+
+
+/* ========= 楽天公式APIで商品画像を取得 ========= */
+// 中継サービスは停止しやすいので、公式APIのみを使う。
+// アプリIDとアクセスキーは他のツールと共通の保存先を使う（一度設定すれば共用）。
+const RK_APPID_KEY="rakuten-appid", RK_KEY_KEY="rakuten-accesskey";
+const RK_VERSIONS=["20260401","20220601"];
+function rkAppId(){try{return localStorage.getItem(RK_APPID_KEY)||"";}catch(e){return "";}}
+function rkAccessKey(){try{return localStorage.getItem(RK_KEY_KEY)||"";}catch(e){return "";}}
+function rkReady(){return !!(rkAppId()&&rkAccessKey());}
+// 売り切れ商品を含めるため availability=0 を必ず付ける。
+// 撤収対象は「売れた商品」なので、これが無いと全件ヒットしない。
+function rkUrl(hinban,ver,mode){
+  const base="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+(ver||RK_VERSIONS[0])
+    +"?applicationId="+encodeURIComponent(rkAppId())
+    +"&accessKey="+encodeURIComponent(rkAccessKey())
+    +"&availability=0&hits=1&format=json";
+  if(mode==="code"){
+    // 商品コードで直接指定（最も正確）
+    return base+"&itemCode="+encodeURIComponent("gsc-rinkan:"+hinban);
+  }
+  // 予備：ショップ内をキーワード検索
+  return base+"&shopCode=gsc-rinkan&keyword="+encodeURIComponent(hinban);
+}
+// 取得済み画像はブラウザに保存して、翌日以降の再読み込みを省く
+const IMG_CACHE="pick-img-cache-v1";
+let imgCache={};
+try{imgCache=JSON.parse(localStorage.getItem(IMG_CACHE)||"{}");}catch(e){imgCache={};}
+// 以前のバージョンでは、通信制限による失敗まで「画像なし」として保存していた。
+// 起動時に一度だけその記録を捨てて、取り直せるようにする。
+try{
+  if(localStorage.getItem("pick-img-purged")!=="1"){
+    Object.keys(imgCache).forEach(k=>{ if(!imgCache[k])delete imgCache[k]; });
+    localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
+    localStorage.setItem("pick-img-purged","1");
+  }
+}catch(e){}
+function saveImgCache(){
+  try{
+    // 古い分が溜まらないよう直近800件に抑える
+    const ks=Object.keys(imgCache);
+    if(ks.length>800){const keep={};ks.slice(-800).forEach(k=>keep[k]=imgCache[k]);imgCache=keep;}
+    localStorage.setItem(IMG_CACHE,JSON.stringify(imgCache));
+  }catch(e){}
+}
+let lastImgError="", lastImgUrl="";
+// 楽天APIは概ね「1秒1リクエスト」の制限がある（超えると HTTP 429）。
+// 全件を一気に叩くと大半が失敗するため、必ず間隔を空けて1件ずつ取得する。
+let lastCall=0;
+const MIN_INTERVAL=1200; // ms
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function rkFetch(url){
+  const wait=lastCall+MIN_INTERVAL-Date.now();
+  if(wait>0)await sleep(wait);
+  lastCall=Date.now();
+  return fetch(url,{signal:AbortSignal.timeout(12000)});
+}
+// 戻り値: {img:"..."} 取得成功 / {none:true} 商品なし（キャッシュしてよい）
+//         {retry:true} 一時的な失敗（キャッシュしない）
+async function tryFetchImage(hinban){
+  for(const mode of ["code","keyword"]){
+    let attempt=0;
+    while(attempt<3){
+      attempt++;
+      try{
+        const r=await rkFetch(rkUrl(hinban,RK_VERSIONS[0],mode));
+        if(r.status===429){
+          // 制限に当たったら待ち時間を伸ばして再試行する
+          lastImgError="混雑のため待機中…";
+          await sleep(2500*attempt);
+          continue;
+        }
+        const txt=await r.text();
+        if(!r.ok){
+          // 楽天は理由を本文に入れてくるので、そのまま残す（原因特定に必要）
+          let msg="HTTP "+r.status;
+          try{
+            const j=JSON.parse(txt);
+            const d=[j.error,j.error_description,j.message].filter(Boolean).join(" ");
+            msg+=d?(" "+d):(" "+txt.slice(0,160));
+          }catch(e){ msg+=" "+String(txt).slice(0,160); }
+          lastImgError=msg.replace(/\s+/g," ").trim();
+          lastImgUrl=rkUrl(hinban,RK_VERSIONS[0],mode).replace(/accessKey=[^&]*/,"accessKey=***").replace(/applicationId=[^&]*/,"applicationId=***");
+          break; // このモードは諦めて次のモードへ
+        }
+        const j=JSON.parse(txt);
+        if(!j.Items||!j.Items.length){ break; } // このモードでは見つからない
+        const it=j.Items[0].Item||j.Items[0];
+        const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+        let list=urls(it.mediumImageUrls);
+        if(!list.length)list=urls(it.smallImageUrls);
+        if(list.length){
+          // 元画像（高解像度）に変換し、連番を辿って残りの写真も集める
+          const all=await expandImages(list);
+          lastImgError="";
+          return {img:{t:toThumb(all[0]),list:all,name:it.itemName||"",price:Number(it.itemPrice)||0,url:it.itemUrl||""}};
+        }
+        break;
+      }catch(e){
+        lastImgError=(e.name==="TimeoutError"?"タイムアウト":(e.message||"通信失敗"));
+        await sleep(1200);
+      }
+    }
+  }
+  // 429やタイムアウトが原因なら「商品なし」と断定できないので再試行対象にする
+  if(/混雑|タイムアウト|通信失敗|429/.test(lastImgError))return {retry:true};
+  return {none:true};
+}
+async function fetchItemImage(hinban){
+  if(imgCache[hinban])return imgCache[hinban];               // 取得済み
+  if(imgCache[hinban]===null)return null;                    // 商品なしと確定済み
+  if(!rkReady())return null;
+  const res=await tryFetchImage(hinban);
+  if(res.img){ imgCache[hinban]=res.img; saveImgCache(); return res.img; }
+  if(res.none){ imgCache[hinban]=null; saveImgCache(); return null; }
+  return undefined; // 一時的な失敗 → キャッシュせず、次回また試す
+}
+// 一覧に出ている商品の画像を順に読み込む（APIの制限に合わせて1件ずつ）
+let imgLoading=false, imgAbort=false;
+async function loadVisibleImages(){
+  if(imgLoading)return;
+  imgLoading=true; imgAbort=false;
+  const boxes=[...document.querySelectorAll("[data-img]")].filter(b=>!b.dataset.loaded);
+  let done=0;
+  for(const box of boxes){
+    if(imgAbort)break;
+    const h=box.getAttribute("data-img");
+    // キャッシュ済みなら即反映（待たない）
+    if(imgCache[h]){ setThumb(box,imgCache[h]); box.dataset.loaded="1"; done++; continue; }
+    if(imgCache[h]===null){ setThumb(box,null); box.dataset.loaded="1"; done++; continue; }
+    box.innerHTML='<span style="font-size:9.5px;color:var(--t3);">読込中</span>';
+    const url=await fetchItemImage(h);
+    if(url===undefined){
+      // 一時的な失敗。ここでキャッシュせず、印だけ付けて次回また試す
+      box.innerHTML='<span style="font-size:9px;color:var(--orange);text-align:center;line-height:1.3;">あとで<br>再試行</span>';
+    }else{
+      setThumb(box,url);
+      box.dataset.loaded="1";
+    }
+    done++;
+    updateImgStatus(done,boxes.length);
+  }
+  imgLoading=false;
+  updateImgStatus();
+}
+// キャッシュは新形式(オブジェクト)と旧形式(文字列)の両方を受ける
+function imgThumb(v){ return !v?"":(typeof v==="string"?v:v.t); }
+function imgList(v){ return !v?[]:(typeof v==="string"?[v]:(v.list||[])); }
+function setThumb(box,v){
+  const t=imgThumb(v);
+  if(t){
+    const n=imgList(v).length;
+    box.innerHTML=`<img src="${t}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`
+      +(n>1?`<span class="th-n">${n}</span>`:"");
+    box.style.background="#fff";
+    box.classList.add("has");
+  }else{
+    box.innerHTML='<span style="font-size:10px;color:var(--t3);text-align:center;line-height:1.3;">画像<br>なし</span>';
+    box.classList.remove("has");
+  }
+}
+function updateImgStatus(done,total){
+  const el=document.getElementById("imgStatus");
+  if(!el)return;
+  if(!rkReady()){
+    el.innerHTML='<span style="color:var(--orange);font-weight:700;">⚠️ 楽天APIが未設定のため写真が出ません</span>　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">設定する</button>';
+  }else if(done!=null&&total!=null&&done<total){
+    el.innerHTML=`<span style="color:var(--blue);font-weight:700;">📷 写真を取得中… ${done} / ${total}</span>`
+      +'<span style="color:var(--t3);">（楽天の制限に合わせて1件ずつ取得しています）</span>';
+    return;
+  }else{
+    const boxes=[...document.querySelectorAll("[data-img]")];
+    const shown=boxes.filter(b=>b.querySelector("img")).length;
+    const errNote=lastImgError
+      ? `<div style="color:var(--orange);margin-top:5px;word-break:break-all;">⚠ ${esc(lastImgError)}</div>`
+        +`<div class="muted" style="font-size:10.5px;word-break:break-all;">ID:${esc((rkAppId()||"").slice(0,8))}… Key:${esc((rkAccessKey()||"").slice(0,6))}… 送信元:${esc(location.origin)}</div>`
+        +(lastImgUrl?`<div class="muted" style="font-size:10px;word-break:break-all;">${esc(lastImgUrl)}</div>`:"")
+      :"";
+    el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ 写真 ${shown} / ${boxes.length} 件</span>`+errNote
+      +'　<button class="btn sub2" id="retryImg" style="padding:6px 11px;font-size:12px;">写真が無い分を取り直す</button>'
+      +'　<button class="btn sub2" id="testApi" style="padding:6px 11px;font-size:12px;">接続テスト</button>'
+      +'　<button class="btn sub2" id="setApi" style="padding:6px 11px;font-size:12px;">キーを変更</button>';
+    const tb=document.getElementById("testApi");
+    if(tb)tb.addEventListener("click",async()=>{
+      tb.textContent="確認中...";tb.disabled=true;
+      const chk=await testRakutenKeys(rkAppId(),rkAccessKey());
+      tb.textContent="接続テスト";tb.disabled=false;
+      alert(chk.ok?"✓ 楽天に接続できました。キーは有効です。"
+                 :"✗ 接続できませんでした。\n\n"+chk.err
+                  +"\n\nアプリID："+rkAppId()+"\nアクセスキー："+rkAccessKey());
+    });
+    const rb=document.getElementById("retryImg");
+    if(rb)rb.addEventListener("click",()=>{
+      // 「画像なし」として保存された記録は、通信制限による誤判定の可能性があるので消す。
+      // 取得できている写真はそのまま残す。
+      Object.keys(imgCache).forEach(k=>{ if(!imgCache[k])delete imgCache[k]; });
+      saveImgCache();
+      boxes.forEach(b=>{ if(!b.querySelector("img"))b.removeAttribute("data-loaded"); });
+      lastImgError="";loadVisibleImages();
+    });
+  }
+  const b=document.getElementById("setApi");
+  if(b)b.addEventListener("click",setRakutenKeys);
+}
+// 入力されたキーが実際に使えるか、楽天に1回問い合わせて確かめる
+async function testRakutenKeys(appId,accessKey){
+  const url="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+RK_VERSIONS[0]
+    +"?applicationId="+encodeURIComponent(appId)
+    +"&accessKey="+encodeURIComponent(accessKey)
+    +"&availability=0&hits=1&format=json&shopCode=gsc-rinkan&keyword=%E3%83%AA%E3%83%B3%E3%82%B0";
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(12000)});
+    const txt=await r.text();
+    if(r.ok)return {ok:true};
+    let d="";
+    try{const j=JSON.parse(txt);d=(j.errors&&j.errors.errorMessage)||j.error_description||j.error||"";}catch(e){}
+    return {ok:false,err:"HTTP "+r.status+(d?" "+d:" "+txt.slice(0,120))};
+  }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
+}
+function setRakutenKeys(){
+  const id=prompt("① 楽天アプリID（applicationId）\n\nUUID形式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",rkAppId()||"");
+  if(id==null)return;
+  const t=id.trim();
+  if(!t){try{localStorage.removeItem(RK_APPID_KEY);localStorage.removeItem(RK_KEY_KEY);}catch(e){}updateImgStatus();return;}
+  const k=prompt("② アクセスキー（accessKey）\n\n「pk_」から始まる文字列です。",rkAccessKey()||"");
+  if(k==null)return;
+  const kk=k.trim();
+  (async()=>{
+    // まず実際に使えるか確かめる。使えないキーを共有すると全端末が壊れるため。
+    const chk=await testRakutenKeys(t,kk);
+    if(!chk.ok){
+      alert("このキーでは楽天に接続できませんでした。\n\n"+chk.err
+        +"\n\n楽天ウェブサービスの管理画面で、アプリIDとアクセスキーを確認してください。\n保存を中止しました。");
+      return;
+    }
+    try{localStorage.setItem(RK_APPID_KEY,t);localStorage.setItem(RK_KEY_KEY,kk);}catch(e){}
+    imgCache={};saveImgCache();
+    updateImgStatus();render();
+    const res=await saveRakutenKeysShared(t,kk);
+    alert(res.ok?"✓ 接続を確認し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+            :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
+  })();
+}
+
+
+/* ========= 画像URLの処理 ========= */
+// 楽天のサムネイル用URLを、元画像（高解像度）のURLに変換する。
+// thumbnail.image.rakuten.co.jp/@0_mall/... は縮小版なので拡大すると粗い。
+function toOriginal(u){
+  if(!u)return "";
+  return String(u)
+    .replace(/\?_ex=\d+x\d+.*$/,"")
+    .replace(/^https?:\/\/thumbnail\.image\.rakuten\.co\.jp\/@0_mall\//,"https://image.rakuten.co.jp/");
+}
+// 一覧用の小さいサムネ（通信量を抑える）
+function toThumb(u){
+  const o=toOriginal(u);
+  if(!o)return "";
+  return o.replace(/^https:\/\/image\.rakuten\.co\.jp\//,"https://thumbnail.image.rakuten.co.jp/@0_mall/")+"?_ex=300x300";
+}
+// 画像が実在するか確かめる（<img>の読み込みはCORSの制限を受けない）
+function imageExists(url){
+  return new Promise(res=>{
+    const im=new Image();
+    let done=false;
+    const fin=v=>{if(!done){done=true;res(v);}};
+    im.onload=()=>fin(im.naturalWidth>1);
+    im.onerror=()=>fin(false);
+    setTimeout(()=>fin(false),6000);
+    im.src=url;
+  });
+}
+// APIは3枚までしか返さないが、楽天の画像は連番で並んでいることが多い。
+// 連番をまとめて並列に確認して、付属品などの追加写真も拾う（直列だと遅いため）。
+async function expandImages(baseUrls){
+  const found=[], seen=new Set();
+  for(const u of baseUrls){
+    const o=toOriginal(u);
+    if(o&&!seen.has(o)){seen.add(o);found.push(o);}
+  }
+  if(!found.length)return found;
+  const m=found[0].match(/^(.*?)_(\d+)(\.[a-zA-Z]+)$/);
+  if(!m)return found;
+  const [,stem,,ext]=m;
+  // 1〜12番をまとめて確認（画像の読み込みは同時に走らせても問題ない）
+  const cands=[];
+  for(let i=1;i<=12;i++){
+    const u=`${stem}_${i}${ext}`;
+    cands.push({i,u,exists:seen.has(u)?Promise.resolve(true):imageExists(u)});
+  }
+  const results=await Promise.all(cands.map(async cd=>({i:cd.i,u:cd.u,ok:await cd.exists})));
+  // 連番が途切れたらそこで打ち切る（別商品の画像を拾わないため）
+  const out=[];
+  let miss=0;
+  for(const r of results){
+    if(r.ok){ out.push(r.u); miss=0; }
+    else { miss++; if(miss>=3&&out.length)break; }
+  }
+  return out.length?out:found;
+}
+
+/* ========= 共有（GitHubのファイル） ========= */
+// Supabaseの無料プランは放置で自動停止してしまい、朝いきなり共有が死ぬため、
+// タスク集計ツールと同じ「リポジトリ内のJSONファイル」方式に移した。止まる概念がない。
+// 保存先: shibuya-tk/pick-data.json
+// 中身  : {"pick-list":{...},"pick-list-idou":{...},"pick-checked":{...}, ...}
+const API="/api", STORE="shibuya";
+let ME=null;
+let KIND="tesshu";  // tesshu=撤収 / idou=在庫移動
+function TOOLKEY(){return KIND==="idou"?"pick-list-idou":(KIND==="kakaku"?"pick-list-kakaku":"pick-list");}
+
+// 鍵は廃止。Cloudflare Access がログインを保証する。
+function getKey(){ return "access"; }
+function peekKey(){ return "access"; }
+function clearKey(){}
+
+// 店内は電波が不安定なので何度か試す
+async function ghRetry(url,opt,tries){
+  tries=tries||3; let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(r=>setTimeout(r,600*(i+1))); }
+  }
+  throw last||new Error("通信できませんでした");
+}
+// 共有データ全体を読む
+async function ghAll(){
+  let r;
+  try{ r=await ghRetry(`${API}/kv?store=${STORE}&ts=${Date.now()}`,{headers:{"Accept":"application/json"}}); }
+  catch(e){ throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください"); }
+  if(r.status===401||r.status===403){ location.reload(); return {}; }
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return (await r.json())||{};
+}
+async function shareGet(tool){
+  let r;
+  try{ r=await ghRetry(`${API}/kv?store=${STORE}&tool=${encodeURIComponent(tool)}&ts=${Date.now()}`,{headers:{"Accept":"application/json"}}); }
+  catch(e){ throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください"); }
+  if(r.status===401||r.status===403){ location.reload(); return null; }
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return await r.json();
+}
+// 1つのリストだけを書き換える。payload に関数を渡すと最新の値を受け取って作れる。
+async function sharePut(tool,payload){
+  let value=payload;
+  if(typeof payload==="function"){
+    let cur=null;
+    try{ cur=await shareGet(tool); }catch(e){}
+    value=payload(cur||null);
+  }
+  let r;
+  try{ r=await ghRetry(`${API}/kv?store=${STORE}&tool=${encodeURIComponent(tool)}`,
+        {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)}); }
+  catch(e){ throw new Error("通信できませんでした。入力内容は残してあります"); }
+  if(r.status===401||r.status===403){ location.reload(); return; }
+  if(!r.ok) throw new Error("保存失敗 "+r.status+" "+(await r.text()).slice(0,120));
+}
+
+function myName(){
+  let n="";try{n=localStorage.getItem("pick-staff")||"";}catch(e){}
+  if(!n){
+    n=(prompt("お名前を入力してください（誰が共有したか分かるようにするため）")||"").trim();
+    if(n){try{localStorage.setItem("pick-staff",n);}catch(e){}}
+  }
+  return n||"不明";
+}
+
+async function shareList(fileName){
+  // 既存のペイロードにある楽天APIキーを消さないよう引き継ぐ
+  let keep=null;
+  try{ const cur=await shareGet(TOOLKEY()); if(cur&&cur.rkKeys)keep=cur.rkKeys; }catch(e){}
+  const payload={
+    file:fileName, at:new Date().toISOString(), by:myName(),
+    sheets:SHEETS, listId:listId
+  };
+  if(keep)payload.rkKeys=keep;
+  await sharePut(TOOLKEY(),payload);
+}
+
+async function fetchShared(){ return await shareGet(TOOLKEY()); }
+
+// 共有データを画面に反映する
+function applyShared(p){
+  if(!p||p.cleared||!p.sheets)return false;
+  SHEETS=p.sheets;
+  const names=Object.keys(SHEETS);
+  if(!names.length)return false;
+  listId=p.listId||("shared:"+(p.file||"")+":"+names.reduce((s,n)=>s+SHEETS[n].length,0));
+  loadChecked();
+  const sel=document.getElementById("storeSel");
+  sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
+  let pref="";try{pref=localStorage.getItem("pick-store-"+KIND)||"";}catch(e){}
+  store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
+  sel.value=store;
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display=id==="foot"?"block":"block";
+  });
+  const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
+  const db=document.getElementById("deleteShared");if(db)db.style.display="block";
+  const d=p.at?new Date(p.at):null;
+  const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+  document.getElementById("sharedInfo").innerHTML=
+    `<span style="color:var(--green);font-weight:800;">✓ 共有リストを表示中</span><br>`
+    +`<span style="color:var(--t3);">${esc(p.file||"")}　${when}　${esc(p.by||"")}さんが共有　全${total}点</span>`;
+  updateImgStatus();
+  render();
+  startCkSync();
+  return true;
+}
+
+
+/* ========= 楽天APIキーの共有 ========= */
+// 端末ごとに入力させると全員分の設定が必要になるため、共有DBに置いて
+// 誰か一人が入れれば全員が使える状態にする。
+// 取得したキーは端末にも控えておき、通信できない時でも使えるようにする。
+const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
+let rkLoaded=false;
+async function loadRakutenKeysShared(){
+  if(rkLoaded)return;
+  rkLoaded=true;
+  try{
+    const p=await shareGet(RK_SHARE_TOOL);
+    const kk=p&&p.rkKeys;
+    // 既にこの端末でキーが設定されている場合は上書きしない。
+    // 誤ったキーが共有されると、動いている端末まで壊れてしまうため。
+    if(kk&&kk.appId&&kk.accessKey&&!(rkAppId()&&rkAccessKey())){
+      try{
+        localStorage.setItem(RK_APPID_KEY,kk.appId);
+        localStorage.setItem(RK_KEY_KEY,kk.accessKey);
+      }catch(e){}
+      updateImgStatus();
+    }
+  }catch(e){}
+}
+// 既存の共有先（撤収リスト）の中にキーを入れる。
+// リストを共有し直してもキーが消えないよう、書き込み時は必ず引き継ぐ。
+async function saveRakutenKeysShared(appId,accessKey){
+  // 共有ファイルは公開リポジトリにあるため、キーをここに書かない。
+  // キーは各端末のlocalStorageにのみ保存する（呼び出し側で保存済み）。
+  return {ok:true,localOnly:true};
+}
+
+/* ========= 状態 ========= */
+let SHEETS={};        // {店舗名:[item,...]}
+let store="";
+let listId="";        // ファイル内容から作る識別子（チェック状態の保存キー）
+let checked=new Set();
+let filter="all";
+let brandPick="", cutOnly=false;
+let currentShown=[];
+
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const yen=n=>"¥"+Number(n||0).toLocaleString("ja-JP");
+
+// 品番 10831-260801-0038 → 末尾7桁 8010038
+function keyOf(hinban){
+  const d=String(hinban||"").replace(/[^0-9]/g,"");
+  return d.length>=7?d.slice(-7):d;
+}
+
+/* ========= 読み込み ========= */
+const drop=document.getElementById("drop"), fileIn=document.getElementById("fileIn");
+drop.addEventListener("click",()=>fileIn.click());
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.borderColor="#c7c7cc";}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)readFile(f);});
+fileIn.addEventListener("change",e=>{const f=e.target.files[0];if(f)readFile(f);fileIn.value="";});
+
+async function readFile(file){
+  const msg=document.getElementById("loadMsg");
+  msg.textContent="読み込み中...";
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    SHEETS={};
+    for(const sn of wb.SheetNames){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
+      // 形式を自動判別する。
+      // ①店舗ごとにシートが分かれた「◆アパレル/◆小物」形式（撤収など）
+      // ②1シートに全店舗が縦に並ぶ在庫表形式（列に店舗名称・ハイフン品番がある）
+      const flat=parseFlatSheet(rows);
+      if(flat){
+        Object.entries(flat).forEach(([store,items])=>{
+          if(!SHEETS[store])SHEETS[store]=[];
+          SHEETS[store].push(...items);
+        });
+      }else{
+        const items=parseSheet(rows);
+        if(items.length)SHEETS[sn]=items;
+      }
+    }
+    const names=Object.keys(SHEETS);
+    if(!names.length){
+      msg.innerHTML=KIND==="kakaku"
+        ?'<span style="color:var(--red);">値下げ後の価格が入っている商品が見つかりませんでした。</span><br><span class="muted">エクセルの「値下げ後」または「税込み」欄に金額が入っている行だけを対象にしています。</span>'
+        :'<span style="color:var(--red);">品番が見つかりませんでした。ファイルを確認してください。</span>';
+      return;
+    }
+    // チェック状態の保存キー（ファイル名＋総点数）
+    const total=names.reduce((s,n)=>s+SHEETS[n].length,0);
+    listId="pick:"+file.name.replace(/\s/g,"")+":"+total;
+    loadChecked();
+
+    const sel=document.getElementById("storeSel");
+    sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}（${SHEETS[n].length}点）</option>`).join("");
+    // 前回選んだ店舗を復元（なければ渋谷）
+    let pref="";
+    try{pref=localStorage.getItem("pick-store-"+KIND)||"";}catch(e){}
+    store=names.includes(pref)?pref:(names.find(n=>n.includes("渋谷")&&!n.includes("silver"))||names[0]);
+    sel.value=store;
+
+    document.getElementById("storeCard").style.display="block";
+    document.getElementById("progCard").style.display="block";
+    document.getElementById("filterCard").style.display="block";
+    document.getElementById("foot").style.display="block";
+    msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗　<span style="color:var(--blue);">共有中…</span>`;
+    updateImgStatus();
+    render();
+    // 全端末に共有する
+    try{
+      await shareList(file.name);
+      msg.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${file.name}</span>　全${total}点 / ${names.length}店舗<br><span style="color:var(--green);font-weight:700;">✓ 全員に共有しました</span>`;
+      const db2=document.getElementById("deleteShared");if(db2)db2.style.display="block";
+      const d=new Date();
+      document.getElementById("sharedInfo").innerHTML=
+        `<span style="color:var(--green);font-weight:800;">✓ 共有リストを表示中</span><br>`
+        +`<span style="color:var(--t3);">${esc(file.name)}　${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}　${esc(myName())}さんが共有　全${total}点</span>`;
+    }catch(err){
+      msg.innerHTML+=`<br><span style="color:var(--red);">⚠ 共有に失敗：${esc(err.message)}（この端末では使えています）</span>`;
+    }
+  }catch(e){
+    console.error(e);
+    msg.innerHTML='<span style="color:var(--red);">読み込みに失敗しました：'+esc(e.message)+'</span>';
+  }
+}
+
+// 1シートを商品リストに変換する。
+// 「◆アパレル」などの見出しでカテゴリが変わり、品番の行だけを拾う。
+
+// 在庫表形式（1シートに全店舗・横に長い列構成）を読む。
+// 該当しなければ null を返し、従来の店舗別シート形式として処理させる。
+// エクセルの計算結果は 6050000.0000000001 のように小数が付くことがあるので、
+// 数字だけを抜くのではなく小数として読んで四捨五入する
+function numOf(v){
+  const s=String(v==null?"":v).replace(/[^0-9.\-]/g,"");
+  const n=parseFloat(s);
+  return isFinite(n)?Math.round(n):0;
+}
+function parseFlatSheet(rows){
+  let hi=-1, col={};
+  // ヘッダーは全角/半角の括弧や空白がファイルによって違うので、正規化して照合する
+  const nz=s=>String(s==null?"":s).replace(/[（）＊]/g,m=>({"（":"(","）":")","＊":"*"}[m])).replace(/\s/g,"").trim();
+  const NEED={
+    store:["店舗名称"], hinban:["ハイフン品番"], jan:["JANコード"],
+    dest:["移動先"], destCode:["移動先コード"],
+    brand:["ブランド名(カナ)","ブランド名（カナ）"], brandEn:["ブランド名称"],
+    model:["モデル","モデル名"], name:["品名","商品名称"],
+    size:["サイズ*","サイズ名称"], color:["カラー*","カラー2","カラー２"],
+    rank:["状態ランク"], acc:["付属品"],
+    price:["単品売価(税込)","単品売価（税込）"],
+    newBase:["値下げ後"], newPrice:["税込み","税込"],
+    cat:["小分類名称"], cat2:["中分類名称"], cond1:["状態１","状態1"],
+    buyer:["バイヤー名称"], hinbanRaw:["品番"]
+  };
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const line=rows[i].map(nz);
+    if(line.includes("店舗名称")&&(line.includes("ハイフン品番")||line.includes("品番"))){
+      hi=i;
+      Object.entries(NEED).forEach(([k,names])=>{
+        for(const n of names){const j=line.indexOf(nz(n));if(j>=0){col[k]=j;return;}}
+      });
+      break;
+    }
+  }
+  if(hi<0||col.store==null)return null;
+  const out={};
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];
+    const g=k=>col[k]!=null?String(r[col[k]]==null?"":r[col[k]]).trim():"";
+    const store=g("store");
+    // ハイフン品番があればそれを使う。無ければ15桁の品番から組み立てる。
+    let hinban=g("hinban");
+    if(!/^\d{5}-\d{6}-\d{4}$/.test(hinban)){
+      const d=g("hinbanRaw").replace(/[^0-9]/g,"");
+      hinban=d.length===15?`${d.slice(0,5)}-${d.slice(5,11)}-${d.slice(11)}`:"";
+    }
+    if(!store||!hinban)continue;
+    // 売価修正モードでは、値下げ後の価格が入っている商品だけを対象にする
+    if(KIND==="kakaku"){
+      const np=numOf(g("newPrice")), nb=numOf(g("newBase"));
+      if(!np&&!nb)continue;
+    }
+    const brand=g("brand")||g("brandEn");
+    const nameParts=[brand,g("model"),g("name")].filter(Boolean);
+    const specs=[g("size")&&("サイズ:"+g("size")),g("color"),g("rank")&&("ランク"+g("rank"))].filter(Boolean);
+    out[store]=out[store]||[];
+    out[store].push({
+      hinban, key:keyOf(hinban),
+      cat:g("cat")||g("cat2")||"商品",
+      acc:g("acc"),
+      name:nameParts.join(" ")+(specs.length?"　"+specs.join(" / "):""),
+      price:numOf(g("price")),
+      // 移動先は必ず見えるようにしておく（どこへ送るかを間違えないため）
+      info:g("dest")?("→ "+g("dest")):"", warn:"",
+      dest:g("dest"), destCode:g("destCode"), buyer:g("buyer"), cond:g("cond1"),
+      // 売価修正リスト用：改定後の税込価格
+      // 税込みが空で税抜だけ入っている場合は税込を計算して補う
+      newPrice:numOf(g("newPrice"))||(numOf(g("newBase"))?Math.round(numOf(g("newBase"))*1.1):0),
+      newBase:numOf(g("newBase")),
+      color:g("color"), rank:g("rank"), cat2:g("cat2"),
+      brandName:(g("brandEn")||g("brand"))
+    });
+  }
+  return Object.keys(out).length?out:null;
+}
+
+function parseSheet(rows){
+  const items=[];
+  let cat="";
+  for(const r of rows){
+    const cells=r.map(v=>String(v==null?"":v).trim());
+    const joined=cells.join("");
+    if(!joined)continue;
+    const head=cells.find(v=>v.startsWith("◆"));
+    if(head){cat=head.replace(/^◆/,"");continue;}
+    // 品番（00000-000000-0000 形式）を含む列を探す
+    let hi=-1,hinban="";
+    for(let i=0;i<cells.length;i++){
+      const m=cells[i].match(/\d{5}-\d{6}-\d{4}/);
+      if(m){hi=i;hinban=m[0];break;}
+    }
+    if(hi<0)continue;
+    // 品番より後ろの列から 付属品 / 商品名 / 価格 を拾う
+    const after=cells.slice(hi+1);
+    const nums=after.map(v=>Number(String(v).replace(/[^\d]/g,""))).map((n,i)=>({n,i}))
+      .filter(x=>x.n>=1000);
+    const price=nums.length?nums[nums.length-1].n:0;
+    const texts=after.filter(v=>v&&!/^[\d,]+$/.test(v));
+    // 「※」で始まる行は作業指示（例：出庫せずに店頭裏に引く）。
+    // 見落とすと事故になるため、商品名と切り離して警告として扱う。
+    const warn=texts.filter(t=>/^[※*]/.test(t)).join(" / ");
+    const body=texts.filter(t=>!/^[※*]/.test(t));
+    let name="",acc="";
+    if(body.length){
+      const sorted=[...body].sort((a,b)=>b.length-a.length);
+      name=sorted[0]||"";
+      acc=body.filter(t=>t!==name&&t.length<=12).join(" ");
+    }
+    items.push({hinban,key:keyOf(hinban),cat,acc,name,price,warn});
+  }
+  return items;
+}
+
+/* ========= チェック状態（全端末で共有） ========= */
+// 複数人で同時にピックするため、
+// ・保存時は「共有の最新」と「自分のチェック」を足し合わせる（誰のチェックも消えない）
+// ・外したチェックだけは明示的に取り消しとして送る
+// という形にして、お互いのチェックを上書きしないようにしている。
+function ckKey(){return KIND+":"+listId+":"+store;}
+function ckTool(){return (KIND==="idou"?"pick-checked-idou":(KIND==="kakaku"?"pick-checked-kakaku":"pick-checked"));}
+let ckPushTimer=null, ckSyncTimer=null, lastRemoved=new Set(), lastLocalEdit=0;
+
+function loadChecked(){
+  loadMarksLocal();
+  applyMarks();
+  pullChecked();   // 開いた直後に共有分を取り込む
+}
+function saveChecked(){
+  lastLocalEdit=Date.now();
+  try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));}catch(e){}
+  // 連続タップでも通信が集中しないよう、少しまとめて送る
+  clearTimeout(ckPushTimer);
+  ckPushTimer=setTimeout(pushChecked,700);
+}
+// 商品1点ごとに「いつ・誰が・付けたか外したか」を持たせ、
+// 商品単位で新しい方を採用する。これにより
+//  ・2人が同じ店舗を分担しても、お互いのチェックが消えない
+//  ・チェックを外した操作もきちんと全員に伝わる
+// の両方が成り立つ。
+let ckMarks={};   // { 品番: {on:true/false, at:ミリ秒, by:名前} }
+
+function markLocal(h,on){
+  ckMarks[h]={on:!!on,at:Date.now(),by:myName()};
+}
+function applyMarks(){
+  const next=new Set();
+  Object.entries(ckMarks).forEach(([h,m])=>{ if(m&&m.on)next.add(h); });
+  checked=next;
+  try{localStorage.setItem(ckKey(),JSON.stringify([...checked]));
+      localStorage.setItem(ckKey()+":marks",JSON.stringify(ckMarks));}catch(e){}
+}
+function loadMarksLocal(){
+  ckMarks={};
+  try{
+    const raw=localStorage.getItem(ckKey()+":marks");
+    if(raw)ckMarks=JSON.parse(raw)||{};
+    else{
+      // 旧形式（チェック一覧だけ）から引き継ぐ
+      const old=localStorage.getItem(ckKey());
+      if(old)JSON.parse(old).forEach(h=>ckMarks[h]={on:true,at:1,by:""});
+    }
+  }catch(e){ckMarks={};}
+}
+// 商品ごとに新しい方を採用して統合する
+function mergeMarks(remote){
+  let changed=false;
+  Object.entries(remote||{}).forEach(([h,rm])=>{
+    if(!rm)return;
+    const lm=ckMarks[h];
+    if(!lm||(rm.at||0)>(lm.at||0)){
+      if(!lm||lm.on!==rm.on)changed=true;
+      ckMarks[h]=rm;
+    }
+  });
+  return changed;
+}
+async function pullChecked(){
+  if(!listId)return;
+  try{
+    const p=await shareGet(ckTool());
+    if(!p||!p.lists)return;
+    const mine=p.lists[ckKey()];
+    if(!mine)return;
+    // 新形式（marks）があればそれを、無ければ旧形式の一覧を取り込む
+    const remote=mine.marks||{};
+    if(!mine.marks&&Array.isArray(mine.items))
+      mine.items.forEach(h=>remote[h]={on:true,at:1,by:mine.by||""});
+    const changed=mergeMarks(remote);
+    applyMarks();
+    if(changed)render();
+    showCkStatus(mine.by,mine.at);
+  }catch(e){}
+}
+async function pushChecked(){
+  if(!listId)return;
+  try{
+    // 送る直前にも取り込み、他の人の操作を消さないようにする
+    let p=await shareGet(ckTool());
+    if(!p||!p.lists)p={lists:{}};
+    const k=ckKey();
+    const cur=p.lists[k]||{};
+    const remote=cur.marks||{};
+    if(!cur.marks&&Array.isArray(cur.items))
+      cur.items.forEach(h=>remote[h]={on:true,at:1,by:cur.by||""});
+    mergeMarks(remote);
+    applyMarks();
+    p.lists[k]={marks:ckMarks,items:[...checked],by:myName(),at:new Date().toISOString()};
+    // 古いリストが溜まらないよう、直近20リストだけ残す
+    const ks=Object.keys(p.lists);
+    if(ks.length>20){
+      const keep={};
+      ks.map(x=>({x,at:p.lists[x].at||""})).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,20)
+        .forEach(o=>keep[o.x]=p.lists[o.x]);
+      p.lists=keep;
+    }
+    await sharePut(ckTool(),p);
+    render();showCkStatus(myName(),new Date().toISOString());
+  }catch(e){}
+}
+function showCkStatus(by,at){
+  const el=document.getElementById("ckStatus");
+  if(!el)return;
+  const d=at?new Date(at):null;
+  const when=d?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+  el.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ピック状況は全員で共有中（2人で分担してもお互いのチェックは消えません）</span>`
+    +(by?`<span class="muted">　最終更新 ${esc(when)} ${esc(by)}さん</span>`:"");
+}
+// 他の人のピックを取り込むため、30秒ごとに同期する
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&listId)pullChecked();
+});
+function startCkSync(){
+  clearInterval(ckSyncTimer);
+  ckSyncTimer=setInterval(()=>{ if(listId)pullChecked(); },10000);
+}
+
+/* ========= 描画 ========= */
+function render(){
+  const items=SHEETS[store]||[];
+  const q=(document.getElementById("q").value||"").trim().toLowerCase();
+  const el=document.getElementById("list");
+
+  // 進捗
+  const doneN=items.filter(i=>checked.has(i.hinban)).length;
+  document.getElementById("progN").textContent=`${doneN} / ${items.length}`;
+  document.getElementById("progFill").style.width=items.length?(doneN/items.length*100)+"%":"0%";
+  const rest=items.length-doneN;
+  if(KIND==="kakaku"){
+    document.getElementById("progNote").innerHTML=
+      `${esc(store)}　値下げ対象 <b>${items.length}</b>点（確認済み ${doneN}点）`
+      +(rest===0&&items.length?'<br><span style="color:var(--green);font-weight:700;">🎉 すべて確認しました</span>':"");
+  }else{
+    document.getElementById("progNote").innerHTML=
+      rest===0&&items.length?'<span style="color:var(--green);font-weight:700;">🎉 この店舗はすべてピック完了です</span>'
+      :`${esc(store)}　残り <b>${rest}</b>点`;
+  }
+
+  let show=items.filter(i=>{
+    if(filter==="todo"&&checked.has(i.hinban))return false;
+    if(filter==="done"&&!checked.has(i.hinban))return false;
+    if(brandPick&&!(i.name||"").includes(brandPick))return false;
+    if(cutOnly&&!(i.newPrice&&i.price&&i.newPrice!==i.price))return false;
+    if(q&&!((i.hinban+" "+i.key+" "+i.name+" "+i.acc+" "+(i.warn||"")+" "+(i.info||"")+" "+(i.destCode||"")).toLowerCase().includes(q)))return false;
+    return true;
+  });
+
+  currentShown=show;
+  if(!show.length){
+    el.innerHTML=`<div class="c"><div class="empty">${items.length?"該当する商品がありません":"この店舗の商品はありません"}</div></div>`;
+    return;
+  }
+  // 売価修正は点数が多いので、ブランドで素早く絞れるようにする
+  const isKakaku=KIND==="kakaku";
+  const brandRow=document.getElementById("brandRow"), cutRow=document.getElementById("cutRow");
+  if(brandRow)brandRow.style.display=isKakaku?"block":"none";
+  if(cutRow)cutRow.style.display="none"; // 売価修正は値下げ対象のみ取り込むため不要
+  const bsr=document.getElementById("bulkStoryRow");
+  if(bsr)bsr.style.display=isKakaku?"block":"none";
+  if(isKakaku&&brandRow){
+    const m={};
+    items.forEach(i=>{
+      const b=(i.brandName||"").trim();
+      if(b)m[b]=(m[b]||0)+1;
+    });
+    const list=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    const bc=document.getElementById("brandChips");
+    if(bc)bc.innerHTML=`<span class="pill${brandPick?"":" on"}" data-b="">すべて(${items.length})</span>`
+      +list.map(([b,n])=>`<span class="pill${brandPick===b?" on":""}" data-b="${esc(b)}">${esc(b)} ${n}</span>`).join("");
+    if(bc)bc.querySelectorAll("[data-b]").forEach(el=>el.addEventListener("click",()=>{
+      brandPick=el.getAttribute("data-b")||"";render();
+    }));
+    const fc=document.getElementById("fCut");
+    if(fc){
+      fc.classList.toggle("on",cutOnly);
+      fc.onclick=()=>{cutOnly=!cutOnly;render();};
+    }
+  }
+  // 作業指示のある商品を先頭でまとめて知らせる
+  const warns=items.filter(i=>i.warn);
+  const wb2=warns.length?`<div class="warn-banner">
+      <b>⚠ 注意が必要な商品が ${warns.length}点あります</b><br>
+      ${[...new Set(warns.map(i=>i.warn))].map(w=>esc(w)).join("<br>")}
+      <div style="margin-top:6px;font-size:11.5px;">該当：${warns.map(i=>esc(i.hinban)).join(" / ")}</div>
+    </div>`:"";
+  // カテゴリごとにまとめる
+  const cats=[...new Set(show.map(i=>i.cat||"その他"))];
+  el.innerHTML=wb2+cats.map(c=>{
+    const list=show.filter(i=>(i.cat||"その他")===c);
+    const cd=list.filter(i=>checked.has(i.hinban)).length;
+    return `<div class="cat-head">◆ ${esc(c)} <span class="n">${cd}/${list.length}</span></div>`
+      +list.map(i=>itemHtml(i,items.indexOf(i)+1)).join("");
+  }).join("");
+
+  el.querySelectorAll("[data-ck]").forEach(b=>b.addEventListener("click",()=>{
+    const h=b.getAttribute("data-ck");
+    markLocal(h,!checked.has(h));applyMarks();
+    saveChecked();render();
+  }));
+  loadVisibleImages();
+  el.querySelectorAll("[data-img]").forEach(b=>b.addEventListener("click",()=>{
+    if(b.classList.contains("has"))openViewer(b.getAttribute("data-img"));
+  }));
+  el.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",async()=>{
+    const v=b.getAttribute("data-copy");
+    try{await navigator.clipboard.writeText(v);}catch(e){}
+    // 移動先コードのように中身を見せたい場所では、表示を消さずに合図だけ出す
+    const cp=b.querySelector(".cp");
+    if(cp){
+      const o=cp.textContent;cp.textContent="✓ コピー";
+      setTimeout(()=>cp.textContent=o,1200);
+    }else{
+      const o=b.textContent;b.textContent="✓ コピー";setTimeout(()=>b.textContent=o,1200);
+    }
+  }));
+}
+
+function itemHtml(i,no){
+  const on=checked.has(i.hinban);
+  return `<div class="item ${on?"done":""}" id="it-${esc(i.hinban)}">
+    <div class="chk ${on?"on":""}" data-ck="${esc(i.hinban)}">${on?"✓":""}</div>
+    <div class="i-thumb" data-img="${esc(i.hinban)}"><span style="font-size:9.5px;color:var(--t3);">…</span></div>
+    <div class="i-body">
+      <div class="i-top">
+        <span class="i-no">${no}</span>
+        <span class="i-price">${i.price?yen(i.price):""}</span>
+      </div>
+      <div class="i-key">${esc(i.hinban)}</div>
+      ${i.name?`<div class="i-name">${esc(i.name)}</div>`:""}
+      ${i.acc?`<div class="i-acc">付属品：${esc(i.acc)}</div>`:""}
+      ${(i.newPrice&&i.price&&i.newPrice!==i.price)?`<div class="i-newprice">
+        <span class="old">${yen(i.price)}</span><span class="new">${yen(i.newPrice)}</span>
+        <span class="off">${Math.round((1-i.newPrice/i.price)*100)}% OFF</span></div>`:""}
+      ${i.info?`<div class="i-info">📍 ${esc(i.info)}</div>`:""}
+      ${i.destCode?`<div class="i-code" data-copy="${esc(i.destCode)}" title="タップでコピー">
+        <span class="lbl">移動先コード</span><span class="val">${esc(i.destCode)}</span><span class="cp">コピー</span></div>`:""}
+      ${i.warn?`<div class="i-warn">⚠ ${esc(i.warn)}</div>`:""}
+      <div class="i-acts">
+        <a class="go" href="${searchUrl(i)}" target="_blank" rel="noopener">▶ 商品ページを開く</a>
+        <a href="${fallbackUrl(i)}" target="_blank" rel="noopener">🔍 検索で探す</a>
+        <a href="../story-maker/?hinban=${encodeURIComponent(i.hinban)}${i.newPrice?("&price="+i.newPrice):""}${(i.newPrice&&i.price&&i.price>i.newPrice)?("&old="+i.price):""}" target="_blank" rel="noopener" style="background:#5b3fc4;color:#fff;border-color:#5b3fc4;">📸 ストーリー</a>
+        <button data-copy="${esc(i.hinban)}">品番をコピー</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ========= 操作 ========= */
+document.getElementById("storeSel").addEventListener("change",e=>{
+  store=e.target.value;
+  try{localStorage.setItem("pick-store-"+KIND,store);}catch(err){}
+  loadChecked();render();
+});
+document.getElementById("q").addEventListener("input",render);
+[["fAll","all"],["fTodo","todo"],["fDone","done"]].forEach(([id,v])=>{
+  document.getElementById(id).addEventListener("click",()=>{
+    filter=v;
+    ["fAll","fTodo","fDone"].forEach(x=>document.getElementById(x).classList.toggle("on",x===id));
+    render();
+  });
+});
+document.getElementById("resetChk").addEventListener("click",()=>{
+  if(!confirm(`${store} のチェックをすべて外しますか？\n\n全員の共有からも外れます。`))return;
+  [...checked].forEach(h=>markLocal(h,false));
+  applyMarks();saveChecked();render();
+});
+document.getElementById("printBtn").addEventListener("click",()=>window.print());
+document.getElementById("nextTodo").addEventListener("click",()=>{
+  const items=SHEETS[store]||[];
+  const next=items.find(i=>!checked.has(i.hinban));
+  if(!next){alert("未ピックの商品はありません。");return;}
+  filter="all";
+  ["fAll","fTodo","fDone"].forEach(x=>document.getElementById(x).classList.toggle("on",x==="fAll"));
+  render();
+  const el=document.getElementById("it-"+next.hinban);
+  if(el){
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.style.boxShadow="0 0 0 3px var(--blue)";
+    setTimeout(()=>el.style.boxShadow="",1400);
+  }
+});
+document.getElementById("toggleSet").addEventListener("click",()=>{
+  const c=document.getElementById("setCard");
+  const open=c.style.display==="none"||!c.style.display;
+  c.style.display=open?"block":"none";
+  if(open){document.getElementById("tpl").value=getTpl();c.scrollIntoView({behavior:"smooth"});}
+});
+document.getElementById("tplSave").addEventListener("click",()=>{
+  const v=document.getElementById("tpl").value.trim();
+  if(!v.includes("{HINBAN}")&&!v.includes("{KEY}")){alert("URLに {HINBAN} を含めてください（そこに品番が入ります）。");return;}
+  setTpl(v);render();alert("保存しました。");
+});
+document.getElementById("tplA").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_A;});
+document.getElementById("tplB").addEventListener("click",()=>{document.getElementById("tpl").value=TPL_B;});
+
+
+/* ========= 写真の拡大ビューア ========= */
+let vIdx=-1;           // 表示中の商品（現在の一覧内）
+let vList=[];          // ビューア対象の商品配列
+function openViewer(hinban){
+  const items=SHEETS[store]||[];
+  vList=currentShown.length?currentShown:items;
+  vIdx=vList.findIndex(i=>i.hinban===hinban);
+  if(vIdx<0)return;
+  document.getElementById("viewer").classList.add("on");
+  document.body.style.overflow="hidden";
+  paintViewer();
+}
+function closeViewer(){
+  document.getElementById("viewer").classList.remove("on");
+  document.body.style.overflow="";
+  vIdx=-1;
+}
+function paintViewer(){
+  const it=vList[vIdx];
+  if(!it)return;
+  const v=imgCache[it.hinban];
+  const list=imgList(v);
+  const stage=document.getElementById("vStage");
+  stage.innerHTML=list.length
+    ? list.map(u=>`<img src="${u}" alt="">`).join("")
+    : '<div style="margin:auto;color:#888;font-size:14px;">画像がありません</div>';
+  stage.scrollLeft=0;
+  const dots=document.getElementById("vDots");
+  dots.innerHTML=list.length>1
+    ? `<span class="v-count" id="vCount">1 / ${list.length}</span>`
+      +list.slice(0,12).map((_,i)=>`<i class="${i===0?"on":""}"></i>`).join("")
+    : "";
+  stage.onscroll=()=>{
+    if(list.length<2)return;
+    const n=Math.round(stage.scrollLeft/stage.clientWidth);
+    [...dots.querySelectorAll("i")].forEach((d,i)=>d.classList.toggle("on",i===n));
+    const cEl=document.getElementById("vCount");
+    if(cEl)cEl.textContent=`${Math.min(n+1,list.length)} / ${list.length}`;
+  };
+  document.getElementById("vTitle").textContent=`${vIdx+1} / ${vList.length}　${it.hinban}`;
+  const nm=(v&&typeof v==="object"&&v.name)?v.name:it.name;
+  document.getElementById("vInfo").innerHTML=
+    `<b>${esc(it.hinban)}</b><br>${esc(nm||"")}`
+    +(it.acc?`<br><span style="color:#ffd27a;">付属品：${esc(it.acc)}</span>`:"")
+    +((it.newPrice&&it.price&&it.newPrice!==it.price)
+       ?`<br><span style="color:#9a9aa0;text-decoration:line-through;">${yen(it.price)}</span>
+         <span style="color:#ff8a8a;font-weight:800;font-size:19px;"> ${yen(it.newPrice)}</span>
+         <span style="color:#ff8a8a;font-weight:800;"> ${Math.round((1-it.newPrice/it.price)*100)}%OFF</span>`:"")
+    +(it.info?`<br><span style="color:#8ac4ff;font-weight:800;">📍 ${esc(it.info)}</span>`:"")
+    +(it.destCode?`<br><span style="color:#fff;font-weight:800;">移動先コード <span style="font-size:19px;letter-spacing:.06em;">${esc(it.destCode)}</span></span>`:"")
+    +(it.warn?`<br><span style="color:#ff8a8a;font-weight:800;">⚠ ${esc(it.warn)}</span>`:"")
+    +(it.price?`<br><span style="color:#fff;font-weight:800;">${yen(it.price)}</span>`:"");
+  document.getElementById("vOpen").href=searchUrl(it);
+  const on=checked.has(it.hinban);
+  const cb=document.getElementById("vChk");
+  cb.textContent=on?"✓ ピック済み":"✓ ピック";
+  cb.classList.toggle("off",!on);
+}
+function viewerMove(d){
+  if(vIdx<0)return;
+  const n=vIdx+d;
+  if(n<0||n>=vList.length)return;
+  vIdx=n;paintViewer();
+}
+document.getElementById("vClose").addEventListener("click",closeViewer);
+document.getElementById("vPrevItem").addEventListener("click",()=>viewerMove(-1));
+document.getElementById("vNextItem").addEventListener("click",()=>viewerMove(1));
+document.getElementById("vChk").addEventListener("click",()=>{
+  const it=vList[vIdx];if(!it)return;
+  markLocal(it.hinban,!checked.has(it.hinban));applyMarks();
+  saveChecked();paintViewer();render();
+});
+document.addEventListener("keydown",e=>{
+  if(!document.getElementById("viewer").classList.contains("on"))return;
+  if(e.key==="Escape")closeViewer();
+  if(e.key==="ArrowRight")viewerMove(1);
+  if(e.key==="ArrowLeft")viewerMove(-1);
+});
+
+
+
+/* ===== 撤収 / 在庫移動 の切り替え ===== */
+// それぞれ別のリストとして扱う（共有先・チェック状態・店舗選択を分ける）
+function kindLabel(){return KIND==="idou"?"在庫移動":(KIND==="kakaku"?"売価修正":"撤収");}
+document.querySelectorAll("#kindSeg button").forEach(b=>b.addEventListener("click",async()=>{
+  if(b.dataset.k===KIND)return;
+  document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  KIND=b.dataset.k;
+  try{localStorage.setItem("pick-kind",KIND);}catch(e){}
+  // 表示を初期化してから、その種類の共有リストを読み込む
+  SHEETS={};store="";listId="";checked=new Set();
+  brandPick="";cutOnly=false;
+  document.getElementById("list").innerHTML="";
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display="none";
+  });
+  document.getElementById("loadCard").style.display="block";
+  const db3=document.getElementById("deleteShared");if(db3)db3.style.display="none";
+  document.querySelector("#loadCard .c-title").textContent=
+    `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
+  document.getElementById("loadMsg").innerHTML="";
+  document.getElementById("sharedInfo").textContent="共有リストを確認中…";
+  const ex=document.getElementById("showLoad");
+  if(ex&&ex.parentElement)ex.parentElement.remove();
+  await loadRakutenKeysShared().then(bootShared);
+}));
+try{
+  const k=localStorage.getItem("pick-kind");
+  if(k==="idou"||k==="kakaku"){
+    KIND=k;
+    document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x.dataset.k===k));
+  }
+}catch(e){}
+document.querySelector("#loadCard .c-title").textContent=
+  `📥 ${kindLabel()}のピッキングリストを読み込む（全員に共有されます）`;
+
+
+
+/* ===== まとめてストーリー作成 ===== */
+// 絞り込んで表示している商品の品番と値下げ価格をまとめてストーリー作成ツールに渡す。
+// URLが長くなりすぎないよう、1回あたりの件数に上限を設ける。
+// 件数の上限をなくすため、URLに並べるのではなく共有データベースに渡す。
+// ストーリー作成ツールは受け取り番号だけで全件を読み込める。
+document.getElementById("bulkStoryBtn").addEventListener("click",async()=>{
+  const list=(currentShown||[]).filter(i=>i.hinban);
+  if(!list.length){alert("対象の商品がありません。");return;}
+  if(!confirm(`${list.length}件 でストーリー作成を始めます。`))return;
+  const btn=document.getElementById("bulkStoryBtn");
+  const label=btn.textContent;
+  btn.textContent="受け渡し中...";btn.disabled=true;
+  const items=list.map(i=>({
+    hinban:i.hinban,
+    newPrice:i.newPrice||0,
+    oldPrice:(i.newPrice&&i.price&&i.price>i.newPrice)?i.price:0,
+    brand:i.brandName||"", name:i.name||""
+  }));
+  const token="bulk"+Date.now().toString(36);
+  try{
+    await sharePut("story-bulk",{token,at:new Date().toISOString(),by:myName(),items});
+    window.open("../story-maker/?bulkref="+encodeURIComponent(token),"_blank");
+  }catch(e){
+    alert("受け渡しに失敗しました：\n"+e.message);
+  }
+  btn.textContent=label;btn.disabled=false;
+});
+
+/* ========= 共有リストの削除 ========= */
+// 表示中の種類（撤収／在庫移動／売価修正）のリストとチェック状況を消す。
+// 誤って別の種類を消さないよう、種類名を確認文に出す。
+async function deleteSharedList(){
+  const total=Object.values(SHEETS).reduce((s,v)=>s+v.length,0);
+  if(!confirm(`${kindLabel()}の共有リスト（${total.toLocaleString()}点）を削除します。\n\n全員の画面から消え、ピック済みのチェックも消えます。\nこの操作は取り消せません。よろしいですか？`))return;
+  const btn=document.getElementById("deleteShared");
+  btn.textContent="削除中...";btn.disabled=true;
+  let err="";
+  try{
+    // リスト本体を空にする（楽天APIキーは他のツールでも使うので引き継ぐ）
+    let keep=null;
+    try{ const cur=await shareGet(TOOLKEY()); if(cur&&cur.rkKeys)keep=cur.rkKeys; }catch(e){}
+    const payload={cleared:true, at:new Date().toISOString(), by:myName(), sheets:{}, listId:""};
+    if(keep)payload.rkKeys=keep;
+    await sharePut(TOOLKEY(),payload);
+    // この種類のチェック状況も消す
+    try{
+      await sharePut(ckTool(),cur=>{
+        const p=cur||{lists:{}};
+        if(p.lists){ Object.keys(p.lists).forEach(k=>{ if(k.startsWith(KIND+":"))delete p.lists[k]; }); }
+        return p;
+      });
+    }catch(e){}
+  }catch(e){ err=(e&&e.message)||"通信失敗"; }
+  btn.textContent="🗑 削除";btn.disabled=false;
+  if(err){ alert("削除に失敗しました：\n"+err); return; }
+  // 画面を初期状態に戻す
+  try{ localStorage.removeItem(ckKey()); localStorage.removeItem(ckKey()+":marks"); }catch(e){}
+  SHEETS={};store="";listId="";checked=new Set();ckMarks={};
+  document.getElementById("list").innerHTML="";
+  ["storeCard","progCard","filterCard","foot"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display="none";
+  });
+  btn.style.display="none";
+  document.getElementById("loadCard").style.display="block";
+  const ex=document.getElementById("showLoad");
+  if(ex&&ex.parentElement)ex.parentElement.remove();
+  document.getElementById("sharedInfo").innerHTML=
+    '<span class="muted">共有リストを削除しました。下からファイルを読み込むと全員に共有されます。</span>';
+  document.getElementById("loadMsg").innerHTML="";
+}
+document.getElementById("deleteShared").addEventListener("click",deleteSharedList);
+
+/* ========= 起動時：共有リストを取り込む ========= */
+async function bootShared(){
+  const info=document.getElementById("sharedInfo");
+  try{
+    const p=await fetchShared();
+    if(p&&applyShared(p)){
+      // 共有があれば読み込みカードは畳んでおく（必要な時だけ使う）
+      document.getElementById("loadCard").style.display="none";
+      const t=document.createElement("div");
+      t.className="note noprint";
+      t.style.marginTop="8px";
+      t.innerHTML='<button class="btn sub2" id="showLoad" style="padding:7px 12px;font-size:12px;">新しいファイルを読み込む</button>';
+      document.getElementById("sharedCard").appendChild(t);
+      document.getElementById("showLoad").addEventListener("click",()=>{
+        document.getElementById("loadCard").style.display="block";
+        document.getElementById("loadCard").scrollIntoView({behavior:"smooth"});
+      });
+    }else{
+      info.innerHTML='<span style="color:var(--t3);">まだ共有されたリストがありません。下からファイルを読み込むと全員に共有されます。</span>';
+    }
+  }catch(e){
+    info.innerHTML='<span style="color:var(--orange);">共有リストを読み込めませんでした：'+esc(e.message)+'</span>';
+  }
+}
+
+document.getElementById("reloadShared").addEventListener("click",async()=>{
+  const b=document.getElementById("reloadShared");
+  b.textContent="更新中...";b.disabled=true;
+  document.getElementById("sharedInfo").textContent="共有リストを確認中…";
+  await bootShared();
+  b.textContent="🔄 更新";b.disabled=false;
+});
+bootShared();
+
+/* バージョン表示（タップで強制更新） */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";b.textContent=APP_VERSION;b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{const u=new URL(location.href);u.searchParams.set("v",Date.now());location.replace(u.toString());});
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>
