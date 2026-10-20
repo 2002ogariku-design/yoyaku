@@ -1,0 +1,3653 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>RINKAN ストーリー作成</title>
+<script src="/lib/jsQR.min.js"></script>
+<script src="/lib/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Hiragino Sans","Yu Gothic",sans-serif;
+  --bg:#ececf0;--card:#ffffff;--card2:#f2f2f7;--line:#e0e0e6;
+  --t1:#000000;--t2:#3c3c43;--t3:#8e8e93;
+  --blue:#007aff;--green:#34c759;--orange:#ff9500;--red:#ff3b30;
+  --spring:cubic-bezier(.34,1.56,.5,1);
+  --smooth:cubic-bezier(.32,.72,0,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--t1);padding-bottom:60px;
+  background-image:radial-gradient(140% 80% at 50% -20%,rgba(0,122,255,.10),transparent 55%),radial-gradient(120% 60% at 100% 0%,rgba(175,82,222,.06),transparent 50%);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+
+/* iOS large-title style header */
+header{
+  background:rgba(236,236,240,.7);
+  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  color:var(--t1);padding:14px 20px;
+  padding-top:max(14px,env(safe-area-inset-top,0));
+  position:sticky;top:0;z-index:20;border-bottom:.5px solid rgba(0,0,0,.08);
+}
+header .eyebrow{font-size:12px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase;}
+header h1{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-top:2px;}
+header p{font-size:13px;color:var(--t3);margin-top:5px;font-weight:500;letter-spacing:-.01em;}
+
+.wrap{max-width:600px;margin:0 auto;padding:20px 16px;}
+
+.c{
+  background:var(--card);border-radius:24px;padding:22px;margin-bottom:18px;
+  box-shadow:0 1px 1px rgba(0,0,0,.03),0 10px 34px rgba(0,0,0,.07);
+  animation:cardIn .6s var(--smooth) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(18px) scale(.98);}to{opacity:1;transform:none;}}
+.c:nth-child(2){animation-delay:.06s;}
+.c:nth-child(3){animation-delay:.12s;}
+.c-title{font-size:12px;font-weight:700;margin-bottom:18px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;}
+
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.f{margin-bottom:0;}
+.f.full{grid-column:1/-1;}
+.f label{display:block;font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px;letter-spacing:-.01em;}
+.f input,.f select{
+  width:100%;padding:15px 16px;border-radius:15px;border:1.5px solid transparent;
+  background:var(--card2);font-size:17px;font-weight:500;font-family:var(--font);color:var(--t1);
+  transition:border-color .22s var(--smooth),box-shadow .22s var(--smooth),background .22s var(--smooth),transform .13s var(--smooth);
+}
+.f input:focus,.f select:focus{
+  outline:none;border-color:var(--blue);background:#fff;
+  box-shadow:0 0 0 5px rgba(0,122,255,.14);
+}
+
+/* Segmented control for rank (iOS style) */
+.seg{display:flex;gap:4px;background:var(--card2);border-radius:14px;padding:4px;}
+.seg button{
+  flex:1;border:none;background:transparent;padding:11px 0;border-radius:11px;
+  font-size:16px;font-weight:700;font-family:var(--font);color:var(--t2);cursor:pointer;
+  transition:transform .16s var(--spring),color .2s,box-shadow .25s var(--smooth),background .25s var(--smooth);
+}
+.seg button.on{background:#fff;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,.12),0 3px 8px rgba(0,0,0,.06);}
+.seg button:active{transform:scale(.92);}
+
+.save-btn{
+  width:100%;padding:18px;border-radius:17px;border:none;
+  background:linear-gradient(180deg,#0a84ff,#007aff);color:#fff;
+  font-size:18px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:16px;letter-spacing:-.01em;
+  box-shadow:0 4px 16px rgba(0,122,255,.3);
+  transition:transform .14s var(--smooth),box-shadow .2s,filter .15s;
+}
+.pill{
+  padding:14px 24px;border-radius:16px;border:none;background:var(--card);color:var(--t1);
+  font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font);
+  box-shadow:0 1px 3px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.06);
+  transition:transform .14s var(--smooth),box-shadow .2s var(--smooth);
+}
+.save-btn:active,.pill:active,.chip:active,.drop:active{transform:scale(.95);}
+.save-btn:active{filter:brightness(.94);}
+
+.empty{text-align:center;color:var(--t3);font-size:14px;padding:32px 16px;line-height:1.6;font-weight:500;}
+
+.chip{
+  display:inline-flex;align-items:center;padding:11px 17px;margin:4px;border-radius:22px;
+  border:none;background:var(--card2);font-size:14px;cursor:pointer;
+  font-family:var(--font);color:var(--t1);font-weight:600;letter-spacing:-.01em;
+  transition:transform .18s var(--spring),background .24s var(--smooth),color .24s,box-shadow .24s;
+}
+.chip.on{background:var(--t1);color:#fff;transform:scale(1.06);box-shadow:0 4px 14px rgba(0,0,0,.22);}
+
+.drop{
+  border:2px dashed #c7c7cc;border-radius:18px;padding:34px 12px;text-align:center;
+  cursor:pointer;color:var(--t3);font-size:14px;font-weight:600;background:var(--card2);
+  transition:transform .18s var(--spring),border-color .22s var(--smooth),background .22s,color .22s;
+}
+.drop:hover{border-color:var(--blue);color:var(--blue);}
+
+#storyCanvas{
+  max-width:100%;max-height:62vh;border-radius:18px;
+  box-shadow:0 6px 20px rgba(0,0,0,.12),0 26px 60px rgba(0,0,0,.18);
+  transition:transform .4s var(--spring);
+}
+
+.arch-item{text-align:center;cursor:pointer;transition:transform .18s var(--spring);}
+.arch-item:active{transform:scale(.92);}
+.arch-item img{width:100%;border-radius:14px;box-shadow:0 3px 12px rgba(0,0,0,.1);}
+
+#viewerModal{
+  -webkit-backdrop-filter:blur(0);backdrop-filter:blur(0);
+  transition:backdrop-filter .4s var(--smooth),-webkit-backdrop-filter .4s var(--smooth),background .4s var(--smooth);
+}
+#viewerModal.show{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+#viewerImg{transition:transform .45s var(--spring),opacity .3s var(--smooth);}
+
+.tick{font-size:15px;color:var(--green);font-weight:700;opacity:0;transition:opacity .4s var(--smooth);margin-top:12px;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;transition-duration:.1ms !important;}
+  .c{animation:none;}
+}
+@media (prefers-reduced-transparency: reduce){
+  header{background:#ececeF;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  #viewerModal.show{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.92);}
+}
+
+#verBadge{position:fixed;right:8px;bottom:8px;z-index:9999;background:rgba(0,0,0,.62);color:#fff;
+  font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;font-family:inherit;
+  letter-spacing:.02em;cursor:pointer;user-select:none;line-height:1.4;}
+#verBadge:active{background:rgba(0,0,0,.85);}
+</style>
+</head>
+<body>
+<header style="display:flex;justify-content:space-between;align-items:flex-end;">
+  <div>
+    <div class="eyebrow">RINKAN SHIBUYA</div>
+    <h1>ストーリー作成</h1>
+    <p>値札スキャンで自動入力、ワンタップで保存</p>
+  </div>
+  <button type="button" onclick="openHelp()" style="flex-shrink:0;background:rgba(0,122,255,.12);color:var(--blue);border:none;border-radius:20px;padding:9px 16px;font-size:14px;font-weight:700;font-family:var(--font);cursor:pointer;">? 使い方</button>
+</header>
+
+<!-- Help sheet -->
+<div id="helpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-end;justify-content:center;" onclick="closeHelp(event)">
+  <div id="helpSheet" style="background:#fff;width:100%;max-width:600px;max-height:88vh;overflow-y:auto;border-radius:24px 24px 0 0;padding:24px 22px calc(30px + env(safe-area-inset-bottom,0));transform:translateY(100%);transition:transform .42s cubic-bezier(.32,.72,0,1);">
+    <div style="width:38px;height:5px;background:#d1d1d6;border-radius:3px;margin:0 auto 18px;"></div>
+    <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;">使い方</h2>
+    <p style="font-size:14px;color:var(--t3);margin-bottom:22px;font-weight:500;">値札をスキャンして、インスタ用のストーリー画像を数タップで作れます。</p>
+
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">1</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">商品写真を選ぶ</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「タップして選択」から投稿したい商品の写真を選びます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">2</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">値札をスキャン</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「値札を追加」で値札を撮影/選択 →「スキャン開始」。<br><b>衣類などQR付きタグ</b>は1枚でOK。<br><b>アクセサリー・小物</b>は<b>表面（税込価格）＋裏面（商品番号）の2枚</b>を追加してからスキャン。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">3</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">自動入力を確認</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">ブランド・サイズ・ランク・価格が自動で入ります。違っていれば手で直せます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">4</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">下部テキストを選ぶ</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「DMにて割引可能」「SALE MAX 8%OFF」などをタップ。文字色も選べます。</div></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px;">5</div>
+        <div><div style="font-weight:700;font-size:16px;margin-bottom:3px;">保存・共有</div><div style="font-size:14px;color:var(--t2);line-height:1.6;">「保存・共有」ボタンでiPhoneの共有メニューが開き、そのままインスタに投稿できます。作った画像はアーカイブに残り、後から見返せます。</div></div>
+      </div>
+    </div>
+
+    <div style="background:var(--card2);border-radius:16px;padding:16px;margin-top:22px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">📸 スキャンのコツ</div>
+      <div style="font-size:13.5px;color:var(--t2);line-height:1.7;">値札は文字を読み取るので、<b>明るく・ピントを合わせて・まっすぐ</b>撮ると精度が上がります。価格は値札の税込金額をそのまま使うので正確です（楽天の手数料込み価格ではありません）。</div>
+    </div>
+
+    <button type="button" onclick="closeHelp()" style="width:100%;margin-top:22px;padding:16px;border-radius:15px;border:none;background:var(--t1);color:#fff;font-size:17px;font-weight:700;font-family:var(--font);cursor:pointer;">閉じる</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="c">
+    <div class="c-title">📸 ストーリー画像を作成</div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">種類</div>
+      <div class="seg" id="kindSeg">
+        <button type="button" data-k="sale" class="on">🏷️ 販売（値札スキャン）</button>
+        <button type="button" data-k="buy">💰 買取速報</button>
+      </div>
+    </div>
+    <div id="batchPanel" style="margin-bottom:16px;background:linear-gradient(135deg,#f3f0ff,#fff);border:1px solid #d6ccff;border-radius:14px;padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:800;color:#5b3fc4;">⚡️ まとめて作成（値札＋商品写真）</div>
+        <button type="button" id="batchPick" class="pill" style="padding:8px 14px;font-size:12.5px;background:#5b3fc4;color:#fff;border-color:#5b3fc4;">写真をまとめて選ぶ</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.6;">
+        <b>値札 → 商品写真 → 値札 → 商品写真…</b> の順で撮った写真をまとめて選んでください。<br>
+        値札を自動で読み取り、商品ごとに組み立てます。あとは1件ずつ確認して保存するだけです。<br>
+        <span style="color:#5b3fc4;">小物タグは<b>品番が書かれた面</b>を撮ってください（ブランド・サイズ・ランクは楽天から取得します）。</span>
+      </div>
+      <input type="file" id="batchIn" accept="image/*" multiple style="display:none;">
+      <div id="batchProgress" style="display:none;margin-top:10px;"></div>
+      <div id="batchList" style="display:none;margin-top:10px;"></div>
+    </div>
+    <div id="buyPanel" style="display:none;margin-bottom:16px;background:var(--card2);border-radius:14px;padding:14px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:8px;">買取履歴から商品を選ぶ</div>
+      <div class="seg" id="buyDaySeg" style="margin-bottom:8px;flex-wrap:wrap;">
+        <button type="button" data-d="today" class="on">本日</button>
+        <button type="button" data-d="yesterday">昨日</button>
+        <button type="button" data-d="week">7日間</button>
+        <button type="button" data-d="all">すべて</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+        <select id="buyDateSel" style="flex:1;font-size:12.5px;"></select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input type="text" id="buySearch" placeholder="🔍 さらに絞り込む（ブランド・商品名・担当）" style="flex:1;">
+        <button type="button" id="buyLoadBtn" class="pill" style="padding:9px 14px;font-size:12.5px;white-space:nowrap;">🔄 更新</button>
+      </div>
+      <div id="buyStoreChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div id="buyBuyerChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div id="buyBrandChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div id="buyItemChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <span style="font-size:11px;color:var(--t3);font-weight:700;">並び順</span>
+        <select id="buySort" style="flex:1;font-size:12px;padding:7px 10px;">
+          <option value="new">新しい順</option>
+          <option value="costHigh">買取金額が高い順</option>
+          <option value="priceHigh">売価が高い順</option>
+          <option value="brand">ブランド名順</option>
+        </select>
+      </div>
+      <div id="buyStatus" style="font-size:11.5px;color:var(--t3);margin-bottom:8px;"></div>
+      <div id="buyResults" style="max-height:420px;overflow-y:auto;"></div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);">
+          <input type="checkbox" id="buyShowPrice" style="width:auto;"> 販売価格を表示する
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);">
+          <input type="checkbox" id="buyShowCost" style="width:auto;"> 買取金額を表示する
+        </label>
+      </div>
+      <div id="buyNoteRow" style="display:none;margin-top:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:5px;">※注意書き（画像に小さく入ります）</div>
+        <input type="text" id="buyNote" value="※状態・付属品・時期により金額は変動します" style="width:100%;font-size:12.5px;">
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">テンプレート（配置・色）</div>
+      <div class="seg" id="tplSeg" style="flex-wrap:wrap;">
+        <button type="button" data-t="classic" class="on">クラシック</button>
+        <button type="button" data-t="bottom">下寄せ</button>
+        <button type="button" data-t="minimal">ミニマル</button>
+        <button type="button" data-t="bold">ボールド</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <div class="f"><label>商品写真</label></div>
+        <div id="photoDrop" class="drop">📷 タップして選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">複数枚まとめて選べます</span></div>
+        <input type="file" id="photoIn" accept="image/*" multiple style="display:none;">
+      </div>
+      <div id="tagScanCol">
+        <div class="f"><label>🏷️ 値札スキャン</label></div>
+        <div id="tagDrop" class="drop">🏷️ 値札を追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表＋裏を追加してからスキャン</span></div>
+        <input type="file" id="tagIn" accept="image/*" style="display:none;">
+        <div id="tagThumbs" style="display:none;gap:8px;margin-top:8px;flex-wrap:wrap;"></div>
+        <button type="button" id="tagScanBtn" class="save-btn" style="display:none;margin-top:10px;padding:13px;font-size:15px;border-radius:13px;">📷 スキャン開始</button>
+        <div id="ocrStatus" style="display:none;text-align:center;font-size:12px;color:var(--blue);margin-top:6px;font-weight:600;"></div>
+        <div style="text-align:center;margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <button type="button" onclick="runProxyTest()" style="border:1px solid var(--line,#ddd);background:#fff;color:var(--t2);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">🔧 通信テスト</button>
+          <button type="button" onclick="setRakutenAppId()" style="border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;">⚙️ 楽天APIを設定</button>
+        </div>
+        <div id="apiStatus" style="text-align:center;font-size:11px;margin-top:6px;"></div>
+        <div id="proxyTestResult" style="display:none;background:var(--card2);border-radius:12px;padding:14px;margin-top:10px;font-size:12.5px;line-height:1.6;"></div>
+      </div>
+    </div>
+    <div id="tagRefArea" style="display:none;margin-bottom:14px;background:var(--card2);border-radius:12px;padding:10px;">
+      <div style="font-size:10.5px;color:var(--t3);margin-bottom:6px;text-align:center;">▼ 値札（自動入力の確認用）</div>
+      <img id="tagRefImg" style="width:100%;border-radius:8px;border:1px solid var(--line);">
+    </div>
+    <div class="fg">
+      <div class="f"><label>ブランド</label><input type="text" id="sBrand" placeholder="CHROME HEARTS" list="sBrandDl"></div>
+      <div class="f"><label>サイズ</label><input type="text" id="sSize" placeholder="54"></div>
+      <div class="f"><label>ランク</label>
+        <div class="seg" id="rankSeg">
+          <button type="button" data-r="N">N</button>
+          <button type="button" data-r="S">S</button>
+          <button type="button" data-r="A">A</button>
+          <button type="button" data-r="B">B</button>
+          <button type="button" data-r="C">C</button>
+          <button type="button" data-r="D">D</button>
+        </div>
+        <input type="hidden" id="sRank" value="">
+      </div>
+      <div class="f"><label>価格（税込・数字のみ）</label><input type="number" id="sPrice" placeholder="172480"></div>
+      <div class="f full"><label>下部テキスト</label><input type="text" id="sTag" value="📩DMにて割引可能"></div>
+    </div>
+    <div style="margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--t1);cursor:pointer;margin-right:auto;">
+          <input type="checkbox" id="tagShow" checked style="width:auto;"> 画像に表示する
+        </label>
+        <button type="button" id="phraseToggle" style="border:none;background:none;font-family:inherit;font-size:11.5px;font-weight:700;color:var(--t3);padding:0;cursor:pointer;display:flex;align-items:center;gap:5px;">
+          <span id="phraseCaret">▸</span> 💬 よく使う文言 <span id="phraseCount" style="opacity:.6;"></span>
+        </button>
+        <button type="button" id="addPhraseBtn" class="pill" style="padding:6px 12px;font-size:12px;">＋ 追加</button>
+      </div>
+      <div id="phraseWrap" style="display:none;">
+        <div id="phraseChips" style="max-height:132px;overflow-y:auto;padding-right:2px;"></div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:6px;line-height:1.5;">タップで下部テキストに入ります。×で削除できます。</div>
+      </div>
+      <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
+          <input type="checkbox" id="cutOn" style="width:auto;"> 🔻 値下げ表示（上の価格 → 値下げ後）
+        </label>
+        <div id="cutRow2" style="display:none;margin-top:9px;">
+          <div class="f"><label>値下げ後の価格（税込・数字のみ）</label>
+            <input type="text" id="sNewPrice" inputmode="numeric" placeholder="88000"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center;">
+            <span style="font-size:11.5px;color:var(--t3);">かんたん設定</span>
+            <button type="button" class="pill cutp" data-off="10" style="padding:6px 11px;font-size:12px;">10%OFF</button>
+            <button type="button" class="pill cutp" data-off="20" style="padding:6px 11px;font-size:12px;">20%OFF</button>
+            <button type="button" class="pill cutp" data-off="30" style="padding:6px 11px;font-size:12px;">30%OFF</button>
+            <button type="button" class="pill cutp" data-off="50" style="padding:6px 11px;font-size:12px;">50%OFF</button>
+          </div>
+          <div id="cutInfo" style="font-size:12.5px;color:var(--t3);margin-top:8px;line-height:1.6;"></div>
+        </div>
+      </div>
+      <div style="margin:14px 0 6px;background:var(--card2);border-radius:12px;padding:12px 14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;">
+          <input type="checkbox" id="loanOn" style="width:auto;"> 💳 ローン訴求を表示する（最大42回 無金利）
+        </label>
+        <div id="loanInfo" style="font-size:11.5px;color:var(--t3);margin-top:7px;line-height:1.6;"></div>
+      </div>
+      <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin:14px 0 6px;">下部テキストの色</div>
+      <div id="colorChips"></div>
+    </div>
+    <datalist id="sBrandDl"></datalist>
+  </div>
+
+  <div class="c" style="text-align:center;">
+    <div id="quickSaveBar" style="display:flex;gap:7px;margin-bottom:10px;">
+      <button class="btn" id="quickSave" style="flex:1;padding:14px;font-size:15.5px;">⬇️ 保存・共有</button>
+      <button class="btn sub" id="quickNext" style="flex:0 0 auto;padding:14px 16px;font-size:14px;">次へ ▶︎</button>
+    </div>
+    <canvas id="storyCanvas" width="1080" height="1920" style="max-width:100%;max-height:65vh;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.12);touch-action:none;cursor:grab;"></canvas>
+    <div id="stockBox" style="margin-bottom:16px;background:linear-gradient(135deg,#eef5ff,#fff);
+      border:1px solid #b8d4f5;border-radius:14px;padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:800;color:#0055aa;">📦 在庫表から選んで作成</div>
+        <button type="button" class="pill" id="stockPick" style="padding:8px 13px;font-size:12.5px;background:#0055aa;color:#fff;border-color:#0055aa;">在庫表を読み込む</button>
+      </div>
+      <input type="file" id="stockIn" accept=".xlsx,.xls" style="display:none;">
+      <div id="stockInfo" class="note"></div>
+      <div id="stockFilter" style="display:none;margin-top:10px;">
+        <select id="stockStore" style="width:100%;margin-bottom:7px;"></select>
+        <input type="text" id="stockQ" placeholder="🔍 ブランド・品名・品番で検索">
+        <div class="seg" id="stockSort" style="margin-top:7px;">
+          <button type="button" data-ss="new" class="on">新しい順</button>
+          <button type="button" data-ss="high">高い順</button>
+          <button type="button" data-ss="low">安い順</button>
+        </div>
+        <div id="stockBrands" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;max-height:104px;overflow-y:auto;"></div>
+        <div id="stockHits" class="note" style="margin-top:8px;"></div>
+        <div id="stockList" style="margin-top:8px;max-height:300px;overflow-y:auto;"></div>
+        <div class="row" style="margin-top:9px;">
+          <button class="btn" id="stockBulk" style="background:#0055aa;">表示中をまとめて作成</button>
+        </div>
+      </div>
+    </div>
+    <div id="bulkBox" style="display:none;margin-bottom:16px;background:linear-gradient(135deg,#f3f0ff,#fff);
+      border:1px solid #d6ccff;border-radius:14px;padding:14px;">
+      <div style="font-size:13px;font-weight:800;color:#5b3fc4;margin-bottom:7px;">
+        ⚡️ 売価修正 まとめて作成</div>
+      <div id="bulkProg" class="note"></div>
+      <div id="bulkList" style="margin-top:10px;"></div>
+    </div>
+    <div id="netPhotoBox" style="display:none;margin-top:12px;background:linear-gradient(135deg,#eef7f0,#fff);
+      border:1px solid #c3e2cd;border-radius:14px;padding:13px;">
+      <div style="font-size:12.5px;font-weight:800;color:#1f7a4d;margin-bottom:8px;">
+        🖼 オンラインの商品画像が使えます</div>
+      <div id="netPhotoList" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:3px;"></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.6;">
+        タップするとその画像に差し替わります。「撮影写真」を押せば元に戻せます。</div>
+    </div>
+    <div id="photoQueueBar" style="display:none;margin-top:12px;background:linear-gradient(135deg,#eef5ff,#fff);border:1px solid #b8d4f5;border-radius:14px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:800;color:#0055aa;" id="pqLabel"></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" id="pqPrev" class="pill" style="padding:7px 12px;font-size:12.5px;">◀ 前</button>
+          <button type="button" id="pqNext" class="pill" style="padding:7px 12px;font-size:12.5px;">次 ▶</button>
+          <button type="button" id="pqClear" class="pill" style="padding:7px 12px;font-size:12.5px;">✕ 解除</button>
+        </div>
+      </div>
+      <div id="pqThumbs" style="display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px;"></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5;">
+        保存・共有すると自動で次の写真に進みます。サムネイルをタップして直接移動もできます。
+      </div>
+    </div>
+    <div id="photoControls" style="display:none;margin-top:12px;">
+      <div style="font-size:11.5px;color:var(--t3);font-weight:600;margin-bottom:8px;">📷 写真をドラッグで位置調整・スライダーで拡大</div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:center;">
+        <span style="font-size:13px;">🔍</span>
+        <input type="range" id="zoomSlider" min="100" max="250" value="100" style="flex:1;max-width:240px;">
+        <button class="pill" id="resetPhotoBtn" style="padding:8px 14px;font-size:13px;">リセット</button>
+      </div>
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+          <span style="font-size:11.5px;color:var(--t3);font-weight:700;">🎚 明るさ・色の調整</span>
+          <button type="button" class="pill" id="adjReset" style="padding:5px 11px;font-size:11.5px;">戻す</button>
+        </div>
+        <div id="adjRows"></div>
+      </div>
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+          <span style="font-size:11.5px;color:var(--t3);font-weight:700;">📍 価格テキストの位置</span>
+          <button type="button" class="pill" id="posReset" style="padding:5px 11px;font-size:11.5px;">戻す</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span style="font-size:11.5px;width:40px;color:var(--t2);">上下</span>
+          <input type="range" id="priceYSlider" min="-420" max="260" step="4" value="0" style="flex:1;">
+          <span style="font-size:11px;width:44px;text-align:right;color:var(--t3);" id="priceYVal">0</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">🖼 写真の収め方</div>
+        <div class="seg" id="fitSeg" style="margin-bottom:12px;">
+          <button type="button" data-fit="cover" class="on">画面いっぱい</button>
+          <button type="button" data-fit="contain">全体を入れる</button>
+        </div>
+        <div id="fitRow" style="display:none;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">
+            <span style="font-size:11.5px;width:76px;color:var(--t2);">写真の大きさ</span>
+            <input type="range" id="fitArea" min="35" max="85" step="1" value="58" style="flex:1;">
+            <span style="font-size:11px;width:34px;text-align:right;color:var(--t3);" id="fitAreaV">58%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;">
+            <span style="font-size:11.5px;width:76px;color:var(--t2);">上下の位置</span>
+            <input type="range" id="fitTop" min="22" max="62" step="1" value="42" style="flex:1;">
+            <span style="font-size:11px;width:34px;text-align:right;color:var(--t3);" id="fitTopV">42%</span>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:var(--t3);font-weight:700;margin-bottom:7px;">✨ 画像加工</div>
+        <div class="seg" id="fxSeg" style="flex-wrap:wrap;">
+          <button type="button" data-fx="none" class="on">なし</button>
+          <button type="button" data-fx="blur">背景ぼかし</button>
+          <button type="button" data-fx="spotlight">スポットライト</button>
+          <button type="button" data-fx="cutout">切り抜き風</button>
+        </div>
+        <div id="cutoutBgRow" style="display:none;margin-top:8px;">
+          <div style="font-size:11px;color:var(--t3);margin-bottom:6px;">切り抜き背景色</div>
+          <div class="seg" id="cutBgSeg">
+            <button type="button" data-bg="#ffffff" class="on">白</button>
+            <button type="button" data-bg="#111111">黒</button>
+            <button type="button" data-bg="#f2efe9">ベージュ</button>
+            <button type="button" data-bg="#e8e4f0">ラベンダー</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px;">
+        <span style="font-size:13px;">🔤</span>
+        <input type="range" id="textScaleSlider" min="70" max="140" value="100" style="flex:1;max-width:240px;">
+        <span style="font-size:11px;color:var(--t3);">文字サイズ</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:center;flex-wrap:wrap;">
+      <button class="pill" id="shareBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:12px 24px;font-size:15px;">📤 保存・共有</button>
+      <button class="pill" id="dlBtn" style="padding:12px 18px;">💾 DL</button>
+      <button class="pill" id="nextItemBtn" style="padding:12px 18px;background:var(--green);color:#fff;border-color:var(--green);">➡️ 次の商品へ</button>
+    </div>
+    <div id="shareTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">✍️ キャプション自動生成</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px;line-height:1.6;">入力した商品情報から、ハッシュタグ付きの投稿文を作ります。トーンを選べます。</div>
+    <div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:7px;">トーン</div>
+    <div class="seg" id="capTone" style="margin-bottom:12px;">
+      <button type="button" data-tone="standard" class="on">スタンダード</button>
+      <button type="button" data-tone="hype">煽り強め</button>
+      <button type="button" data-tone="polite">丁寧</button>
+    </div>
+    <textarea id="captionBox" style="width:100%;min-height:170px;padding:14px 16px;border-radius:15px;border:1.5px solid transparent;background:var(--card2);font-size:15px;font-family:var(--font);color:var(--t1);line-height:1.7;resize:vertical;" readonly></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="pill" id="genCaptionBtn" style="padding:11px 18px;font-size:14px;">🔄 生成</button>
+      <button class="pill" id="copyCaptionBtn" style="background:var(--blue);color:#fff;border-color:var(--blue);padding:11px 22px;font-size:14px;">📋 コピー</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);margin-left:auto;"><input type="checkbox" id="capEn" style="width:auto;"> 英語も追加</label>
+    </div>
+    <div id="capTick" style="font-size:13px;color:var(--green);font-weight:600;opacity:0;transition:opacity .4s;margin-top:8px;"></div>
+  </div>
+
+  <div class="c">
+    <div class="c-title">📁 作成アーカイブ</div>
+    <div id="archiveList"><div class="empty">まだ作成した画像はありません</div></div>
+  </div>
+
+</div>
+
+<!-- Full-size archive viewer modal -->
+<div id="viewerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px;" onclick="closeViewer(event)">
+  <img id="viewerImg" style="max-width:100%;max-height:78vh;border-radius:10px;">
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button class="pill" id="viewerShare" style="background:var(--blue);color:#fff;border-color:var(--blue);">📤 保存・共有</button>
+    <button class="pill" id="viewerClose" style="background:#fff;">閉じる</button>
+  </div>
+</div>
+
+<script>
+const APP_VERSION="cf-v2026.10.20.1930";
+
+const PHRASES=[
+  // 案内・問い合わせ
+  "📩DMにて割引可能","📩コメント・DMお気軽に","📩在庫確認はDMまで","📩お取り置き承ります","💬ご質問お気軽に",
+  // セール・お得
+  "🔥SALE MAX 8%OFF","💰買取で最大10%OFF","💰お値下げ交渉可","🉐今だけ特別価格","🔥期間限定価格",
+  // 状態・希少性
+  "✨新入荷","🆕新品未使用","💎美品","⭐️極美品","🈶付属品完備","🔥希少モデル","👑入手困難",
+  // 販売・発送
+  "⭐️店頭にて販売中","📦全国発送可能","🚚即日発送可","🏬渋谷店にて販売中","🛒オンラインでも販売中",
+  // 煽り・限定
+  "⚡️早い者勝ち","🔥残り1点","⏰お早めに","👀お問い合わせ多数",
+  // 買取速報
+  "💰高価買取いたしました","💰買取強化中","🔍査定無料","📩写真査定OK","💴その場で現金化","🏆高価買取実績",
+  // 英語
+  "DM for price 📩","SALE UP TO 8% OFF","10% OFF with trade-in","IN STORE NOW","Worldwide shipping 📦",
+  "New arrival ✨","Tax-free available 🌏","Only 1 left ⚡️","DM for more photos 📷"
+];
+
+// Persistent Tesseract worker — created once, reused. Re-creating per call reloads
+// the language model (~2-4s each time), which is the main source of slowness.
+let _ocrWorker=null, _ocrWorkerPromise=null;
+async function getOcrWorker(){
+  if(_ocrWorker)return _ocrWorker;
+  if(_ocrWorkerPromise)return _ocrWorkerPromise;
+  _ocrWorkerPromise=(async()=>{
+    const w=await Tesseract.createWorker("eng");
+    await w.setParameters({tessedit_pageseg_mode:"6"});
+    _ocrWorker=w;return w;
+  })();
+  return _ocrWorkerPromise;
+}
+async function ocrText(canvas){
+  const w=await getOcrWorker();
+  const {data}=await w.recognize(canvas);
+  return data.text;
+}
+const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const today=()=>{const d=new Date();return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;};
+
+
+// Help sheet (slide-up)
+window.openHelp=function(){
+  const m=document.getElementById("helpModal"),s=document.getElementById("helpSheet");
+  m.style.display="flex";
+  requestAnimationFrame(()=>{s.style.transform="translateY(0)";});
+};
+window.closeHelp=function(e){
+  if(e&&e.target.id!=="helpModal"&&e.target.tagName!=="BUTTON")return;
+  const m=document.getElementById("helpModal"),s=document.getElementById("helpSheet");
+  s.style.transform="translateY(100%)";
+  setTimeout(()=>{m.style.display="none";},420);
+};
+
+let photoImg=null, storyArchive=[];
+let photoOffX=0, photoOffY=0, photoZoom=1;
+try{storyArchive=JSON.parse(localStorage.getItem("story-archive-v2")||"[]");}catch(e){}
+const cv=document.getElementById("storyCanvas"),cx=cv.getContext("2d");
+
+// ===== template / text-scale =====
+let TEMPLATE="classic";      // classic | bottom | minimal | bold
+let textScale=1;             // 0.7 .. 1.4 fine-tune
+let PHOTO_FX="none";         // none | blur | spotlight | cutout
+let PRICE_DY=0;              // 価格ブロックの上下位置（px）
+// 写真の明るさ調整。露出（brightness）を中心に、必要な項目だけ絞って用意する。
+const ADJ_DEF={exposure:100,contrast:100,saturate:100,warmth:0,shadow:0};
+let ADJ=Object.assign({},ADJ_DEF);
+const ADJ_ROWS=[
+  ["exposure","露出",50,160,1,"%"],
+  ["contrast","コントラスト",60,160,1,"%"],
+  ["saturate","彩度",0,180,1,"%"],
+  ["warmth","色味（寒色⇔暖色）",-40,40,1,""],
+  ["shadow","暗部を持ち上げる",0,60,1,""],
+];
+// canvasのfilterは古いiOS Safariで効かないため、画素を直接計算して調整する。
+// 端末に関係なく同じ結果になる。
+function filterSupported(){
+  try{const t=document.createElement("canvas").getContext("2d");t.filter="blur(2px)";return t.filter==="blur(2px)";}
+  catch(e){return false;}
+}
+const HAS_FILTER=filterSupported();
+// 調整用の変換表を作る（1画素ごとに計算せず表引きにして速くする）
+function adjLUT(){
+  const ex=ADJ.exposure/100, ct=ADJ.contrast/100, sh=ADJ.shadow/100;
+  const wr=1+Math.max(0,ADJ.warmth)/100*0.35, wb=1+Math.max(0,-ADJ.warmth)/100*0.35;
+  const wg=1+Math.abs(ADJ.warmth)/100*0.06*(ADJ.warmth>0?1:-1);
+  const mk=(mul)=>{
+    const t=new Uint8ClampedArray(256);
+    for(let i=0;i<256;i++){
+      let v=i/255;
+      if(sh>0)v=v+(1-v)*sh*0.55*(1-v);      // 暗い部分ほど持ち上げる
+      v=v*ex;                                 // 露出
+      v=(v-0.5)*ct+0.5;                       // コントラスト
+      v=v*mul;                                // 色味
+      t[i]=Math.round(Math.max(0,Math.min(1,v))*255);
+    }
+    return t;
+  };
+  return {r:mk(wr),g:mk(wg),b:mk(wb),sat:ADJ.saturate/100};
+}
+function applyAdjustments(ctx,W,H){
+  if(!adjActive())return;
+  let d;
+  try{ d=ctx.getImageData(0,0,W,H); }catch(e){ return; }
+  const p=d.data, L=adjLUT(), sat=L.sat;
+  for(let i=0;i<p.length;i+=4){
+    let r=L.r[p[i]], g=L.g[p[i+1]], b=L.b[p[i+2]];
+    if(sat!==1){
+      const y=0.299*r+0.587*g+0.114*b;
+      r=y+(r-y)*sat; g=y+(g-y)*sat; b=y+(b-y)*sat;
+    }
+    p[i]=r<0?0:r>255?255:r;
+    p[i+1]=g<0?0:g>255?255:g;
+    p[i+2]=b<0?0:b>255?255:b;
+  }
+  ctx.putImageData(d,0,0);
+}
+// ぼかしも filter に頼らず、縮小→拡大で作る
+function blurDraw(ctx,img,dw,dh,W,H){
+  const s=8;
+  const t=document.createElement("canvas");t.width=Math.max(1,Math.round(W/s));t.height=Math.max(1,Math.round(H/s));
+  const tc=t.getContext("2d");
+  tc.drawImage(img,0,0,t.width,t.height);
+  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.globalAlpha=1;ctx.drawImage(t,0,0,W,H);
+  ctx.restore();
+}
+function adjActive(){ return ADJ_ROWS.some(([k])=>ADJ[k]!==ADJ_DEF[k]); }
+function renderAdj(){
+  const el=document.getElementById("adjRows");
+  if(!el)return;
+  el.innerHTML=ADJ_ROWS.map(([k,label,min,max,step,unit])=>`
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px;">
+      <span style="font-size:11.5px;width:106px;flex-shrink:0;color:var(--t2);">${label}</span>
+      <input type="range" data-adj="${k}" min="${min}" max="${max}" step="${step}" value="${ADJ[k]}" style="flex:1;">
+      <span style="font-size:11px;width:38px;text-align:right;font-variant-numeric:tabular-nums;color:var(--t3);"
+        data-adjv="${k}">${ADJ[k]}${unit}</span>
+    </div>`).join("");
+  el.querySelectorAll("[data-adj]").forEach(s=>s.addEventListener("input",e=>{
+    const k=e.target.getAttribute("data-adj");
+    ADJ[k]=Number(e.target.value);
+    const row=ADJ_ROWS.find(r=>r[0]===k);
+    const v=el.querySelector(`[data-adjv="${k}"]`);
+    if(v)v.textContent=ADJ[k]+(row?row[5]:"");
+    drawStory();
+  }));
+}
+let CUTOUT_BG="#ffffff";     // background color for cutout effect
+
+// Template definitions: where/how text is drawn. Each returns positions & colors.
+const TEMPLATES={
+  classic:{ name:"クラシック", topY:220, align:"left", brandBase:72, infoSize:58, priceSize:74, priceY:H=>H-280, tagY:H=>H-190, gradTop:true, gradBottom:true },
+  bottom:{  name:"下寄せ", topY:H=>H-620, align:"left", brandBase:70, infoSize:54, priceSize:72, priceY:H=>H-230, tagY:H=>H-150, gradTop:false, gradBottom:true, strongBottom:true },
+  minimal:{ name:"ミニマル", topY:200, align:"left", brandBase:64, infoSize:50, priceSize:66, priceY:H=>H-260, tagY:H=>H-180, gradTop:false, gradBottom:false, plate:true },
+  bold:{    name:"ボールド", topY:230, align:"center", brandBase:84, infoSize:62, priceSize:88, priceY:H=>H-300, tagY:H=>H-190, gradTop:true, gradBottom:true, weight:700 }
+};
+
+
+// Photo drag-to-pan
+let dragging=false,dragStartX=0,dragStartY=0,offStartX=0,offStartY=0;
+cv.addEventListener("pointerdown",e=>{
+  if(!photoImg)return;
+  dragging=true;cv.setPointerCapture(e.pointerId);cv.style.cursor="grabbing";
+  dragStartX=e.clientX;dragStartY=e.clientY;offStartX=photoOffX;offStartY=photoOffY;
+});
+cv.addEventListener("pointermove",e=>{
+  if(!dragging||!photoImg)return;
+  const rect=cv.getBoundingClientRect();
+  // convert screen delta to canvas offset fraction
+  const dxFrac=(e.clientX-dragStartX)/rect.width*2;
+  const dyFrac=(e.clientY-dragStartY)/rect.height*2;
+  photoOffX=Math.max(-1,Math.min(1,offStartX+dxFrac));
+  photoOffY=Math.max(-1,Math.min(1,offStartY+dyFrac));
+  drawStory();
+});
+cv.addEventListener("pointerup",e=>{dragging=false;cv.style.cursor="grab";});
+cv.addEventListener("pointercancel",()=>{dragging=false;cv.style.cursor="grab";});
+
+document.getElementById("zoomSlider").addEventListener("input",e=>{
+  photoZoom=Number(e.target.value)/100;drawStory();
+});
+document.getElementById("tagShow").addEventListener("change",()=>{drawStory();});
+document.getElementById("priceYSlider").addEventListener("input",e=>{
+  PRICE_DY=Number(e.target.value);
+  document.getElementById("priceYVal").textContent=PRICE_DY;
+  drawStory();
+});
+document.getElementById("posReset").addEventListener("click",()=>{
+  PRICE_DY=0;document.getElementById("priceYSlider").value=0;
+  document.getElementById("priceYVal").textContent="0";drawStory();
+});
+document.getElementById("adjReset").addEventListener("click",()=>{
+  ADJ=Object.assign({},ADJ_DEF);renderAdj();drawStory();
+});
+document.getElementById("resetPhotoBtn").addEventListener("click",()=>{
+  photoOffX=0;photoOffY=0;photoZoom=1;document.getElementById("zoomSlider").value=100;drawStory();
+});
+
+// text-size fine tune
+document.getElementById("textScaleSlider").addEventListener("input",e=>{
+  textScale=Number(e.target.value)/100; drawStory();
+});
+
+// template switch
+document.querySelectorAll("#tplSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#tplSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    TEMPLATE=b.dataset.t; drawStory();
+  });
+});
+// photo effects
+document.querySelectorAll("#fxSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    PHOTO_FX=b.dataset.fx;
+    document.getElementById("cutoutBgRow").style.display = PHOTO_FX==="cutout"?"block":"none";
+    drawStory();
+  });
+});
+document.querySelectorAll("#cutBgSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#cutBgSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    CUTOUT_BG=b.dataset.bg; drawStory();
+  });
+});
+
+
+// phrase chips
+// ===== 下部テキストの文言テンプレ（自分で追加・削除できる／端末に保存） =====
+const PHRASE_KEY="story-phrases-v1";
+let phrases=[];
+try{
+  const saved=localStorage.getItem(PHRASE_KEY);
+  phrases=saved?JSON.parse(saved):PHRASES.slice();
+}catch(e){ phrases=PHRASES.slice(); }
+if(!Array.isArray(phrases)||!phrases.length)phrases=PHRASES.slice();
+function savePhrases(){try{localStorage.setItem(PHRASE_KEY,JSON.stringify(phrases));}catch(e){}}
+
+const pc=document.getElementById("phraseChips");
+function renderPhrases(){
+  const cur=document.getElementById("sTag").value;
+  const cnt=document.getElementById("phraseCount");
+  if(cnt)cnt.textContent=`(${phrases.length})`;
+  pc.innerHTML=phrases.map((p,i)=>`<span class="chip${p===cur?" on":""}" data-i="${i}" onclick="pickPhrase(this)" style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:5px 9px;margin:2px;">${esc(p)}<span onclick="event.stopPropagation();delPhrase(${i})" title="削除" style="color:var(--t3);font-weight:800;padding:0 2px;">×</span></span>`).join("");
+}
+window.pickPhrase=function(el){
+  const i=Number(el.dataset.i);
+  document.querySelectorAll("#phraseChips .chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  document.getElementById("sTag").value=phrases[i];
+  drawStory();
+};
+window.delPhrase=function(i){
+  if(!confirm(`「${phrases[i]}」を削除しますか？`))return;
+  phrases.splice(i,1);
+  if(!phrases.length)phrases=PHRASES.slice(); // 全部消したら初期文言に戻す
+  savePhrases();
+  renderPhrases();
+};
+// 開閉できるようにして、普段は畳んでおく（画面を圧迫しないため）
+document.getElementById("phraseToggle").addEventListener("click",()=>{
+  const w=document.getElementById("phraseWrap");
+  const open=w.style.display==="none"||!w.style.display;
+  w.style.display=open?"block":"none";
+  document.getElementById("phraseCaret").textContent=open?"▾":"▸";
+  try{localStorage.setItem("story-phrase-open",open?"1":"0");}catch(e){}
+});
+// 前回開いていたら開いた状態で始める。既定は開いておく（選べないと気づけないため）
+try{
+  const st=localStorage.getItem("story-phrase-open");
+  if(st!=="0"){
+    document.getElementById("phraseWrap").style.display="block";
+    document.getElementById("phraseCaret").textContent="▾";
+  }
+}catch(e){
+  document.getElementById("phraseWrap").style.display="block";
+}
+document.getElementById("addPhraseBtn").addEventListener("click",()=>{
+  const cur=document.getElementById("sTag").value.trim();
+  const v=prompt("追加する文言を入力してください（絵文字も使えます）", cur||"");
+  if(v==null)return;
+  const t=v.trim();
+  if(!t)return;
+  if(phrases.includes(t)){alert("その文言はすでに登録されています。");return;}
+  phrases.unshift(t);
+  if(phrases.length>40)phrases=phrases.slice(0,40);
+  savePhrases();
+  document.getElementById("sTag").value=t;
+  renderPhrases();drawStory();
+});
+renderPhrases();
+
+// bottom text color
+const COLORS=[["白","#ffffff"],["黒","#111111"],["赤","#ff2d2d"],["ゴールド","#d4af37"],["ピンク","#ff5fa2"],["水色","#4fc3ff"],["イエロー","#ffd60a"],["グリーン","#34c759"]];
+let tagColor="#ffffff";
+const cc=document.getElementById("colorChips");
+cc.innerHTML=COLORS.map(([name,hex],i)=>`<span class="chip${i===0?" on":""}" onclick="pickColor(this,'${hex}')" style="display:inline-flex;align-items:center;gap:6px;"><span style="width:16px;height:16px;border-radius:50%;background:${hex};border:1px solid #ccc;display:inline-block;"></span>${name}</span>`).join("");
+window.pickColor=function(el,hex){
+  document.querySelectorAll("#colorChips .chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on");
+  tagColor=hex;
+  drawStory();
+};
+
+// photo drop
+const pd=document.getElementById("photoDrop"),pi=document.getElementById("photoIn");
+pd.addEventListener("click",()=>pi.click());
+pi.addEventListener("change",e=>{
+  const fs=e.target.files;
+  if(fs&&fs.length>1)loadPhotoQueue(fs);
+  else if(fs&&fs[0]){photoQueue=[];renderPhotoQueue();loadPhoto(fs[0]);}
+  pi.value="";
+});
+["dragover","dragenter"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>pd.addEventListener(ev,e=>{e.preventDefault();pd.style.borderColor="var(--line)";}));
+pd.addEventListener("drop",e=>{
+  const fs=e.dataTransfer.files;
+  if(fs&&fs.length>1)loadPhotoQueue(fs);
+  else if(fs&&fs[0]){photoQueue=[];renderPhotoQueue();loadPhoto(fs[0]);}
+});
+// ===== 複数写真の一括処理 =====
+// 選んだ写真をキューに入れ、1枚ずつ仕上げていく。
+// 各写真ごとに入力内容（ブランド・価格など）と位置調整を保持するので、
+// 前後に移動しても作業内容が消えない。
+let photoQueue=[];   // [{file, dataUrl, img, done, state}]
+let pqIndex=0;
+
+function pqCurrentState(){
+  return {
+    brand:document.getElementById("sBrand").value,
+    size:document.getElementById("sSize").value,
+    rank:document.getElementById("sRank").value,
+    price:document.getElementById("sPrice").value,
+    tag:document.getElementById("sTag").value,
+    fit:PHOTO_FIT,fitArea:FIT_AREA,fitTop:FIT_TOP,
+    cutOn:document.getElementById("cutOn").checked,
+    newPrice:document.getElementById("sNewPrice").value,
+    tagShow:document.getElementById("tagShow").checked,
+    tagColor:tagColor,
+    offX:photoOffX,offY:photoOffY,zoom:photoZoom,fx:PHOTO_FX,adj:Object.assign({},ADJ),priceDY:PRICE_DY,
+  };
+}
+function pqApplyState(s){
+  if(!s)return;
+  document.getElementById("sBrand").value=s.brand||"";
+  document.getElementById("sSize").value=s.size||"";
+  document.getElementById("sPrice").value=s.price||"";
+  document.getElementById("sTag").value=s.tag||"📩DMにて割引可能";
+  document.getElementById("tagShow").checked=(s.tagShow!==false);
+  if(s.fit)setFit(s.fit,true);
+  if(s.fitArea){FIT_AREA=s.fitArea;const a=document.getElementById("fitArea");
+    if(a){a.value=Math.round(FIT_AREA*100);document.getElementById("fitAreaV").textContent=a.value+"%";}}
+  if(s.fitTop){FIT_TOP=s.fitTop;const t=document.getElementById("fitTop");
+    if(t){t.value=Math.round(FIT_TOP*100);document.getElementById("fitTopV").textContent=t.value+"%";}}
+  document.getElementById("cutOn").checked=!!s.cutOn;
+  document.getElementById("sNewPrice").value=s.newPrice||"";
+  document.getElementById("cutRow2").style.display=s.cutOn?"block":"none";
+  updateCutInfo();
+  setRank(s.rank||"");
+  tagColor=s.tagColor||"#ffffff";
+  photoOffX=s.offX||0;photoOffY=s.offY||0;photoZoom=s.zoom||1;
+  PHOTO_FX=s.fx||"none";
+  ADJ=Object.assign({},ADJ_DEF,s.adj||{});renderAdj();
+  PRICE_DY=s.priceDY||0;
+  const pys=document.getElementById("priceYSlider");
+  if(pys){pys.value=PRICE_DY;document.getElementById("priceYVal").textContent=PRICE_DY;}
+  document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx===PHOTO_FX));
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
+}
+function renderPhotoQueue(){
+  const bar=document.getElementById("photoQueueBar");
+  if(!bar)return;
+  if(photoQueue.length<2){bar.style.display="none";return;}
+  bar.style.display="block";
+  const doneN=photoQueue.filter(p=>p.done).length;
+  document.getElementById("pqLabel").innerHTML=
+    `📸 ${pqIndex+1} / ${photoQueue.length} 枚目　<span style="font-weight:600;color:var(--t3);">保存済み ${doneN}枚</span>`;
+  const th=document.getElementById("pqThumbs");
+  th.innerHTML=photoQueue.map((p,i)=>`
+    <div class="pqThumb" data-i="${i}" style="flex-shrink:0;width:52px;height:52px;border-radius:9px;overflow:hidden;position:relative;cursor:pointer;
+      border:2px solid ${i===pqIndex?'var(--blue)':'transparent'};opacity:${p.done?0.55:1};">
+      <img src="${p.dataUrl}" style="width:100%;height:100%;object-fit:cover;">
+      ${p.done?'<div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">✓</div>':""}
+    </div>`).join("");
+  th.querySelectorAll(".pqThumb").forEach(el=>el.addEventListener("click",()=>pqGoto(Number(el.dataset.i))));
+  const cur=th.querySelector(`.pqThumb[data-i="${pqIndex}"]`);
+  if(cur)cur.scrollIntoView({block:"nearest",inline:"nearest"});
+}
+function pqGoto(i){
+  if(!photoQueue.length)return;
+  // 今の作業内容を保存してから移動する
+  if(photoQueue[pqIndex])photoQueue[pqIndex].state=pqCurrentState();
+  pqIndex=Math.max(0,Math.min(photoQueue.length-1,i));
+  const p=photoQueue[pqIndex];
+  photoImg=p.img;
+  pqApplyState(p.state);
+  document.getElementById("photoControls").style.display="block";
+  document.getElementById("photoDrop").innerHTML=`📷 ${pqIndex+1}/${photoQueue.length} 枚目 ✓`;
+  renderPhotoQueue();
+  drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+}
+function pqNext(){
+  if(photoQueue.length<2)return false;
+  // 未保存の写真を優先して次に進む
+  let n=-1;
+  for(let k=pqIndex+1;k<photoQueue.length;k++){if(!photoQueue[k].done){n=k;break;}}
+  if(n<0)for(let k=0;k<photoQueue.length;k++){if(!photoQueue[k].done){n=k;break;}}
+  if(n<0){ // 全部保存済み
+    renderPhotoQueue();
+    flashSyncIndicator("🎉 選択した写真をすべて作成しました");
+    return false;
+  }
+  pqGoto(n);
+  return true;
+}
+function loadPhotoQueue(files){
+  const list=Array.from(files).filter(f=>/^image\//.test(f.type));
+  if(!list.length)return;
+  photoQueue=[];pqIndex=0;
+  let loaded=0;
+  list.forEach((file,idx)=>{
+    const fr=new FileReader();
+    fr.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        photoQueue[idx]={file,dataUrl:e.target.result,img,done:false,state:null};
+        loaded++;
+        if(loaded===list.length){
+          photoQueue=photoQueue.filter(Boolean);
+          pqIndex=0;
+          const p=photoQueue[0];
+          photoImg=p.img;photoOffX=0;photoOffY=0;photoZoom=1;
+          document.getElementById("photoControls").style.display="block";
+          const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+          document.getElementById("photoDrop").innerHTML=
+            photoQueue.length>1?`📷 1/${photoQueue.length} 枚目 ✓`:"📷 選択済み ✓";
+          renderPhotoQueue();
+          drawStory();
+        }
+      };
+      img.src=e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+document.getElementById("pqPrev").addEventListener("click",()=>pqGoto(pqIndex-1));
+document.getElementById("pqNext").addEventListener("click",()=>pqGoto(pqIndex+1));
+document.getElementById("pqClear").addEventListener("click",()=>{
+  photoQueue=[];pqIndex=0;renderPhotoQueue();
+  batchItems=[];batchIndex=-1;
+  const bl=document.getElementById("batchList");if(bl)bl.style.display="none";
+  const bp=document.getElementById("batchProgress");if(bp)bp.style.display="none";
+  document.getElementById("photoDrop").innerHTML='📷 タップして選択<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">複数枚まとめて選べます</span>';
+});
+
+// 画面上部に一時的な通知を出す（まとめて作成の完了案内などに使う）
+function flashSyncIndicator(msg){
+  let el=document.getElementById("flashMsg");
+  if(!el){
+    el=document.createElement("div");
+    el.id="flashMsg";
+    el.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:9999;"
+      +"background:rgba(0,0,0,.86);color:#fff;font-size:13.5px;font-weight:700;"
+      +"padding:11px 18px;border-radius:24px;max-width:90vw;text-align:center;"
+      +"box-shadow:0 4px 14px rgba(0,0,0,.25);transition:opacity .3s;";
+    document.body.appendChild(el);
+  }
+  el.textContent=msg;
+  el.style.opacity="1";
+  clearTimeout(window._flashT);
+  window._flashT=setTimeout(()=>{el.style.opacity="0";},2600);
+}
+
+
+
+
+
+/* ===== プレビュー直下の保存ボタン ===== */
+// 下まで行かずに保存できるよう、同じ処理を上でも押せるようにする。
+document.getElementById("quickSave").addEventListener("click",()=>{
+  const b=document.getElementById("dlBtn")||document.getElementById("shareBtn");
+  if(b)b.click();
+});
+document.getElementById("quickNext").addEventListener("click",()=>{
+  const b=document.getElementById("nextItemBtn");
+  if(b)b.click();
+});
+// まとめて作成中だけ「次へ」を出す
+function syncQuickBar(){
+  const n=document.getElementById("quickNext");
+  if(!n)return;
+  const multi=(typeof BULK!=="undefined"&&BULK.length)||(typeof batchItems!=="undefined"&&batchItems.length)
+            ||(typeof photoQueue!=="undefined"&&photoQueue.length>1);
+  n.style.display=multi?"block":"none";
+}
+
+/* ===== 在庫表から選んで作成 ===== */
+// 全店の在庫データ（3万件超）を読み込み、絞り込んでストーリーを作れるようにする。
+// 読み込んだデータは端末に保存して、次回から読み込み直さずに使える。
+let STOCK=[], STOCK_COLS=[], stockStore="", stockBrand="", stockShown=60;
+const STOCK_KEY="story-stock-v1";
+
+const SCOL={store:1,hinban:44,brand:5,kana:6,collab:7,season:8,model:9,name:10,
+  size:11,color:12,price:16,rank:22,acc:29,list:28,cat:39,buyer:33,qty:13,cost:14,ikki:20};
+
+async function saveStock(){
+  try{
+    const body=JSON.stringify(STOCK);
+    if(typeof CompressionStream!=="undefined"){
+      const cs=new CompressionStream("gzip");
+      const blob=await new Response(new Blob([new TextEncoder().encode(body)]).stream().pipeThrough(cs)).blob();
+      const buf=new Uint8Array(await blob.arrayBuffer());
+      let bin="";const CH=0x8000;
+      for(let i=0;i<buf.length;i+=CH)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+CH));
+      localStorage.setItem(STOCK_KEY,"gz:"+btoa(bin));
+    }else{
+      localStorage.setItem(STOCK_KEY,body);
+    }
+    localStorage.setItem(STOCK_KEY+":at",new Date().toISOString());
+  }catch(e){ console.log("在庫表の保存に失敗",e); }
+}
+async function loadStockCache(){
+  try{
+    const raw=localStorage.getItem(STOCK_KEY);
+    if(!raw)return false;
+    let json=raw;
+    if(raw.startsWith("gz:")){
+      const bin=atob(raw.slice(3));
+      const buf=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+      const ds=new DecompressionStream("gzip");
+      json=await (await new Response(new Blob([buf]).stream().pipeThrough(ds)).blob()).text();
+    }
+    STOCK=JSON.parse(json);
+    return STOCK.length>0;
+  }catch(e){ return false; }
+}
+
+document.getElementById("stockPick").addEventListener("click",()=>document.getElementById("stockIn").click());
+document.getElementById("stockIn").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value="";
+  if(!f)return;
+  const info=document.getElementById("stockInfo");
+  info.textContent="読み込み中…（件数が多いので少し時間がかかります）";
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    // ヘッダー行を探す
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,20);i++){
+      const line=rows[i].map(v=>String(v||"").trim());
+      if(line.includes("店舗名称")&&line.includes("ハイフン品番")){hi=i;break;}
+    }
+    if(hi<0){info.innerHTML='<span style="color:var(--red);">在庫表の形式ではないようです。</span>';return;}
+    const H=rows[hi].map(v=>String(v||"").trim());
+    const col={};
+    Object.entries({store:"店舗名称",hinban:"ハイフン品番",brand:"ブランド名称",kana:"ブランド名（カナ）",
+      collab:"コラボブランド",season:"シーズン",model:"モデル",name:"品名",size:"サイズ*",color:"カラー*",
+      price:"単品売価（税込）",rank:"状態ランク",acc:"付属品",list:"参考定価",cat:"小分類名称",
+      buyer:"バイヤー名称",qty:"リアル在庫数量",cost:"単品原価",ikki:"100イキ（税込）"}).forEach(([k,label])=>{
+      const j=H.indexOf(label); if(j>=0)col[k]=j;
+    });
+    const num=v=>{const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));return isFinite(n)?Math.round(n):0;};
+    STOCK=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i];
+      const g=k=>col[k]!=null?String(r[col[k]]==null?"":r[col[k]]).trim():"";
+      const hb=g("hinban");
+      if(!g("store")||!/^\d{5}-\d{6}-\d{4}$/.test(hb))continue;
+      STOCK.push({st:g("store"),hb,br:g("brand")||g("kana"),ka:g("kana"),cb:g("collab"),
+        se:g("season"),mo:g("model"),nm:g("name"),sz:g("size"),co:g("color"),
+        pr:num(g("price")),rk:g("rank"),ac:g("acc"),li:num(g("list")),ct:g("cat"),
+        by:g("buyer"),qt:num(g("qty"))||1});
+    }
+    await saveStock();
+    info.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${STOCK.length.toLocaleString()}件を読み込みました</span>`;
+    setupStockFilter();
+  }catch(err){
+    info.innerHTML='<span style="color:var(--red);">読み込みに失敗しました：'+esc(err.message)+'</span>';
+  }
+});
+
+function setupStockFilter(){
+  if(!STOCK.length)return;
+  document.getElementById("stockFilter").style.display="block";
+  const stores={};
+  STOCK.forEach(r=>stores[r.st]=(stores[r.st]||0)+1);
+  const list=Object.entries(stores).sort((a,b)=>b[1]-a[1]);
+  const sel=document.getElementById("stockStore");
+  sel.innerHTML=list.map(([s,n])=>`<option value="${esc(s)}">${esc(s)}（${n.toLocaleString()}点）</option>`).join("");
+  let pref="";try{pref=localStorage.getItem("story-stock-store")||"";}catch(e){}
+  stockStore=list.some(([s])=>s===pref)?pref:(list.find(([s])=>s.includes("渋谷")&&!s.includes("SV"))||list[0])[0];
+  sel.value=stockStore;
+  renderStock();
+}
+document.getElementById("stockStore").addEventListener("change",e=>{
+  stockStore=e.target.value;stockBrand="";stockShown=60;
+  try{localStorage.setItem("story-stock-store",stockStore);}catch(err){}
+  renderStock();
+});
+document.getElementById("stockQ").addEventListener("input",()=>{stockShown=60;renderStock();});
+
+let stockSort="new";
+document.querySelectorAll("#stockSort button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#stockSort button").forEach(x=>x.classList.toggle("on",x===b));
+  stockSort=b.dataset.ss;stockShown=60;renderStock();
+}));
+// 品番の中間6桁が登録日なので、そこで新しい順に並べられる
+function stockDate(hb){ const m=String(hb||"").match(/^\d{5}-(\d{6})-/); return m?m[1]:"000000"; }
+function stockFiltered(){
+  const q=(document.getElementById("stockQ").value||"").trim().toLowerCase();
+  const out=STOCK.filter(r=>{
+    if(stockStore&&r.st!==stockStore)return false;
+    if(stockBrand&&r.br!==stockBrand)return false;
+    if(q&&!((r.br+" "+r.ka+" "+r.mo+" "+r.nm+" "+r.hb+" "+r.ct).toLowerCase().includes(q)))return false;
+    return true;
+  });
+  if(stockSort==="high")out.sort((a,b)=>b.pr-a.pr);
+  else if(stockSort==="low")out.sort((a,b)=>a.pr-b.pr);
+  else out.sort((a,b)=>stockDate(b.hb).localeCompare(stockDate(a.hb)));
+  return out;
+}
+function renderStock(){
+  const inStore=STOCK.filter(r=>!stockStore||r.st===stockStore);
+  const bm={};
+  inStore.forEach(r=>{ if(r.br)bm[r.br]=(bm[r.br]||0)+1; });
+  const bl=Object.entries(bm).sort((a,b)=>b[1]-a[1]);
+  const bc=document.getElementById("stockBrands");
+  bc.innerHTML=`<span class="pill${stockBrand?"":" on"}" data-sb="">すべて(${inStore.length})</span>`
+    +bl.map(([b,n])=>`<span class="pill${stockBrand===b?" on":""}" data-sb="${esc(b)}">${esc(b)} ${n}</span>`).join("");
+  bc.querySelectorAll("[data-sb]").forEach(el=>el.onclick=()=>{stockBrand=el.getAttribute("data-sb")||"";stockShown=60;renderStock();});
+
+  const hits=stockFiltered();
+  const total=hits.length;
+  if(stockShown>total)stockShown=Math.min(60,total);
+  document.getElementById("stockHits").innerHTML=
+    `<b>${total.toLocaleString()}件</b>が該当${total>stockShown?`（${stockShown}件を表示中）`:""}`;
+  const el=document.getElementById("stockList");
+  el.innerHTML=hits.slice(0,stockShown).map((r,i)=>`
+    <div class="stockRow" data-si="${STOCK.indexOf(r)}" style="display:flex;gap:9px;align-items:center;
+      border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.br)}　<span class="muted" style="font-weight:400;">${esc(r.mo||r.nm||"")}</span></div>
+        <div class="muted" style="font-size:11px;">${esc(r.hb)}　size${esc(r.sz)}　${esc(r.rk)}　¥${r.pr.toLocaleString()}</div>
+      </div>
+      <button class="btn sub" style="flex:0 0 auto;padding:7px 11px;font-size:11.5px;">作成</button>
+    </div>`).join("")||'<div class="note">該当する商品がありません。</div>';
+  if(total>stockShown){
+    el.insertAdjacentHTML("beforeend",
+      `<div class="row" style="margin-top:9px;"><button class="btn sub" id="stockMore">
+        さらに表示（残り ${(total-stockShown).toLocaleString()}件）</button></div>`);
+    const mb=document.getElementById("stockMore");
+    if(mb)mb.onclick=()=>{stockShown+=100;renderStock();};
+  }
+  el.querySelectorAll(".stockRow").forEach(row=>row.addEventListener("click",()=>{
+    const r=STOCK[Number(row.dataset.si)];
+    if(r)startBulk([{hinban:r.hb,newPrice:0,oldPrice:0,stock:r}]);
+  }));
+}
+document.getElementById("stockBulk").addEventListener("click",()=>{
+  const hits=stockFiltered();
+  if(!hits.length){alert("対象の商品がありません。");return;}
+  if(!confirm(`${hits.length}件 でストーリー作成を始めます。`))return;
+  startBulk(hits.map(r=>({hinban:r.hb,newPrice:0,oldPrice:0,stock:r})));
+});
+
+/* ===== 売価修正のまとめて作成 ===== */
+// ピッキングツールから品番の一覧を受け取り、
+// 楽天の商品画像と情報を一気に集めてから、1件ずつ確認して保存していく。
+let BULK=[], bulkIndex=-1;
+
+// 共有データベースから受け取る（件数の上限なし）
+async function fetchBulkRef(token){
+  try{
+    const p=await shareGetS("story-bulk");
+    if(!p||!Array.isArray(p.items))return null;
+    if(token&&p.token&&p.token!==token)return null;
+    return p.items.map(x=>({hinban:x.hinban,newPrice:Number(x.newPrice)||0,
+      oldPrice:Number(x.oldPrice)||0,brandHint:x.brand||"",nameHint:x.name||""}));
+  }catch(e){ return null; }
+}
+
+function bulkParam(){
+  const sp=new URLSearchParams(location.search);
+  const raw=sp.get("bulk");
+  if(!raw)return null;
+  // 形式: 品番:値下げ後:元価格 をカンマ区切りで受け取る
+  return raw.split(",").map(s=>{
+    const [hinban,np,op]=s.split(":");
+    return {hinban:(hinban||"").trim(),
+            newPrice:Number(np||0)||0, oldPrice:Number(op||0)||0};
+  }).filter(x=>/^\d{5}-\d{6}-\d{4}$/.test(x.hinban));
+}
+
+async function startBulk(list){
+  BULK=list.map(x=>Object.assign({},x,{data:null,img:null,done:false,state:null,picIdx:0}));
+  document.getElementById("bulkBox").style.display="block";
+  const prog=document.getElementById("bulkProg");
+  let done=0, started=false;
+  const show=()=>{
+    prog.innerHTML=`<span style="color:#5b3fc4;font-weight:700;">🔍 商品情報を取得中… ${done} / ${BULK.length}</span>
+      <div style="height:6px;background:#e6e0ff;border-radius:4px;margin-top:6px;overflow:hidden;">
+        <div style="height:100%;width:${Math.round(done/BULK.length*100)}%;background:#5b3fc4;"></div></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:5px;">取得できた商品から確認・保存できます</div>`;
+  };
+  show(); renderBulk();
+
+  const work=async i=>{
+    const b=BULK[i];
+    let info=null;
+    try{
+      info=await rakutenLookup(b.hinban,"https://item.rakuten.co.jp/gsc-rinkan/"+b.hinban);
+    }catch(e){ info=null; }
+    // 品番で見つからない場合、ブランドとモデル名で画像だけ探す（古い商品は品番で出ないため）
+    if((!info||!info.ok)&&b.stock&&(b.stock.br||b.stock.mo)){
+      try{
+        const kw=[b.stock.br,b.stock.mo].filter(Boolean).join(" ").slice(0,60);
+        const alt=await rakutenSearchPics(kw);
+        if(alt&&alt.length)info={ok:true,pics:alt,viaKeyword:true};
+      }catch(e){}
+    }
+    // 在庫表の情報は社内の正しい値なので、楽天の成否に関係なく必ず反映する
+    if(b.stock){
+      const s=b.stock;
+      b.data={ok:true,
+        brand:s.br||(info&&info.brand)||"",
+        size:s.sz||(info&&info.size)||"",
+        rank:s.rk||(info&&info.rank)||"",
+        price:s.pr||(info&&info.price)||0,
+        model:s.mo||"", itemName:s.nm||"", acc:s.ac||"",
+        pics:(info&&info.pics)||[]};
+      if(!b.data.pics.length)b.data.reason="写真なし（選んでください）";
+    }else{
+      b.data=(info&&info.ok)?info
+        :{ok:false,reason:(info&&info.notFound)?"楽天に商品ページがありません":"情報を取得できません"};
+    }
+    if(b.data.pics&&b.data.pics.length){
+      const r=await loadNetImage(b.data.pics[0]);
+      if(r){ b.img=r.img; b.tainted=r.tainted; }
+    }
+    done++; show(); renderBulk();
+    if(!started){ started=true; bulkGoto(i); }
+  };
+  let next=0;
+  const runner=async()=>{ while(next<BULK.length){ const i=next++; await work(i); } };
+  await Promise.all([runner(),runner(),runner()]);
+  const ok=BULK.filter(b=>b.img).length;
+  prog.innerHTML=`<span style="color:var(--green);font-weight:700;">✓ ${BULK.length}件を読み込みました</span>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:4px;">
+      画像あり ${ok}件${BULK.length-ok?` ／ <span style="color:var(--orange);font-weight:700;">画像なし ${BULK.length-ok}件</span>（写真を選んでください）`:""}</div>`;
+  renderBulk();
+}
+
+function renderBulk(){
+  const el=document.getElementById("bulkList");
+  if(!el)return;
+  const doneN=BULK.filter(b=>b.done).length;
+  el.innerHTML=`<div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:6px;">
+      ${doneN} / ${BULK.length} 件 保存済み</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;">
+    ${BULK.map((b,i)=>{
+      const d=b.data||{};
+      const off=(b.oldPrice&&b.newPrice&&b.oldPrice>b.newPrice)?Math.round((1-b.newPrice/b.oldPrice)*100):0;
+      return `<div class="bulkRow" data-i="${i}" style="display:flex;gap:9px;align-items:center;
+        background:${i===bulkIndex?"#efe9ff":"#fff"};border:1px solid ${i===bulkIndex?"#5b3fc4":"var(--line)"};
+        border-radius:10px;padding:8px 10px;cursor:pointer;opacity:${b.done?0.6:1};">
+        <div style="width:42px;height:42px;border-radius:7px;background:#f4f4f6;flex-shrink:0;overflow:hidden;
+          display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--t3);">
+          ${b.img?`<img src="${b.img.src}" style="width:100%;height:100%;object-fit:contain;">`:(b.data?"画像<br>なし":"…")}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${d.brand?esc(d.brand):(b.data?'<span style="color:var(--orange);">ブランド未取得</span>':'<span style="color:var(--t3);">読み込み中…</span>')}</div>
+          <div style="font-size:11px;color:var(--t3);">${esc(b.hinban)}${off?`　<b style="color:var(--red);">${off}%OFF</b>`:""}</div>
+          ${d.reason?`<div style="font-size:10.5px;color:var(--orange);font-weight:700;">⚠ ${esc(d.reason)}</div>`:""}
+        </div>
+        <div style="font-size:16px;flex-shrink:0;">${b.done?"✅":(!b.data?"⏳":(b.img?"🕐":"⚠️"))}</div>
+      </div>`;
+    }).join("")}</div>`;
+  el.querySelectorAll(".bulkRow").forEach(r=>r.addEventListener("click",()=>bulkGoto(Number(r.dataset.i))));
+}
+
+function bulkGoto(i){
+  if(!BULK.length)return;
+  if(bulkIndex>=0&&BULK[bulkIndex])BULK[bulkIndex].state=pqCurrentState();
+  bulkIndex=Math.max(0,Math.min(BULK.length-1,i));
+  const b=BULK[bulkIndex], d=b.data||{};
+  photoImg=b.img||null; SHOT_IMG=null;
+  photoOffX=0;photoOffY=0;photoZoom=1;
+  setFit(b.img?"contain":"cover",true);
+  if(b.state){ pqApplyState(b.state); }
+  else{
+    const s=b.stock||{};
+    document.getElementById("sBrand").value=d.brand||s.br||"";
+    document.getElementById("sSize").value=d.size||s.sz||"";
+    setRank(d.rank||s.rk||"");
+    // 元の価格を「価格」に、値下げ後を専用欄に入れて割引表示にする
+    const base=b.oldPrice||(b.stock&&b.stock.pr)||d.price||0;
+    document.getElementById("sPrice").value=base?String(base):"";
+    if(b.newPrice&&base&&b.newPrice<base){
+      document.getElementById("sNewPrice").value=String(b.newPrice);
+      document.getElementById("cutOn").checked=true;
+      document.getElementById("cutRow2").style.display="block";
+    }else{
+      document.getElementById("sNewPrice").value="";
+      document.getElementById("cutOn").checked=false;
+      document.getElementById("cutRow2").style.display="none";
+    }
+    updateCutInfo(); updateLoanInfo();
+  }
+  document.getElementById("photoControls").style.display=photoImg?"block":"none";
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+  document.getElementById("photoDrop").innerHTML=
+    `📷 ${bulkIndex+1}/${BULK.length} 件目${photoImg?" ✓":"（写真を選んでください）"}`;
+  showNetPics((d.pics)||[]);
+  renderBulk(); drawStory(); syncQuickBar();
+  if(document.getElementById("captionBox").value)regenCaption();
+}
+
+function bulkMarkDoneAndNext(){
+  if(!BULK.length||bulkIndex<0)return;
+  BULK[bulkIndex].done=true;
+  BULK[bulkIndex].state=pqCurrentState();
+  renderBulk();
+  let n=-1;
+  for(let k=bulkIndex+1;k<BULK.length;k++){if(!BULK[k].done){n=k;break;}}
+  if(n<0)for(let k=0;k<BULK.length;k++){if(!BULK[k].done){n=k;break;}}
+  if(n<0){ flashSyncIndicator("🎉 すべての商品を作成しました"); return; }
+  setTimeout(()=>bulkGoto(n),400);
+}
+
+
+/* ===== 写真の収め方 ===== */
+// 白背景の商品画像は縦長のストーリーに合わないので、全体が入るように置けるようにする。
+let PHOTO_FIT="cover";   // cover=画面いっぱい / contain=全体を入れる
+let FIT_AREA=0.58;       // 画面の高さに対する写真の大きさ
+let FIT_TOP=0.42;        // 写真の中心をどの高さに置くか
+function setFit(v,silent){
+  PHOTO_FIT=v;
+  document.querySelectorAll("#fitSeg button").forEach(b=>b.classList.toggle("on",b.dataset.fit===v));
+  const row=document.getElementById("fitRow");
+  if(row)row.style.display=(v==="contain")?"block":"none";
+  if(!silent)drawStory();
+}
+document.querySelectorAll("#fitSeg button").forEach(b=>b.addEventListener("click",()=>setFit(b.dataset.fit)));
+document.getElementById("fitArea").addEventListener("input",e=>{
+  FIT_AREA=Number(e.target.value)/100;
+  document.getElementById("fitAreaV").textContent=e.target.value+"%";
+  drawStory();
+});
+document.getElementById("fitTop").addEventListener("input",e=>{
+  FIT_TOP=Number(e.target.value)/100;
+  document.getElementById("fitTopV").textContent=e.target.value+"%";
+  drawStory();
+});
+
+// 保存できない形で読み込まれていた画像を、中継サービス経由で読み込み直す
+async function retryTaintedPhoto(){
+  if(!NET_TAINTED)return false;
+  const u=NET_PICS[NET_CUR];
+  if(!u)return false;
+  for(const f of IMG_PROXIES){
+    const im=await tryImage(f(u),true);
+    if(im){
+      photoImg=im; NET_TAINTED=false;
+      if(typeof BULK!=="undefined"&&BULK.length&&bulkIndex>=0)BULK[bulkIndex].img=im;
+      if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=im;
+      drawStory();
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ===== オンラインの商品画像を使う ===== */
+// 値札を読むと楽天から白背景の商品画像が取れるので、候補として出す。
+// 撮影した写真は別に持っておき、いつでも戻せるようにする。
+let NET_PICS=[], SHOT_IMG=null, NET_CUR=-1;
+function showNetPics(pics){
+  NET_PICS=(pics||[]).slice(0,6);
+  const box=document.getElementById("netPhotoBox"), list=document.getElementById("netPhotoList");
+  if(!box||!list)return;
+  if(!NET_PICS.length){box.style.display="none";return;}
+  box.style.display="block";
+  const shot=SHOT_IMG?`<div class="npick" data-np="shot" style="flex-shrink:0;width:64px;height:64px;border-radius:9px;
+      border:2px solid var(--line);cursor:pointer;display:flex;align-items:center;justify-content:center;
+      background:var(--card2);font-size:10px;font-weight:700;color:var(--t2);text-align:center;line-height:1.3;">撮影<br>写真</div>`:"";
+  list.innerHTML=shot+NET_PICS.map((u,i)=>`
+    <div class="npick" data-np="${i}" style="flex-shrink:0;width:64px;height:64px;border-radius:9px;overflow:hidden;
+      border:2px solid var(--line);cursor:pointer;background:#fff;">
+      <img src="${u}" style="width:100%;height:100%;object-fit:contain;" loading="lazy"></div>`).join("");
+  list.querySelectorAll("[data-np]").forEach(el=>el.addEventListener("click",()=>useNetPic(el.getAttribute("data-np"))));
+}
+function markNetPick(v){
+  document.querySelectorAll("#netPhotoList .npick").forEach(el=>{
+    el.style.borderColor=(el.getAttribute("data-np")===String(v))?"var(--green)":"var(--line)";
+  });
+}
+// 楽天の画像サーバーは他サイトからの読み出しを許可していないため、
+// そのまま読み込むと「表示はできるが保存できない」状態になる。
+// 許可付きで配信し直してくれる中継サービスを経由して読み込む。
+const IMG_PROXIES=[
+  u=>"https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https:\/\//,"ssl:").replace(/^http:\/\//,""))+"&w=1000&output=jpg",
+  u=>"https://wsrv.nl/?url="+encodeURIComponent(u.replace(/^https:\/\//,"ssl:").replace(/^http:\/\//,""))+"&w=1000&output=jpg",
+];
+// 一度うまくいった経路を覚えて、次からはそれを先に使う
+let IMG_ROUTE=null;
+try{ IMG_ROUTE=localStorage.getItem("story-img-route"); }catch(e){}
+
+function tryImage(url,useCors){
+  return new Promise(resolve=>{
+    const im=new Image();
+    if(useCors)im.crossOrigin="anonymous";
+    let done=false;
+    const fin=v=>{if(!done){done=true;resolve(v);}};
+    im.onload=()=>fin(im.naturalWidth>1?im:null);
+    im.onerror=()=>fin(null);
+    setTimeout(()=>fin(null),12000);
+    im.src=url;
+  });
+}
+
+async function loadNetImage(url){
+  // 経路の候補：中継サービス（保存できる） → 直接（保存できない場合あり）
+  const routes=[];
+  IMG_PROXIES.forEach((f,i)=>routes.push({key:"p"+i,make:f,cors:true}));
+  routes.push({key:"direct",make:u=>u,cors:true});
+  if(IMG_ROUTE){
+    const i=routes.findIndex(r=>r.key===IMG_ROUTE);
+    if(i>0)routes.unshift(routes.splice(i,1)[0]);
+  }
+  for(const r of routes){
+    const im=await tryImage(r.make(url),r.cors);
+    if(im){
+      try{ localStorage.setItem("story-img-route",r.key); }catch(e){}
+      IMG_ROUTE=r.key;
+      return {img:im,tainted:false};
+    }
+  }
+  // どれも駄目なら、表示だけできる形で読み込む
+  const im=await tryImage(url,false);
+  return im?{img:im,tainted:true}:null;
+}
+let NET_TAINTED=false;
+function netNote(msg,color){
+  const l=document.getElementById("netPhotoList");
+  let e=document.getElementById("netErr");
+  if(!msg){ if(e)e.remove(); return; }
+  if(!e&&l){ l.insertAdjacentHTML("afterend",'<div id="netErr"></div>'); e=document.getElementById("netErr"); }
+  if(e){ e.style.cssText="font-size:11.5px;margin-top:7px;line-height:1.6;color:"+(color||"var(--orange)"); e.innerHTML=msg; }
+}
+async function useNetPic(v){
+  if(v==="shot"){
+    if(SHOT_IMG){
+      photoImg=SHOT_IMG;photoOffX=0;photoOffY=0;NET_TAINTED=false;
+      setFit("cover",true);
+      if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=SHOT_IMG;
+      markNetPick("shot");netNote("");drawStory();
+    }
+    return;
+  }
+  const u=NET_PICS[Number(v)];
+  if(!u)return;
+  netNote("読み込み中…","var(--t3)");
+  const res=await loadNetImage(u);
+  if(!res){ netNote("この画像は読み込めませんでした。別の画像を選んでください。"); return; }
+  if(photoImg&&!SHOT_IMG)SHOT_IMG=photoImg;
+  photoImg=res.img;photoOffX=0;photoOffY=0;photoZoom=1;
+  NET_TAINTED=res.tainted; NET_CUR=Number(v);
+  // まとめて作成中は、その商品の写真としても覚えておく（移動しても戻らないように）
+  if(typeof batchItems!=="undefined"&&batchItems.length&&batchIndex>=0)batchItems[batchIndex].img=res.img;
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+  document.getElementById("photoControls").style.display="block";
+  setFit("contain",true);   // 商品画像は全体が入る置き方が合う
+  markNetPick(v);
+  netNote(res.tainted
+    ? "この画像を使っています。保存できない場合は撮影写真に切り替えてください。"
+    : "✓ この画像を使っています","var(--green)");
+  drawStory();
+}
+
+/* ===== 値下げ表示（上の価格 → 値下げ後） ===== */
+// 「価格」を値下げ前、専用欄を値下げ後として扱い、割引率は自動で計算する。
+function basePrice(){
+  const el=document.getElementById("sPrice");
+  return el?(Number((el.value||"").replace(/[^\d]/g,""))||0):0;
+}
+function cutNewPrice(){
+  const el=document.getElementById("sNewPrice");
+  return el?(Number((el.value||"").replace(/[^\d]/g,""))||0):0;
+}
+function cutOldPrice(){ return basePrice(); }
+function cutActive(){
+  const el=document.getElementById("cutOn");
+  const o=basePrice(), n=cutNewPrice();
+  return !!(el&&el.checked&&o>0&&n>0&&n<o);
+}
+function cutPercent(old,now){ return Math.round((1-Number(now)/Number(old))*100); }
+function updateCutInfo(){
+  const el=document.getElementById("cutInfo");
+  if(!el)return;
+  const o=basePrice(), n=cutNewPrice();
+  if(!o){ el.textContent="上の「価格」を入力すると計算できます。"; return; }
+  if(!n){ el.textContent="値下げ後の価格を入れると、割引率を自動で計算します。"; return; }
+  if(n>=o){ el.innerHTML='<span style="color:var(--orange);">値下げ後の価格が元の価格以上です。表示されません。</span>'; return; }
+  const off=cutPercent(o,n), diff=o-n;
+  el.innerHTML=`<b>¥${o.toLocaleString("ja-JP")}</b> → <b style="color:var(--red);">¥${n.toLocaleString("ja-JP")}</b>`
+    +`　<b style="color:var(--red);">${off}% OFF</b>　<span class="muted">（¥${diff.toLocaleString("ja-JP")}お得）</span>`;
+}
+document.getElementById("cutOn").addEventListener("change",e=>{
+  document.getElementById("cutRow2").style.display=e.target.checked?"block":"none";
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+});
+document.getElementById("sNewPrice").addEventListener("input",()=>{
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+});
+// 割引率から値下げ後の価格を求める（100円単位）
+document.querySelectorAll(".cutp").forEach(b=>b.addEventListener("click",()=>{
+  const o=basePrice();
+  if(!o){alert("先に上の「価格」を入力してください。");return;}
+  const n=Math.round(o*(1-Number(b.dataset.off)/100)/100)*100;
+  document.getElementById("sNewPrice").value=String(n);
+  updateCutInfo();drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+}));
+
+
+// ===== ローン訴求（最大42回 無金利） =====
+// 30万円以上の商品が無金利の対象。月々の金額は価格÷42を切り上げる。
+const LOAN_TIMES=42;
+const LOAN_MIN=300000;
+function loanEligible(price){ return Number(price)>=LOAN_MIN; }
+function loanMonthly(price){
+  const p=Number(price)||0;
+  if(!p)return 0;
+  return Math.ceil(p/LOAN_TIMES); // 小数点以下のみ切り上げた正確な金額
+}
+function loanActive(price){
+  const el=document.getElementById("loanOn");
+  return !!(el&&el.checked&&loanEligible(price));
+}
+function updateLoanInfo(){
+  const el=document.getElementById("loanInfo");
+  if(!el)return;
+  const price=Number((document.getElementById("sPrice").value||"").replace(/[^\d]/g,""));
+  const on=document.getElementById("loanOn").checked;
+  if(!price){ el.innerHTML='価格を入力すると月々の金額を計算します。'; return; }
+  if(!loanEligible(price)){
+    el.innerHTML=`<span style="color:var(--orange);">この商品は ¥${price.toLocaleString("ja-JP")} のため無金利の対象外です（¥${LOAN_MIN.toLocaleString("ja-JP")}以上が対象）。表示されません。</span>`;
+    return;
+  }
+  el.innerHTML=`${LOAN_TIMES}回払い → <b style="color:var(--t1);">月々 ¥${loanMonthly(price).toLocaleString("ja-JP")}</b>${on?"":"（チェックを入れると画像に表示されます）"}`;
+}
+document.getElementById("loanOn").addEventListener("change",()=>{updateLoanInfo();drawStory();if(document.getElementById("captionBox").value)regenCaption();});
+document.getElementById("sPrice").addEventListener("input",()=>{updateLoanInfo();updateCutInfo();});
+
+// ===== まとめて作成（値札＋商品写真をペアで一括処理） =====
+// 「値札→商品→値札→商品…」の順で選ばれた写真を2枚1組にし、
+// 値札を先に全部スキャンしてから、1件ずつ確認・保存していく。
+let batchItems=[];   // [{tagFile, photoFile, data, img, done, state}]
+let batchIndex=-1;
+
+document.getElementById("batchPick").addEventListener("click",()=>document.getElementById("batchIn").click());
+document.getElementById("batchIn").addEventListener("change",async e=>{
+  const files=Array.from(e.target.files||[]).filter(f=>/^image\//.test(f.type));
+  e.target.value="";
+  if(files.length<2){alert("値札と商品写真をあわせて2枚以上選んでください。");return;}
+  if(files.length%2!==0){
+    if(!confirm(`写真が${files.length}枚（奇数）です。\n値札→商品写真 の順で2枚1組にします。最後の1枚は使われません。\n続けますか？`))return;
+  }
+  // 2枚1組に分ける
+  batchItems=[];
+  for(let i=0;i+1<files.length;i+=2){
+    batchItems.push({tagFile:files[i],photoFile:files[i+1],data:null,img:null,done:false,state:null});
+  }
+  const prog=document.getElementById("batchProgress");
+  prog.style.display="block";
+  document.getElementById("batchList").style.display="none";
+
+  // 値札を3件ずつ同時に読み取る。1件目が読めたらすぐ確認を始められるようにする。
+  let done=0, started=false;
+  const total=batchItems.length;
+  const showProg=()=>{
+    prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:#5b3fc4;">🔍 値札を読み取り中... ${done} / ${total}</div>
+      <div style="height:6px;background:#e6e0ff;border-radius:4px;margin-top:7px;overflow:hidden;">
+        <div style="height:100%;width:${Math.round(done/total*100)}%;background:#5b3fc4;transition:width .2s;"></div></div>
+      <div style="font-size:11px;color:var(--t3);margin-top:5px;">読み終わった商品から確認・保存できます</div>`;
+  };
+  showProg();
+  renderBatchList();
+  const t0=Date.now();
+  const work=async i=>{
+    const b=batchItems[i];
+    const photoP=(async()=>{
+      try{b.photoUrl=await readAsDataURL(b.photoFile);b.img=await loadImg(b.photoUrl);}catch(e){console.error(e);}
+    })();
+    try{ b.data=await scanTagToData(b.tagFile); }
+    catch(err){ console.error(err); b.data={ok:false,brand:"",size:"",rank:"",price:0,reason:"読み取り中にエラーが発生しました"}; }
+    await photoP;
+    done++;showProg();renderBatchList();
+    if(!started){ started=true; batchGoto(i); }
+    else if(batchIndex===i&&b.waiting&&!b.state){ fillBatchFields(b); }
+  };
+  let next=0;
+  const runner=async()=>{ while(next<total){ const i=next++; await work(i); } };
+  await Promise.all([runner(),runner(),runner()]);
+  const okN=batchItems.filter(b=>b.data&&b.data.ok&&!b.data.reason).length;
+  const ngN=total-okN;
+  const sec=Math.round((Date.now()-t0)/1000);
+  prog.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--green);">✓ ${total}件を読み取りました（${sec}秒）</div>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:4px;">取得できた ${okN}件${ngN?` ／ <span style="color:var(--orange);font-weight:700;">要確認 ${ngN}件</span>（⚠の商品は手入力してください）`:""}</div>`;
+  renderBatchList();
+});
+
+function renderBatchList(){
+  const el=document.getElementById("batchList");
+  if(!batchItems.length){el.style.display="none";return;}
+  el.style.display="block";
+  const doneN=batchItems.filter(b=>b.done).length;
+  el.innerHTML=`<div style="font-size:11.5px;font-weight:700;color:var(--t3);margin-bottom:6px;">
+      商品一覧（${doneN} / ${batchItems.length} 件 保存済み）</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;">
+    ${batchItems.map((b,i)=>{
+      const d=b.data||{};
+      return `<div class="batchRow" data-i="${i}" style="display:flex;gap:9px;align-items:center;background:${i===batchIndex?'#efe9ff':'#fff'};border:1px solid ${i===batchIndex?'#5b3fc4':'var(--line,#eee)'};border-radius:10px;padding:8px 10px;cursor:pointer;opacity:${b.done?0.6:1};">
+        <img src="${b.photoUrl||""}" style="width:40px;height:40px;object-fit:cover;border-radius:7px;flex-shrink:0;background:#eee;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.data?(esc(d.brand)||'<span style="color:var(--orange);">ブランド未取得</span>'):'<span style="color:var(--t3);">…</span>'}</div>
+          <div style="font-size:11px;color:var(--t3);">${b.data?([d.size&&("size "+d.size),d.rank&&("RANK "+d.rank),d.price&&("¥"+Number(d.price).toLocaleString())].filter(Boolean).map(esc).join(" / ")||"—"):"読み取り中…"}</div>
+          ${d.reason?`<div style="font-size:10.5px;color:var(--orange);font-weight:700;">⚠ ${esc(d.reason)}</div>`:(d.hinban?`<div style="font-size:10px;color:var(--t3);">${esc(d.via||"")} ${esc(d.hinban)}</div>`:"")}
+        </div>
+        <div style="font-size:16px;flex-shrink:0;">${b.done?"✅":(!b.data?"⏳":(d.ok&&!d.reason?"🕐":"⚠️"))}</div>
+      </div>`;
+    }).join("")}</div>`;
+  el.querySelectorAll(".batchRow").forEach(r=>r.addEventListener("click",()=>batchGoto(Number(r.dataset.i))));
+}
+
+function fillBatchFields(b,silent){
+  const d=b.data||{};
+  document.getElementById("sBrand").value=d.brand||"";
+  document.getElementById("sSize").value=d.size||"";
+  document.getElementById("sPrice").value=d.price?String(d.price):"";
+  setRank(d.rank||"");
+  b.waiting=false;
+  if(!silent){
+    photoImg=b.img||photoImg;
+    document.getElementById("photoControls").style.display=photoImg?"block":"none";
+    document.getElementById("photoDrop").innerHTML=`📷 ${batchIndex+1}/${batchItems.length} 件目 ✓`;
+    if(d.dataUrl){document.getElementById("tagRefImg").src=d.dataUrl;document.getElementById("tagRefArea").style.display="block";}
+    drawStory();
+  }
+  if(typeof updateLoanInfo==="function")updateLoanInfo();
+}
+function batchGoto(i){
+  if(!batchItems.length)return;
+  if(batchIndex>=0&&batchItems[batchIndex])batchItems[batchIndex].state=pqCurrentState();
+  batchIndex=Math.max(0,Math.min(batchItems.length-1,i));
+  const b=batchItems[batchIndex];
+  // 写真をセット
+  photoImg=b.img||null;
+  photoOffX=0;photoOffY=0;photoZoom=1;
+  if(b.state){ pqApplyState(b.state); b.waiting=false; }
+  else if(!b.data){
+    // まだ読み取り中。読み終わったら自動で入力する
+    b.waiting=true;
+    ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+    setRank("");
+  }
+  else{ fillBatchFields(b,true); }
+  document.getElementById("photoControls").style.display=photoImg?"block":"none";
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=Math.round(photoZoom*100);
+  document.getElementById("photoDrop").innerHTML=b.data
+    ?`📷 ${batchIndex+1}/${batchItems.length} 件目 ✓`
+    :`📷 ${batchIndex+1}/${batchItems.length} 件目（値札を読み取り中…）`;
+  // 値札の参考画像も出す
+  if(b.data&&b.data.dataUrl){
+    document.getElementById("tagRefImg").src=b.data.dataUrl;
+    document.getElementById("tagRefArea").style.display="block";
+  }
+  SHOT_IMG=b.img||null;
+  showNetPics((b.data&&b.data.pics)||[]);
+  renderBatchList();
+  drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+}
+function batchMarkDoneAndNext(){
+  if(!batchItems.length||batchIndex<0)return;
+  batchItems[batchIndex].done=true;
+  batchItems[batchIndex].state=pqCurrentState();
+  renderBatchList();
+  let n=-1;
+  for(let k=batchIndex+1;k<batchItems.length;k++){if(!batchItems[k].done){n=k;break;}}
+  if(n<0)for(let k=0;k<batchItems.length;k++){if(!batchItems[k].done){n=k;break;}}
+  if(n<0){ flashSyncIndicator("🎉 すべての商品を作成しました"); return; }
+  setTimeout(()=>batchGoto(n),400);
+}
+
+function loadPhoto(file){
+  SHOT_IMG=null;
+  if(typeof setFit==="function")setFit("cover",true);
+  {const b=document.getElementById("netPhotoBox");if(b)b.style.display="none";}
+  const fr=new FileReader();
+  fr.onload=e=>{const img=new Image();img.onload=()=>{photoImg=img;photoOffX=0;photoOffY=0;photoZoom=1;pd.innerHTML="📷 選択済み ✓";document.getElementById("photoControls").style.display="block";document.getElementById("zoomSlider").value=100;drawStory();};img.src=e.target.result;};
+  fr.readAsDataURL(file);
+}
+
+// tag scan
+const td2=document.getElementById("tagDrop"),ti=document.getElementById("tagIn");
+let tagQueue=[]; // photos waiting to be scanned
+
+td2.addEventListener("click",()=>ti.click());
+ti.addEventListener("change",e=>{if(e.target.files.length){[...e.target.files].forEach(f=>tagQueue.push(f));renderTagQueue();}ti.value="";});
+["dragover","dragenter"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--blue)";}));
+["dragleave","drop"].forEach(ev=>td2.addEventListener(ev,e=>{e.preventDefault();td2.style.borderColor="var(--line)";}));
+td2.addEventListener("drop",e=>{const fs=[...e.dataTransfer.files];if(fs.length){fs.forEach(f=>tagQueue.push(f));renderTagQueue();}});
+
+function renderTagQueue(){
+  const tb=document.getElementById("tagThumbs"),btn=document.getElementById("tagScanBtn");
+  if(!tagQueue.length){tb.style.display="none";btn.style.display="none";return;}
+  tb.style.display="flex";btn.style.display="block";
+  btn.textContent=`📷 ${tagQueue.length}枚をスキャン`;
+  tb.innerHTML=tagQueue.map((f,i)=>{
+    const u=URL.createObjectURL(f);
+    return `<div style="position:relative;width:64px;height:64px;">
+      <img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
+      <button type="button" onclick="removeTag(${i})" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:13px;line-height:1;cursor:pointer;padding:0;">×</button>
+    </div>`;
+  }).join("");
+  td2.innerHTML='🏷️ もう1枚追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">表＋裏を揃えたらスキャン開始</span>';
+}
+window.removeTag=function(i){tagQueue.splice(i,1);renderTagQueue();};
+
+document.getElementById("tagScanBtn").addEventListener("click",async()=>{
+  if(!tagQueue.length)return;
+  const files=tagQueue.slice();
+  tagQueue=[];renderTagQueue();
+  window._priceFromTag=false; // reset provenance for this batch
+  td2.innerHTML='🏷️ 値札を追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表＋裏を追加してからスキャン</span>';
+  for(let i=0;i<files.length;i++){
+    await scanTagQR(files[i], files.length>1?`(${i+1}/${files.length}) `:"");
+  }
+});
+
+// 値札を読み取って「データだけ」を返す（画面のフォームは触らない）。
+// 一括処理で複数の値札をまとめてスキャンするために使う。
+
+/* ===================== 値札読み取り（共通・高精度版） ===================== */
+function readAsDataURL(file){return new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});}
+function loadImg(src){return new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=src;});}
+const tick0=()=>new Promise(r=>setTimeout(r,0)); // 画面の更新を挟む
+
+// OCRは2本の作業員で並列に回す（まとめて作成で待ち時間を半分にするため）
+const OCR_POOL_SIZE=2;
+const _ocrPool=[], _ocrBusy=[], _ocrWaiters=[];
+async function _makeOcrWorker(){const w=await Tesseract.createWorker("eng");await w.setParameters({tessedit_pageseg_mode:"6"});return w;}
+async function withOcr(fn){
+  let idx=-1;
+  for(;;){
+    for(let i=0;i<OCR_POOL_SIZE;i++){ if(!_ocrBusy[i]){idx=i;break;} }
+    if(idx>=0)break;
+    await new Promise(r=>_ocrWaiters.push(r));
+  }
+  _ocrBusy[idx]=true;
+  try{
+    if(!_ocrPool[idx])_ocrPool[idx]=idx===0?await getOcrWorker():await _makeOcrWorker();
+    return await fn(_ocrPool[idx]);
+  }finally{
+    _ocrBusy[idx]=false;
+    const r=_ocrWaiters.shift(); if(r)r();
+  }
+}
+
+// 写真の中から白い値札の範囲を探す（見つからなければ写真全体）
+function detectTagBox(img){
+  const dw=Math.min(800,img.width), ds=dw/img.width, dh=Math.max(1,Math.round(img.height*ds));
+  const c=document.createElement("canvas");c.width=dw;c.height=dh;
+  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0,dw,dh);
+  const d=x.getImageData(0,0,dw,dh).data;
+  const rb=new Array(dh).fill(0), cb=new Array(dw).fill(0);
+  for(let y=0;y<dh;y++)for(let xx=0;xx<dw;xx++){
+    const i=(y*dw+xx)*4;
+    if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]>150){rb[y]++;cb[xx]++;}
+  }
+  let r0=0,r1=dh-1,c0=0,c1=dw-1;
+  for(let y=0;y<dh;y++){if(rb[y]/dw>0.3){r0=y;break;}}
+  for(let y=dh-1;y>=0;y--){if(rb[y]/dw>0.3){r1=y;break;}}
+  for(let xx=0;xx<dw;xx++){if(cb[xx]/dh>0.3){c0=xx;break;}}
+  for(let xx=dw-1;xx>=0;xx--){if(cb[xx]/dh>0.3){c1=xx;break;}}
+  let sx=c0/ds, sy=r0/ds, sw=(c1-c0)/ds, sh=(r1-r0)/ds;
+  if(sw<img.width*0.15||sh<img.height*0.05)return {sx:0,sy:0,sw:img.width,sh:img.height,whole:true};
+  // 端の文字が切れないよう少し余白を足す
+  const px=sw*0.04, py=sh*0.04;
+  sx=Math.max(0,sx-px); sy=Math.max(0,sy-py);
+  sw=Math.min(img.width-sx,sw+px*2); sh=Math.min(img.height-sy,sh+py*2);
+  return {sx,sy,sw,sh,whole:false};
+}
+
+// ---- QR ----
+function _qrTry(img,sx,sy,sw,sh,maxSide,inv){
+  if(sw<20||sh<20)return "";
+  const sc=Math.min(maxSide/Math.max(sw,sh),3);
+  const w=Math.max(1,Math.round(sw*sc)), h=Math.max(1,Math.round(sh*sc));
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d",{willReadFrequently:true});x.imageSmoothingQuality="high";
+  x.drawImage(img,sx,sy,sw,sh,0,0,w,h);
+  const r=jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:inv||"dontInvert"});
+  return r&&r.data?String(r.data):"";
+}
+// 値札のQRは小さいので、写真全体だけでなく値札部分・右下部分を拡大して何通りか試す
+async function decodeQRRobust(img){
+  const W=img.width,H=img.height;
+  const b=detectTagBox(img);
+  const regions=[
+    [0,0,W,H],
+    [b.sx,b.sy,b.sw,b.sh],
+    [b.sx+b.sw*0.4,b.sy+b.sh*0.4,b.sw*0.6,b.sh*0.6],   // 値札の右下（QRの位置）
+    [W*0.35,H*0.35,W*0.65,H*0.65],
+    [b.sx,b.sy+b.sh*0.4,b.sw,b.sh*0.6],                // 値札の下半分
+  ];
+  for(const [sx,sy,sw,sh] of regions){
+    for(const m of [1200,800,1600]){
+      const s=_qrTry(img,sx,sy,sw,sh,m);
+      if(s)return s;
+    }
+    await tick0();
+  }
+  // 最後に白黒反転も含めて試す
+  for(const [sx,sy,sw,sh] of regions.slice(0,3)){
+    const s=_qrTry(img,sx,sy,sw,sh,1000,"attemptBoth");
+    if(s)return s;
+  }
+  return "";
+}
+// QRの中身から品番と楽天URLを取り出す
+function hinbanFromQR(raw){
+  const s=String(raw||"").trim();
+  if(!s)return {url:"",hinban:""};
+  let hinban="";
+  const m=s.match(/(\d{5})-(\d{6})-(\d{4})/);
+  if(m)hinban=m[0];
+  if(!hinban){
+    const p=s.match(/gsc-rinkan\/([^\/?#]+)/);
+    const d=p?p[1].replace(/[^0-9]/g,""):"";
+    if(d.length===15)hinban=`${d.slice(0,5)}-${d.slice(5,11)}-${d.slice(11)}`;
+  }
+  let url=/^https?:\/\//i.test(s)?s:"";
+  if(!url&&hinban)url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;
+  return {url,hinban};
+}
+
+// ---- 画像処理 ----
+function _lumOf(ctx,w,h){
+  const d=ctx.getImageData(0,0,w,h).data, lum=new Float32Array(w*h);
+  const hist=new Uint32Array(256);
+  for(let i=0,p=0;i<d.length;i+=4,p++){const v=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];lum[p]=v;hist[v|0]++;}
+  // 2%〜98%でコントラストを広げる（暗い写真・白飛びに強くする）
+  const n=w*h; let acc=0,lo=0,hi=255;
+  for(let i=0;i<256;i++){acc+=hist[i];if(acc>=n*0.02){lo=i;break;}}
+  acc=0;for(let i=255;i>=0;i--){acc+=hist[i];if(acc>=n*0.02){hi=i;break;}}
+  const rng=Math.max(1,hi-lo);
+  for(let p=0;p<n;p++){let v=(lum[p]-lo)/rng*255;lum[p]=v<0?0:v>255?255:v;}
+  return lum;
+}
+function _otsu(lum){
+  const h=new Uint32Array(256);for(let i=0;i<lum.length;i++)h[lum[i]|0]++;
+  const total=lum.length;let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];
+  let sB=0,wB=0,max=0,thr=128;
+  for(let t=0;t<256;t++){wB+=h[t];if(!wB)continue;const wF=total-wB;if(!wF)break;
+    sB+=t*h[t];const mB=sB/wB,mF=(sum-sB)/wF,bt=wB*wF*(mB-mF)*(mB-mF);if(bt>max){max=bt;thr=t;}}
+  return thr;
+}
+// 照明ムラに強い二値化（周囲の明るさと比べて判定する）
+function _bradley(lum,w,h,S,T){
+  const W1=w+1, ii=new Float64Array(W1*(h+1));
+  for(let y=0;y<h;y++){let rs=0;for(let x=0;x<w;x++){rs+=lum[y*w+x];ii[(y+1)*W1+x+1]=ii[y*W1+x+1]+rs;}}
+  const out=new Uint8ClampedArray(w*h), s2=S>>1;
+  for(let y=0;y<h;y++){
+    const y1=Math.max(0,y-s2),y2=Math.min(h-1,y+s2);
+    for(let x=0;x<w;x++){
+      const x1=Math.max(0,x-s2),x2=Math.min(w-1,x+s2);
+      const cnt=(x2-x1+1)*(y2-y1+1);
+      const sum=ii[(y2+1)*W1+x2+1]-ii[y1*W1+x2+1]-ii[(y2+1)*W1+x1]+ii[y1*W1+x1];
+      out[y*w+x]=(lum[y*w+x]*cnt<=sum*(1-T))?0:255;
+    }
+  }
+  return out;
+}
+function _binCanvas(bin,w,h,rot){
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d");const id=x.createImageData(w,h);const d=id.data;
+  for(let p=0,i=0;p<bin.length;p++,i+=4){d[i]=d[i+1]=d[i+2]=bin[p];d[i+3]=255;}
+  x.putImageData(id,0,0);
+  if(!rot)return c;
+  const r=document.createElement("canvas");
+  const sw=rot%180!==0;r.width=sw?h:w;r.height=sw?w:h;
+  const rx=r.getContext("2d");rx.translate(r.width/2,r.height/2);rx.rotate(rot*Math.PI/180);
+  rx.drawImage(c,-w/2,-h/2);return r;
+}
+function _cropLum(img,box,maxSide,maxUp){
+  const sc=Math.min(maxSide/Math.max(box.sw,box.sh),maxUp);
+  const w=Math.max(1,Math.round(box.sw*sc)), h=Math.max(1,Math.round(box.sh*sc));
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const x=c.getContext("2d",{willReadFrequently:true});x.imageSmoothingQuality="high";
+  x.drawImage(img,box.sx,box.sy,box.sw,box.sh,0,0,w,h);
+  return {lum:_lumOf(x,w,h),w,h};
+}
+
+// ---- 品番（小物タグ） ----
+// 真ん中の6桁は日付（YYMMDD）なので、日付として成り立つものだけを採用して誤読を弾く
+function _validDate6(s){
+  const yy=+s.slice(0,2),mm=+s.slice(2,4),dd=+s.slice(4,6);
+  return yy>=18&&yy<=40&&mm>=1&&mm<=12&&dd>=1&&dd<=31;
+}
+function parsePN(text){
+  const lines=String(text||"").split(/\n/);
+  const cand=[];
+  const scan=s=>{
+    const t=s.replace(/[–—~_]/g,"-");
+    for(const m of t.matchAll(/(\d{5})\s*-?\s*(\d{6})\s*-?\s*(\d{4})/g))cand.push([m[1],m[2],m[3]]);
+    const dig=t.replace(/[^0-9]/g,"");
+    for(let i=0;i+15<=dig.length;i++)cand.push([dig.slice(i,i+5),dig.slice(i+5,i+11),dig.slice(i+11,i+15)]);
+  };
+  lines.forEach(scan);
+  for(let i=0;i+1<lines.length;i++)scan(lines[i]+lines[i+1]); // 2行に割れて読まれた場合
+  for(const [a,b,c] of cand){ if(_validDate6(b))return `${a}-${b}-${c}`; }
+  return "";
+}
+async function ocrPNRobust(img){
+  const box=detectTagBox(img);
+  const {lum,w,h}=_cropLum(img,box,1800,3);
+  const S=Math.max(15,Math.round(w/14));
+  const brad=_bradley(lum,w,h,S,0.15);
+  const th=_otsu(lum);
+  const ots=new Uint8ClampedArray(w*h);for(let i=0;i<lum.length;i++)ots[i]=lum[i]>th?255:0;
+  // 縦向きに撮った写真でも読めるよう、回転も試す（早く当たった時点で終わる）
+  const passes=[[brad,0,"11"],[ots,0,"11"],[ots,0,"6"],[brad,90,"11"],[brad,270,"11"]];
+  return await withOcr(async wk=>{
+    await wk.setParameters({tessedit_char_whitelist:"0123456789-",tessedit_pageseg_mode:"11"});
+    try{
+      for(const [bin,rot,psm] of passes){
+        await wk.setParameters({tessedit_pageseg_mode:psm});
+        const {data}=await wk.recognize(_binCanvas(bin,w,h,rot));
+        const pn=parsePN(data.text);
+        console.log("PN pass",psm,rot,JSON.stringify(data.text).slice(0,80),"→",pn);
+        if(pn)return pn;
+      }
+      // 値札の検出に失敗している場合に備え、写真全体でも一度だけ試す
+      if(!box.whole){
+        const whole=_cropLum(img,{sx:0,sy:0,sw:img.width,sh:img.height},1800,2);
+        const b2=_bradley(whole.lum,whole.w,whole.h,Math.max(15,Math.round(whole.w/14)),0.15);
+        await wk.setParameters({tessedit_pageseg_mode:"11"});
+        const {data}=await wk.recognize(_binCanvas(b2,whole.w,whole.h,0));
+        const pn=parsePN(data.text);
+        if(pn)return pn;
+      }
+      return "";
+    }finally{
+      await wk.setParameters({tessedit_char_whitelist:"",tessedit_pageseg_mode:"6"});
+    }
+  });
+}
+
+// ---- 楽天（公式API） ----
+// 1秒1回の制限があるので間隔を空け、商品が無いと分かったらすぐ返す。
+// 停止している中継サービスには回さない（ここで最大1分待たされていた）。
+let _rkLast=0;
+async function _rkThrottle(){const w=_rkLast+1100-Date.now();if(w>0)await new Promise(r=>setTimeout(r,w));_rkLast=Date.now();}
+async function _rkQuery(q){
+  const base="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
+    +"?applicationId="+encodeURIComponent(getRakutenAppId())
+    +"&accessKey="+encodeURIComponent(getRakutenAccessKey())
+    +"&availability=0&hits=1&format=json";
+  for(let a=0;a<3;a++){
+    await _rkThrottle();
+    try{
+      const r=await fetch(base+q,{signal:AbortSignal.timeout(6000)});
+      if(r.status===429){await new Promise(s=>setTimeout(s,1500*(a+1)));continue;}
+      if(!r.ok){
+        let d="";try{const j=await r.json();d=(j.errors&&j.errors.errorMessage)||j.error_description||j.error||"";}catch(e){}
+        return {err:"HTTP "+r.status+(d?" "+d:"")};
+      }
+      const j=await r.json();
+      return {items:(j.Items||[]).map(x=>x.Item||x)};
+    }catch(e){ if(a===2)return {err:e.name==="TimeoutError"?"タイムアウト":(e.message||"通信失敗")}; }
+  }
+  return {err:"混雑しています"};
+}
+// ブランド名やモデル名から商品画像だけを探す（品番で見つからない商品の保険）
+async function rakutenSearchPics(keyword){
+  if(!getRakutenAppId()||!getRakutenAccessKey())return null;
+  const res=await _rkQuery("&shopCode=gsc-rinkan&keyword="+encodeURIComponent(keyword));
+  if(res.err||!res.items.length)return null;
+  const it=res.items[0];
+  const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+  let pics=urls(it.mediumImageUrls); if(!pics.length)pics=urls(it.smallImageUrls);
+  return pics.map(u=>String(u).replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
+}
+
+async function rakutenLookup(hinban,url){
+  const hasKey=getRakutenAppId()&&getRakutenAccessKey();
+  if(hasKey&&hinban){
+    let res=await _rkQuery("&itemCode="+encodeURIComponent("gsc-rinkan:"+hinban));
+    // 品番での直接指定が通らない・見つからない場合は検索でも探す（キー不正の時は無駄なので探さない）
+    if((res.err&&!/HTTP 40[13]/.test(res.err))||(!res.err&&!res.items.length))
+      res=await _rkQuery("&shopCode=gsc-rinkan&keyword="+encodeURIComponent(hinban));
+    if(res.err)return {ok:false,err:res.err};
+    if(!res.items.length)return {ok:false,notFound:true};
+    const it=res.items[0];
+    const e2=s=>String(s||"").replace(/"/g,"&quot;");
+    const syn='<meta property="og:title" content="'+e2(it.itemName)+'">'
+             +'<meta name="description" content="'+e2(it.itemCaption)+'">';
+    const p=parseRakutenHtml(syn)||{};
+    // オンラインサイトの商品画像（白背景）も一緒に取っておく
+    const urls=a=>Array.isArray(a)?a.map(x=>x.imageUrl).filter(Boolean):[];
+    let pics=urls(it.mediumImageUrls); if(!pics.length)pics=urls(it.smallImageUrls);
+    pics=pics.map(u=>String(u).replace(/\?_ex=\d+x\d+/,"?_ex=600x600"));
+    return {ok:true,via:"api",brand:p.brand||"",size:p.size||"",rank:p.rank||"",
+            price:Number(it.itemPrice)||p.price||0,name:it.itemName||"",pics};
+  }
+  // APIキーが無い端末だけ、旧来の中継サービスを試す
+  if(!hasKey&&url&&/rakuten\.co\.jp/i.test(url)){
+    const g=await fetchRakuten(url);
+    return (g&&g.ok)?g:{ok:false,err:"楽天APIが未設定です"};
+  }
+  return {ok:false,notFound:!hinban};
+}
+
+async function scanTagToData(file){
+  const out={brand:"",size:"",rank:"",price:0,hinban:"",url:"",ok:false,reason:"",via:""};
+  const dataUrl=await readAsDataURL(file);
+  out.dataUrl=dataUrl;
+  const img=await loadImg(dataUrl);
+  // 1) QR → 2) 無ければ品番をOCR
+  let {url,hinban}=hinbanFromQR(await decodeQRRobust(img));
+  if(hinban||url)out.via="QR";
+  if(!hinban&&!url){
+    hinban=await ocrPNRobust(img);
+    if(hinban){url="https://item.rakuten.co.jp/gsc-rinkan/"+hinban;out.via="品番";}
+  }
+  out.hinban=hinban;out.url=url;
+  // 3) 楽天照会と値札の価格OCRを同時に進める
+  const [info,tagPrice]=await Promise.all([
+    (hinban||url)?rakutenLookup(hinban,url):Promise.resolve(null),
+    ocrTagPrice(dataUrl)
+  ]);
+  if(info&&info.ok){
+    out.brand=info.brand||"";out.size=info.size||"";out.rank=info.rank||"";
+    if(info.price)out.price=info.price;
+    out.pics=info.pics||[];
+  }
+  // 値札の税込価格を優先（楽天の価格は手数料込みの場合があるため）
+  if(tagPrice&&tagPrice>0)out.price=tagPrice;
+  out.ok=!!(out.brand||out.price);
+  if(!hinban&&!url)out.reason="値札を読み取れませんでした";
+  else if(info&&info.notFound)out.reason="楽天に商品ページがありません";
+  else if(info&&info.err)out.reason="楽天に接続できません（"+info.err+"）";
+  else if(!out.brand)out.reason="ブランドを取得できませんでした";
+  return out;
+}
+
+async function scanTagQR(file, prefix){
+  prefix=prefix||"";
+  const status=document.getElementById("ocrStatus");
+  status.style.display="block";
+  status.textContent="🔍 "+prefix+"読み取り中...";
+  status.style.color="var(--blue)";
+  td2.innerHTML="🏷️ 読み取り中...";
+
+  // Show tag photo as reference
+  const dataUrl=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
+  document.getElementById("tagRefImg").src=dataUrl;
+  document.getElementById("tagRefArea").style.display="block";
+
+  // Scan QR code from image (capped resolution — full-res is slow and rarely needed)
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=dataUrl;});
+  let qr=null;
+  {const s=await decodeQRRobust(img);if(s)qr={data:s};}
+
+  let url="", hinban="";
+  if(qr&&qr.data){
+    console.log("QR data:",qr.data);
+    const q=hinbanFromQR(qr.data);
+    url=q.url;hinban=q.hinban;
+  }else{
+    // No QR (accessory/small-item tags) — OCR the product number instead
+    status.textContent="🔍 "+prefix+"商品番号を読み取り中...";
+    const pn=await ocrProductNumber(dataUrl);
+    if(pn){url="https://item.rakuten.co.jp/gsc-rinkan/"+pn;hinban=pn;}
+  }
+  if(hinban)window._lastHinban=hinban;
+
+  const filled=[];
+  status.textContent="🔍 "+prefix+"情報を取得中...";
+
+  // Run tag-price OCR and Rakuten fetch in PARALLEL (big speed win)
+  // 楽天ドメインなら取得を試みる（item. が付かない短縮URL等にも対応）
+  const isRakuten=url&&/rakuten\.co\.jp/i.test(url);
+  const pricePromise=ocrTagPrice(dataUrl);
+  // 公式APIが設定されていればそちらを優先（中継サービス不要で安定）。
+  // 未設定または取得失敗なら、従来どおり中継サービス経由で取得する。
+  const rakutenPromise=(hinban||url)?rakutenLookup(hinban,url):Promise.resolve(null);
+  const [tagPrice,got]=await Promise.all([pricePromise,rakutenPromise]);
+
+  if(got&&got.ok){
+    if(got.brand){document.getElementById("sBrand").value=got.brand;filled.push("ブランド");}
+    if(got.size){document.getElementById("sSize").value=got.size;filled.push("サイズ");}
+    if(got.rank){setRank(got.rank);filled.push("ランク");}
+    if(got.pics&&got.pics.length){showNetPics(got.pics);filled.push("商品画像"+got.pics.length+"枚");}
+  }
+  // Price priority: TAG tax-included price is authoritative (Rakuten includes fees).
+  // A tag price ALWAYS wins and is never overwritten by a Rakuten price — even across
+  // multiple scans. window._priceFromTag tracks whether the current value is trustworthy.
+  const priceEl=document.getElementById("sPrice");
+  if(tagPrice){
+    priceEl.value=String(tagPrice);
+    window._priceFromTag=true;
+    filled.push("価格(値札)");
+  }else if(got&&got.ok&&got.price&&!window._priceFromTag){
+    // Only use Rakuten price as a placeholder if no tag price has been found yet
+    priceEl.value=String(got.price);
+    filled.push("価格(楽天・要確認)");
+  }
+
+  drawStory();
+
+  const missing=[];
+  if(!document.getElementById("sBrand").value)missing.push("ブランド");
+  if(!document.getElementById("sPrice").value)missing.push("価格");
+  // QR付きタグ（衣類など）は1枚で完結する。裏面を求めるのは QR がなく
+  // OCRで商品番号を読んだ小物タグの場合だけ。
+  const wasQR = !!(qr && qr.data);
+  // 楽天からの取得に失敗したか（ブランド・サイズ・ランクはここから取る）
+  const rakutenFailed = isRakuten && (!got || !got.ok);
+  if(filled.length){
+    td2.innerHTML="🏷️ もう一度タップで別の面をスキャン";
+    let msg='✓ '+filled.join("・")+'を入力しました';
+    if(rakutenFailed){
+      msg+='<br><span style="color:var(--orange);font-size:12px;">⚠ 楽天ページに接続できず、ブランド・サイズ・ランクを取得できませんでした。'
+        +(url?'<a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:underline;">ページを開いて確認</a>するか、手入力してください。':'手入力してください。')+'</span>';
+    }else if(missing.length){
+      if(wasQR){
+        msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力です。手入力するか、もう一度スキャンしてください。</span>';
+      }else{
+        msg+='<br><span style="color:var(--orange);font-size:12px;">まだ'+missing.join("・")+'が未入力。小物タグの場合は<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>の両方をスキャンしてください。</span>';
+      }
+    }
+    if(url&&!rakutenFailed)msg+='<br><a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;font-size:12px;text-decoration:underline;">楽天ページを確認</a>';
+    status.innerHTML=msg;
+    status.style.color="var(--green)";
+  }else{
+    td2.innerHTML="🏷️ 読み取れず（もう一度/手入力）";
+    if(wasQR){
+      status.innerHTML='⚠ QRは読めましたが、商品情報を取得できませんでした。<br><span style="font-size:12px;color:var(--t2);">'
+        +(url?'<a href="'+url+'" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:underline;">楽天ページを開いて確認</a>するか、手入力してください。':'手入力してください。')+'</span>';
+    }else{
+      status.innerHTML='⚠ この面からは読み取れませんでした。<br><span style="font-size:12px;color:var(--t2);">QR付きタグはQRが写るように、小物タグは<b>表面（税込金額）</b>と<b>裏面（商品番号）</b>をそれぞれスキャンしてください。ピントを合わせて明るく撮るのがコツです。</span>';
+    }
+    status.style.color="var(--orange)";
+  }
+  status.style.display="block";
+}
+
+// OCR the RINKAN product number (format: 5digits-6digits-4digits) from tag photo.
+// Used for tags that have no QR code (accessories / small items).
+async function ocrProductNumber(dataUrl){
+  try{ return await ocrPNRobust(await loadImg(dataUrl)); }
+  catch(e){ console.log("product number OCR error:",e); return ""; }
+}
+
+// OCR the tax-included price from the RINKAN tag photo.
+// Tax-included = the price NOT marked exc.tax (usually the larger, on its own line).
+async function ocrTagPrice(dataUrl){
+  try{
+    const img=await loadImg(dataUrl);
+    const box=detectTagBox(img);
+    const {lum,w,h}=_cropLum(img,box,1500,1.6);
+    const th=_otsu(lum);
+    // 写真ごとに最適な境目（大津）を先に試し、だめなら固定値で補う
+    const thrs=[...new Set([th,150,175])];
+    return await withOcr(async wk=>{
+      await wk.setParameters({tessedit_pageseg_mode:"4",tessedit_char_whitelist:""});
+      let best=0,bestAll=0;
+      try{
+        for(const t of thrs){
+          const bin=new Uint8ClampedArray(w*h);
+          for(let i=0;i<lum.length;i++)bin[i]=lum[i]>t?255:0;
+          const {data}=await wk.recognize(_binCanvas(bin,w,h,0));
+          const taxIncluded=[],allPrices=[];
+          for(const ln of data.text.split("\n")){
+            const isExTax=/exc|tax|税抜|外/i.test(ln);
+            // ¥/円の無い行は価格ではない（バーコード番号や品番を拾わないため）
+            if(!/[¥￥]|円/.test(ln))continue;
+            const nums=[...ln.matchAll(/(\d{1,3}(?:,\d{3})+)/g)].map(m=>Number(m[1].replace(/,/g,""))).filter(n=>n>=1000&&n<100000000);
+            for(const n of nums){allPrices.push(n);if(!isExTax)taxIncluded.push(n);}
+          }
+          if(taxIncluded.length){best=Math.max(...taxIncluded);break;}
+          if(allPrices.length&&!bestAll)bestAll=Math.max(...allPrices);
+        }
+      }finally{ await wk.setParameters({tessedit_pageseg_mode:"6"}); }
+      return best||bestAll||0;
+    });
+  }catch(e){console.log("tag OCR error:",e);return 0;}
+}
+
+// Fetch Rakuten product page and extract info (brand-English, size, rank, price)
+// ===== 通信テスト（楽天取得が失敗する原因を特定するための診断） =====
+window.runProxyTest=async function(){
+  const box=document.getElementById("proxyTestResult");
+  box.style.display="block";
+  box.innerHTML="🔧 テスト中... しばらくお待ちください";
+  const hinban=window._lastHinban||"";
+  const appId=getRakutenAppId();
+  const accessKey=getRakutenAccessKey();
+  let out='<div style="font-weight:800;margin-bottom:10px;">🔧 通信テスト結果</div>';
+
+  // ---- 1) 楽天公式API ----
+  out+='<div style="font-weight:700;font-size:12.5px;margin:8px 0 6px;">① 楽天公式API</div>';
+  if(!appId||!accessKey){
+    out+='<div style="color:var(--orange);font-size:12px;">⚠️ '
+      +(!appId?"アプリID未設定":"アクセスキー未設定（pk_ で始まる文字列）")
+      +'。「⚙️ 楽天APIを設定」から入力してください。</div>';
+  }else{
+    out+=`<div style="font-size:11px;color:var(--t3);margin-bottom:6px;">ID: ${esc(appId.slice(0,8))}… / Key: ${esc(accessKey.slice(0,6))}…</div>`;
+    const kw=hinban||"クロムハーツ";
+    let done=false;
+    for(const ver of RAKUTEN_VERSIONS){
+      if(done)break;
+      try{
+        const t0=Date.now();
+        const resp=await fetch(rakutenSearchUrl(kw,ver),{signal:AbortSignal.timeout(12000)});
+        const ms=Date.now()-t0;
+        const txt=await resp.text();
+        if(resp.ok){
+          let j=null;try{j=JSON.parse(txt);}catch(e){}
+          const n=(j&&j.Items)?j.Items.length:0;
+          if(n>0){
+            const it=j.Items[0].Item||j.Items[0];
+            out+=`<div style="color:var(--green);font-size:12.5px;">✅ 成功 [v${ver}]（${ms}ms）<br><span style="color:var(--t2);font-size:11.5px;word-break:break-all;">${esc((it.itemName||"").slice(0,70))}</span></div>`;
+          }else{
+            out+=`<div style="color:var(--orange);font-size:12.5px;">⚠️ 接続OK・該当0件 [v${ver}]（${ms}ms）<br><span style="font-size:11.5px;">「${esc(kw)}」がgsc-rinkan店に無い可能性。</span></div>`;
+          }
+          done=true;
+        }else{
+          let msg="";try{const j=JSON.parse(txt);msg=(j.error||"")+" "+(j.error_description||"");}catch(e){msg=txt.slice(0,120);}
+          out+=`<div style="color:#e5484d;font-size:12px;">❌ v${ver}: HTTP ${resp.status} ${esc(msg)}</div>`;
+          if(/Configuration not found/i.test(msg))out+='<div style="font-size:11px;color:var(--t2);margin:2px 0 6px;">→ このバージョンは廃止済み。次を試します。</div>';
+          else if(/accessKey/i.test(msg))out+='<div style="font-size:11px;color:var(--t2);">→ アクセスキーを確認してください。</div>';
+          else if(resp.status===403)out+='<div style="font-size:11px;color:var(--t2);">→ 許可ウェブサイトに 2002ogariku-design.github.io を追加してください。</div>';
+        }
+      }catch(e){
+        out+=`<div style="color:#e5484d;font-size:12px;">❌ v${ver}: ${esc(e.name==="TimeoutError"?"タイムアウト":(e.message||"接続失敗"))}</div>`;
+      }
+    }
+  }
+
+  // ---- 2) 中継サービス（予備） ----
+  out+='<div style="font-weight:700;font-size:12.5px;margin:14px 0 6px;">② 中継サービス（予備）</div>';
+  const testUrl=hinban?("https://item.rakuten.co.jp/gsc-rinkan/"+hinban):"https://item.rakuten.co.jp/gsc-rinkan/";
+  const proxies=[
+    ["allorigins","https://api.allorigins.win/raw?url="+encodeURIComponent(testUrl)],
+    ["codetabs","https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(testUrl)],
+    ["corsproxy","https://corsproxy.io/?url="+encodeURIComponent(testUrl)]
+  ];
+  for(const [name,u] of proxies){
+    const t0=Date.now();
+    try{
+      const resp=await fetch(u,{signal:AbortSignal.timeout(10000)});
+      const ms=Date.now()-t0;
+      if(!resp.ok){out+=`<div style="font-size:12px;">❌ ${name}: HTTP ${resp.status}（${ms}ms）</div>`;continue;}
+      const txt=await resp.text();
+      const okk=txt.length>500&&/rakuten/i.test(txt.slice(0,50000));
+      out+=`<div style="font-size:12px;">${okk?"✅":"⚠️"} ${name}: ${txt.length}文字（${ms}ms）</div>`;
+    }catch(e){
+      out+=`<div style="font-size:12px;">❌ ${name}: ${esc(e.name==="TimeoutError"?"タイムアウト":(e.message||"失敗"))}（${Date.now()-t0}ms）</div>`;
+    }
+  }
+  out+='<div style="font-size:11.5px;color:var(--t3);margin-top:10px;line-height:1.6;">①が✅なら公式API経由で取得できます。①が❌の場合、その内容をそのまま担当者に伝えてください。</div>';
+  box.innerHTML=out;
+};
+
+// ===== 買取速報モード（買取履歴から商品情報を取得） =====
+let STORY_KIND="sale"; // sale | buy
+let _kaitori=null,_kaitoriLoading=null;
+const SB_URL_S="https://laystqwmucuuvqtztloy.supabase.co";
+const SB_KEY_S="sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
+const SB_PW_S="rinkan-app-pw";
+function sanitizePwS(s){
+  if(!s)return "";
+  let t=String(s).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  return t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+}
+function getPwS(){ return "access"; }
+// 買取履歴はサイズが大きく毎回の取得が遅いので、端末にキャッシュして即表示する。
+// 表示後にバックグラウンドで最新を取り直す（stale-while-revalidate）。
+const KAITORI_CACHE="story-kaitori-cache-v1";
+function readKaitoriCache(){
+  try{
+    const raw=localStorage.getItem(KAITORI_CACHE);
+    if(!raw)return null;
+    const o=JSON.parse(raw);
+    return (o&&Array.isArray(o.items))?o:null;
+  }catch(e){return null;}
+}
+function writeKaitoriCache(items){
+  try{
+    // 画像等は無く軽いが、念のため必要な項目だけに絞って保存
+    const slim=items.map(it=>({brand:it.brand,name:it.name,item:it.item,size:it.size,
+      color:it.color,rank:it.rank,price:it.price,cost:it.cost,date:it.date,
+      store:it.store,origStore:it.origStore,buyer:it.buyer}));
+    localStorage.setItem(KAITORI_CACHE,JSON.stringify({at:Date.now(),items:slim}));
+  }catch(e){ /* 容量超過時は諦める */ }
+}
+async function loadKaitori(force){
+  if(_kaitori&&!force)return _kaitori;
+  if(_kaitoriLoading&&!force)return _kaitoriLoading;
+  _kaitoriLoading=(async()=>{
+    const r=await fetch("/api/sb?tool=eq.kaitori&select=payload",{
+      headers:{"Accept":"application/json"}
+    });
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    const p=rows.length?rows[0].payload:null;
+    _kaitori=(p&&p.items)?p.items:[];
+    writeKaitoriCache(_kaitori);
+    return _kaitori;
+  })();
+  return _kaitoriLoading;
+}
+function renderBuyResults(list){
+  const el=document.getElementById("buyResults");
+  if(!list.length){el.innerHTML='<div style="color:var(--t3);font-size:12.5px;padding:10px 0;">該当する商品がありません</div>';return;}
+  el.innerHTML=list.slice(0,80).map((it,i)=>`
+    <div class="buyItem" data-i="${i}" style="background:#fff;border:1px solid var(--line,#eee);border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;">
+      <div style="font-size:11px;color:var(--gold,#b8860b);font-weight:700;">${esc(it.brand||"")}</div>
+      <div style="font-size:13.5px;font-weight:700;line-height:1.35;">${esc(it.name||"")}</div>
+      <div style="font-size:11.5px;color:var(--t3);margin-top:3px;">
+        ${[it.item,it.size&&("size "+it.size),it.color,it.rank&&("ランク"+it.rank)].filter(Boolean).map(esc).join(" / ")}
+        ${it.date?" ・ "+esc(String(it.date)):""}
+      </div>
+      <div style="font-size:11.5px;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap;">
+        ${it.price?`<span>売価 <b>¥${Number(it.price).toLocaleString("ja-JP")}</b></span>`:""}
+        ${it.cost?`<span style="color:#b8860b;">買取 <b>¥${Number(it.cost).toLocaleString("ja-JP")}</b></span>`:""}
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap;">
+        ${(it.store||it.origStore)?`<span>🏬 ${esc(it.store||it.origStore)}</span>`:""}
+        ${it.buyer?`<span>👤 ${esc(it.buyer)}</span>`:""}
+      </div>
+    </div>`).join("");
+  el.querySelectorAll(".buyItem").forEach(d=>{
+    d.addEventListener("click",()=>applyBuyItem(list[Number(d.dataset.i)]));
+  });
+}
+// カタカナのブランド名を英語表記に変換する（買取履歴はカタカナ表記のため）
+// 「A×B」のコラボ表記にも対応し、それぞれを英語化して繋ぎ直す。
+function toEnglishBrand(name){
+  const s=String(name||"").trim();
+  if(!s)return "";
+  // コラボ表記は分割して個別に変換
+  if(/[×✕xX]/.test(s)&&/[\u3040-\u30FF]/.test(s)){
+    const parts=s.split(/\s*[×✕]\s*/);
+    if(parts.length>1)return parts.map(p=>toEnglishBrandOne(p)).join(" × ");
+  }
+  return toEnglishBrandOne(s);
+}
+function toEnglishBrandOne(name){
+  const s=String(name||"").trim();
+  if(!s)return "";
+  // 既に英字主体ならそのまま
+  if(!/[\u3040-\u30FF\u4E00-\u9FFF]/.test(s))return s;
+  const map=(typeof BRAND_MAP!=="undefined")?BRAND_MAP:{};
+  // 表記ゆれ吸収：中黒・長音・空白を無視して比較する
+  const norm=x=>String(x).replace(/[・\s]/g,"").replace(/[ーｰ−-]/g,"");
+  const target=norm(s);
+  const keys=Object.keys(map).sort((a,b)=>b.length-a.length);
+  for(const k of keys){ if(norm(k)===target)return map[k]; }
+  for(const k of keys){ if(target.startsWith(norm(k))||target.includes(norm(k)))return map[k]; }
+  return s; // 辞書になければそのまま
+}
+function applyBuyItem(it){
+  document.getElementById("sBrand").value=toEnglishBrand(it.brand||"");
+  document.getElementById("sSize").value=it.size||"";
+  setRank((it.rank||"").toUpperCase());
+  const showPrice=document.getElementById("buyShowPrice").checked;
+  const showCost=document.getElementById("buyShowCost").checked;
+  document.getElementById("sPrice").value=(showPrice&&it.price)?String(it.price):"";
+  // 買取金額（エクセルの原価欄）。画像上に「買取金額 ¥○○」として描画する。
+  window._buyCost=(showCost&&it.cost)?Number(it.cost):0;
+  // 買取速報向けの下部テキストを初期値に
+  const tag=document.getElementById("sTag");
+  if(!tag.value||/DM/.test(tag.value))tag.value="💰高価買取いたしました";
+  window._buyItem=it;
+  drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+  document.getElementById("buyStatus").innerHTML='<span style="color:var(--green);font-weight:700;">✓ '+esc(it.brand||"")+' を読み込みました</span>'
+    +((it.store||it.origStore||it.buyer)?'<span style="color:var(--t3);"> ／ '+esc([it.store||it.origStore,it.buyer].filter(Boolean).join(" ・ "))+'</span>':"");
+}
+// 買取日を YYYY-MM-DD に正規化する（エクセル由来で表記がまちまちなため）
+function normBuyDate(d){
+  if(!d)return "";
+  const s=String(d).trim();
+  // 「2026/8/30 16:23」のように時刻付きでも日付部分だけを取る
+  let m=s.match(/(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  m=s.match(/^(\d{1,2})[-\/](\d{1,2})$/);
+  if(m)return `${new Date().getFullYear()}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  m=s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  // Excelシリアル値：時刻を含むと現地時刻換算で翌日にズレるため、
+  // 整数部（日付）だけをUTC基準で読む。
+  const n=Number(s);
+  if(!isNaN(n)&&n>25000&&n<60000){
+    const dt=new Date(Math.floor(n-25569)*86400*1000);
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,"0")}-${String(dt.getUTCDate()).padStart(2,"0")}`;
+  }
+  return "";
+}
+function ymdStr(offsetDays){
+  const d=new Date();
+  if(offsetDays)d.setDate(d.getDate()+offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+let buyDayMode="today";
+// 日付プルダウンを、実際にデータがある日付で作る
+function fillBuyDateSel(){
+  const sel=document.getElementById("buyDateSel");
+  if(!sel||!_kaitori)return;
+  const counts={};
+  _kaitori.forEach(it=>{const d=normBuyDate(it.date);if(d)counts[d]=(counts[d]||0)+1;});
+  const dates=Object.keys(counts).sort().reverse().slice(0,60);
+  const cur=sel.value;
+  sel.innerHTML='<option value="">▼ 買取日を直接選ぶ</option>'
+    +dates.map(d=>`<option value="${d}">${d.replace(/-/g,"/")}（${counts[d]}点）</option>`).join("");
+  if(dates.includes(cur))sel.value=cur;
+}
+let buyBrandPick="", buyItemPick="", buyStorePick="", buyBuyerPick="";
+// その日のデータに実際に含まれる 店舗／バイヤー／ブランド／アイテム をチップにする
+function renderBuyChips(dayList){
+  const els={store:document.getElementById("buyStoreChips"),buyer:document.getElementById("buyBuyerChips"),
+             brand:document.getElementById("buyBrandChips"),item:document.getElementById("buyItemChips")};
+  if(!els.brand)return;
+  const count=(arr,getter)=>{const m={};arr.forEach(it=>{const v=(getter(it)||"").trim();if(v)m[v]=(m[v]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+  const defs=[
+    {el:els.store, get:it=>it.store||it.origStore, pick:()=>buyStorePick, set:v=>buyStorePick=v, all:"全店舗",   attr:"s", max:12},
+    {el:els.buyer, get:it=>it.buyer,               pick:()=>buyBuyerPick, set:v=>buyBuyerPick=v, all:"全バイヤー", attr:"y", max:12},
+    {el:els.brand, get:it=>it.brand,               pick:()=>buyBrandPick, set:v=>buyBrandPick=v, all:"全ブランド", attr:"b", max:14},
+    {el:els.item,  get:it=>it.item,                pick:()=>buyItemPick,  set:v=>buyItemPick=v,  all:"全アイテム", attr:"i", max:14},
+  ];
+  for(const d of defs){
+    if(!d.el)continue;
+    const list=count(dayList,d.get).slice(0,d.max);
+    d.el.innerHTML=list.length>1
+      ? `<span class="chip${d.pick()?"":" on"}" data-v="">${d.all}</span>`
+        +list.map(([v,n])=>`<span class="chip${d.pick()===v?" on":""}" data-v="${esc(v)}">${esc(v)} <span style="opacity:.55;">${n}</span></span>`).join("")
+      : "";
+    d.el.querySelectorAll(".chip").forEach(el=>el.addEventListener("click",()=>{d.set(el.dataset.v||"");doBuySearch();}));
+  }
+}
+function doBuySearch(){
+  if(!_kaitori)return;
+  const q=(document.getElementById("buySearch").value||"").trim().toLowerCase();
+  const pickDate=document.getElementById("buyDateSel").value;
+  let list=_kaitori.slice();
+  // 1) 日付で絞る（買取速報は当日分を出すことが多いので既定は本日）
+  if(pickDate){
+    list=list.filter(it=>normBuyDate(it.date)===pickDate);
+  }else if(buyDayMode==="today"){
+    const t=ymdStr(0);list=list.filter(it=>normBuyDate(it.date)===t);
+  }else if(buyDayMode==="yesterday"){
+    const t=ymdStr(-1);list=list.filter(it=>normBuyDate(it.date)===t);
+  }else if(buyDayMode==="week"){
+    const from=ymdStr(-6);list=list.filter(it=>{const d=normBuyDate(it.date);return d&&d>=from;});
+  }
+  // チップはこの時点（日付で絞った状態）の内訳から作る
+  const dayList=list.slice();
+  // 2) ブランド／アイテムのチップで絞る
+  if(buyStorePick)list=list.filter(it=>((it.store||it.origStore||"").trim())===buyStorePick);
+  if(buyBuyerPick)list=list.filter(it=>(it.buyer||"").trim()===buyBuyerPick);
+  if(buyBrandPick)list=list.filter(it=>(it.brand||"").trim()===buyBrandPick);
+  if(buyItemPick)list=list.filter(it=>(it.item||"").trim()===buyItemPick);
+  // 3) キーワードでさらに絞る
+  if(q)list=list.filter(it=>((it.brand||"")+" "+(it.name||"")+" "+(it.item||"")+" "+(it.color||"")+" "+(it.store||it.origStore||"")+" "+(it.buyer||"")).toLowerCase().includes(q));
+  // 4) 並び替え
+  const sort=(document.getElementById("buySort")||{}).value||"new";
+  if(sort==="costHigh")list.sort((a,b)=>(Number(b.cost)||0)-(Number(a.cost)||0));
+  else if(sort==="priceHigh")list.sort((a,b)=>(Number(b.price)||0)-(Number(a.price)||0));
+  else if(sort==="brand")list.sort((a,b)=>String(a.brand||"").localeCompare(String(b.brand||""),"ja"));
+  else list.sort((a,b)=>String(normBuyDate(b.date)).localeCompare(String(normBuyDate(a.date))));
+
+  renderBuyChips(dayList);
+  const st=document.getElementById("buyStatus");
+  if(st&&!/読み込み中|失敗/.test(st.textContent)){
+    const label=pickDate?pickDate.replace(/-/g,"/")
+      :(buyDayMode==="today"?"本日":buyDayMode==="yesterday"?"昨日":buyDayMode==="week"?"直近7日間":"全期間");
+    const narrowed=[buyStorePick,buyBuyerPick,buyBrandPick,buyItemPick,q].filter(Boolean).length;
+    st.innerHTML=`<b>${label}</b>：${list.length}件${narrowed?` <span style="color:var(--t3);">（${dayList.length}件から絞り込み）</span>`:""}`
+      +(list.length===0&&buyDayMode==="today"&&!narrowed?' <span style="color:var(--orange);">（本日の買取はまだありません。「昨日」や「7日間」をお試しください）</span>':"");
+  }
+  renderBuyResults(list);
+}
+document.getElementById("buySort").addEventListener("change",doBuySearch);
+document.querySelectorAll("#buyDaySeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.toggle("on",x===b));
+    buyDayMode=b.dataset.d;
+    buyBrandPick="";buyItemPick="";buyStorePick="";buyBuyerPick=""; // 日を変えたらチップ選択もリセット
+    document.getElementById("buyDateSel").value=""; // 直接選択を解除
+    doBuySearch();
+  });
+});
+document.getElementById("buyDateSel").addEventListener("change",()=>{
+  buyBrandPick="";buyItemPick="";buyStorePick="";buyBuyerPick="";
+  document.querySelectorAll("#buyDaySeg button").forEach(x=>x.classList.remove("on"));
+  doBuySearch();
+});
+document.getElementById("buyLoadBtn").addEventListener("click",async()=>{
+  const st=document.getElementById("buyStatus");
+  st.textContent="買取履歴を読み込み中...";
+  try{
+    await loadKaitori(true);
+    st.textContent='';
+    fillBuyDateSel();doBuySearch();
+  }catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'</span>'; }
+});
+document.getElementById("buySearch").addEventListener("input",doBuySearch);
+document.getElementById("buyShowPrice").addEventListener("change",()=>{
+  if(window._buyItem)applyBuyItem(window._buyItem);
+});
+document.getElementById("buyShowCost").addEventListener("change",e=>{
+  document.getElementById("buyNoteRow").style.display=e.target.checked?"block":"none";
+  if(window._buyItem)applyBuyItem(window._buyItem);
+});
+document.getElementById("buyNote").addEventListener("input",()=>{
+  drawStory();
+  if(document.getElementById("captionBox").value)regenCaption();
+});
+// 種類切替
+document.querySelectorAll("#kindSeg button").forEach(b=>{
+  b.addEventListener("click",async()=>{
+    document.querySelectorAll("#kindSeg button").forEach(x=>x.classList.toggle("on",x===b));
+    STORY_KIND=b.dataset.k;
+    const buy=STORY_KIND==="buy";
+    document.getElementById("buyPanel").style.display=buy?"block":"none";
+    const bp2=document.getElementById("batchPanel");if(bp2)bp2.style.display=buy?"none":"block";
+    const lr=document.getElementById("loanOn");
+    if(lr&&lr.parentElement&&lr.parentElement.parentElement)lr.parentElement.parentElement.style.display=buy?"none":"block";
+    document.getElementById("tagScanCol").style.display=buy?"none":"block";
+    if(buy){
+      const st=document.getElementById("buyStatus");
+      if(!_kaitori){
+        // まずキャッシュを即表示（待たせない）
+        const cache=readKaitoriCache();
+        if(cache&&cache.items.length){
+          _kaitori=cache.items;
+          st.textContent="";
+          fillBuyDateSel();doBuySearch();
+          // 裏で最新を取得して差し替え
+          loadKaitori(true).then(()=>{
+            fillBuyDateSel();doBuySearch();
+          }).catch(()=>{ st.innerHTML=`${_kaitori.length}件を表示中 <span style="color:var(--orange);">（最新の取得に失敗・🔄で再試行）</span>`; });
+        }else{
+          st.textContent="買取履歴を読み込み中...";
+          try{ await loadKaitori(); st.textContent=''; fillBuyDateSel(); doBuySearch(); }
+          catch(e){ st.innerHTML='<span style="color:#e5484d;">読み込み失敗：'+esc(e.message)+'（🔄読込を押して再試行）</span>'; }
+        }
+      }else{
+        fillBuyDateSel();doBuySearch();
+      }
+      const tag=document.getElementById("sTag");
+      if(!tag.value||/DM/.test(tag.value))tag.value="💰高価買取いたしました";
+    }
+    drawStory();
+  });
+});
+/* ========= 共有ファイル（ピッキングツールと同じ場所を読む） ========= */
+// Supabaseが無料プランで勝手に止まるため、GitHub上のJSONファイルに移した。
+const GH_PICK_API="https://api.github.com/repos/2002ogariku-design/yoyaku/contents/shibuya-tk/pick-data.json";
+const GH_TK_S="tk-gh-token";   // タスク集計・ピッキングと同じキー
+let ghShaS=null;
+function peekKeyS(){try{return String(localStorage.getItem(GH_TK_S)||"").trim();}catch(e){return"";}}
+function getKeyS(){ return "access"; }
+function ghHeadersS(t){return {"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json","Content-Type":"application/json"};}
+function u2bS(x){return btoa(unescape(encodeURIComponent(x)));}
+function b2uS(b){return decodeURIComponent(escape(atob(String(b).replace(/\n/g,""))));}
+async function ghRetryS(url,opt,tries){
+  tries=tries||3; let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(r=>setTimeout(r,600*(i+1))); }
+  }
+  throw last||new Error("通信できませんでした");
+}
+async function ghAllS(){
+  const r=await ghRetryS(`/api/kv?store=shibuya&ts=${Date.now()}`,{headers:{"Accept":"application/json"}});
+  if(r.status===401||r.status===403){ location.reload(); return {}; }
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return (await r.json())||{};
+}
+async function shareGetS(tool){
+  const r=await ghRetryS(`/api/kv?store=shibuya&tool=${encodeURIComponent(tool)}&ts=${Date.now()}`,{headers:{"Accept":"application/json"}});
+  if(r.status===401||r.status===403){ location.reload(); return null; }
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return await r.json();
+}
+async function sharePutS(tool,payload){
+  let value=payload;
+  if(typeof payload==="function"){
+    let cur=null; try{ cur=await shareGetS(tool); }catch(e){}
+    value=payload(cur||null);
+  }
+  const r=await ghRetryS(`/api/kv?store=shibuya&tool=${encodeURIComponent(tool)}`,
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
+  if(r.status===401||r.status===403){ location.reload(); return; }
+  if(!r.ok)throw new Error("保存失敗 "+r.status);
+}
+
+/* ========= 楽天APIキーの共有 ========= */
+// 端末ごとに入力させないよう共有DBに置き、誰か一人が設定すれば全員が使えるようにする。
+const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
+async function loadRakutenKeysShared(){
+  try{
+    const p=await shareGetS(RK_SHARE_TOOL);
+    const kk=p&&p.rkKeys;
+    if(kk&&kk.appId&&kk.accessKey){
+      try{
+        localStorage.setItem(RAKUTEN_APPID_KEY,kk.appId);
+        localStorage.setItem(RAKUTEN_KEY_KEY,kk.accessKey);
+      }catch(e){}
+      updateApiBadge();
+    }
+  }catch(e){}
+}
+// 既存の共有先の中にキーを入れる。他の内容は消さないよう引き継ぐ。
+async function saveRakutenKeysShared(appId,accessKey){
+  // 共有ファイルは公開リポジトリにあるため、キーをここに書かない。
+  // キーは各端末のlocalStorageにのみ保存する（呼び出し側で保存済み）。
+  return {ok:true,localOnly:true};
+}
+const RAKUTEN_APPID_KEY="rakuten-appid";
+const RAKUTEN_KEY_KEY="rakuten-accesskey";
+function getRakutenAppId(){try{return localStorage.getItem(RAKUTEN_APPID_KEY)||"";}catch(e){return "";}}
+function getRakutenAccessKey(){try{return localStorage.getItem(RAKUTEN_KEY_KEY)||"";}catch(e){return "";}}
+window.setRakutenAppId=function(){
+  const curId=getRakutenAppId();
+  const id=prompt("① アプリID（applicationId）を入力してください。\n\nUUID形式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\n空欄で保存すると解除します。",curId||"");
+  if(id==null)return;
+  const t=id.trim();
+  if(!t){
+    try{localStorage.removeItem(RAKUTEN_APPID_KEY);localStorage.removeItem(RAKUTEN_KEY_KEY);}catch(e){}
+    alert("設定を解除しました。");updateApiBadge();return;
+  }
+  const curKey=getRakutenAccessKey();
+  const key=prompt("② アクセスキー（accessKey）を入力してください。\n\n「pk_」から始まる文字列です。\n楽天の管理画面でアプリIDの下に表示されています。",curKey||"");
+  if(key==null)return;
+  const k=key.trim();
+  try{
+    localStorage.setItem(RAKUTEN_APPID_KEY,t);
+    if(k)localStorage.setItem(RAKUTEN_KEY_KEY,k); else localStorage.removeItem(RAKUTEN_KEY_KEY);
+  }catch(e){}
+  updateApiBadge();
+  if(t&&k){
+    saveRakutenKeysShared(t,k).then(res=>{
+      alert(res.ok?"保存し、全員で使えるように共有しました。\n他の端末では入力不要になります。"
+              :"この端末には保存しました。\n\n全員への共有に失敗しました：\n"+res.err);
+    });
+  }else{
+    alert("アプリIDのみ保存しました。アクセスキーも必要です。");
+  }
+};
+function updateApiBadge(){
+  const el=document.getElementById("apiStatus");
+  if(!el)return;
+  const id=getRakutenAppId(), key=getRakutenAccessKey();
+  el.innerHTML=(id&&key)
+    ? '<span style="color:var(--green);font-weight:700;">✅ 楽天公式API 設定済み</span>'
+    : (id&&!key)
+      ? '<span style="color:var(--orange);font-weight:700;">⚠️ アクセスキー未設定（⚙️から入力してください）</span>'
+      : '<span style="color:var(--orange);font-weight:700;">⚠️ 楽天API未設定</span>';
+}
+// 新エンドポイント（2026年2月移行後）
+// 2026-08-17 に 20220601 は完全廃止。現行は 20260401。
+// 将来また変わる可能性があるので、複数バージョンを順に試す。
+const RAKUTEN_VERSIONS=["20260401","20220601"];
+const RAKUTEN_ENDPOINT="https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+RAKUTEN_VERSIONS[0];
+function rakutenSearchUrl(keyword,version){
+  return "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/"+(version||RAKUTEN_VERSIONS[0])
+    +"?applicationId="+encodeURIComponent(getRakutenAppId())
+    +"&accessKey="+encodeURIComponent(getRakutenAccessKey())
+    +"&keyword="+encodeURIComponent(keyword)
+    +"&shopCode=gsc-rinkan&hits=1&format=json";
+}
+// 品番から楽天公式APIで商品情報を取得する
+// ブランド辞書（カタカナ→英語表記）。値札スキャン・買取速報の両方で使う。
+  const BRAND_MAP={
+    "クロムハーツ":"CHROME HEARTS","ゴローズ":"goro's","エルメス":"HERMES",
+    "ルイヴィトン":"LOUIS VUITTON","ルイ・ヴィトン":"LOUIS VUITTON","シュプリーム":"SUPREME",
+    "バレンシアガ":"BALENCIAGA","ディオール":"DIOR","グッチ":"GUCCI","プラダ":"PRADA",
+    "セリーヌ":"CELINE","ロエベ":"LOEWE","サンローラン":"SAINT LAURENT","フェンディ":"FENDI",
+    "ボッテガヴェネタ":"BOTTEGA VENETA","ボッテガ":"BOTTEGA VENETA","モンクレール":"MONCLER",
+    "バーバリー":"BURBERRY","リックオウエンス":"RICK OWENS","アミリ":"AMIRI","エイミリ":"AMIRI",
+    "メゾンマルジェラ":"MAISON MARGIELA","マルジェラ":"MAISON MARGIELA","ヴェトモン":"VETEMENTS",
+    "ロレックス":"ROLEX","カルティエ":"CARTIER","ティファニー":"TIFFANY & CO.","オフホワイト":"OFF-WHITE",
+    "ネイバーフッド":"NEIGHBORHOOD","ステューシー":"STUSSY","パレス":"PALACE","アンブッシュ":"AMBUSH",
+    "ヴァンクリーフ":"VAN CLEEF & ARPELS","ブルガリ":"BVLGARI","シャネル":"CHANEL","オメガ":"OMEGA",
+    "パテックフィリップ":"PATEK PHILIPPE","オーデマピゲ":"AUDEMARS PIGUET","ヴァシュロンコンスタンタン":"VACHERON CONSTANTIN",
+    "ジバンシー":"GIVENCHY","バンズ":"VANS","ナイキ":"NIKE","ニューバランス":"NEW BALANCE",
+    "アークテリクス":"ARC'TERYX","ストーンアイランド":"STONE ISLAND","アップルウォッチ":"APPLE WATCH",
+    "ウブロ":"HUBLOT","タグホイヤー":"TAG HEUER","IWC":"IWC","パネライ":"PANERAI","ブライトリング":"BREITLING",
+    "アクネストゥディオズ":"ACNE STUDIOS","アクネ":"ACNE STUDIOS","マルタンマルジェラ":"MAISON MARGIELA",
+    "コムデギャルソン":"COMME des GARCONS","イヴサンローラン":"SAINT LAURENT","イブサンローラン":"SAINT LAURENT",
+    "アレキサンダーマックイーン":"ALEXANDER McQUEEN","トムブラウン":"THOM BROWNE","ヨウジヤマモト":"YOHJI YAMAMOTO",
+    "アンダーカバー":"UNDERCOVER","ワコマリア":"WACKO MARIA","ヒステリックグラマー":"HYSTERIC GLAMOUR",
+    "エンノイ":"ENNOY","エフシーアールビー":"F.C.Real Bristol","フラグメント":"fragment design",
+    "キャピタル":"KAPITAL","サカイ":"sacai","ジュンヤワタナベ":"JUNYA WATANABE","カラー":"kolor",
+    "ニードルス":"Needles","エムエムシックス":"MM6","ジルサンダー":"JIL SANDER","マルニ":"MARNI",
+    "ドリスヴァンノッテン":"DRIES VAN NOTEN","ラフシモンズ":"RAF SIMONS","ヴィヴィアンウエストウッド":"Vivienne Westwood",
+    "ディースクエアード":"DSQUARED2","ヴァレンティノ":"VALENTINO","フェラガモ":"Salvatore Ferragamo",
+    "トッズ":"TOD'S","コーチ":"COACH","マイケルコース":"MICHAEL KORS","トリーバーチ":"TORY BURCH",
+    "ケンゾー":"KENZO","イッセイミヤケ":"ISSEY MIYAKE","ポールスミス":"Paul Smith","エトロ":"ETRO",
+    "モンブラン":"MONTBLANC","グッチ":"GUCCI","ゼニア":"Ermenegildo Zegna","ブリオーニ":"BRIONI",
+    "オーラリー":"AURALEE","コモリ":"COMOLI","グラフペーパー":"Graphpaper","ヒューマンメイド":"HUMAN MADE",
+    "ガールズドントクライ":"Girls Don't Cry","ヴァーディ":"Verdy","ノースフェイス":"THE NORTH FACE",
+    "パタゴニア":"patagonia","カナダグース":"CANADA GOOSE","モンクレールジーニアス":"MONCLER GENIUS",
+    "ディオールオム":"Dior Homme","バルマン":"BALMAIN","ケイタマルヤマ":"KEITA MARUYAMA",
+    "エンポリオアルマーニ":"EMPORIO ARMANI","ジョルジオアルマーニ":"GIORGIO ARMANI","アルマーニ":"ARMANI",
+    "フラグメントデザイン":"fragment design","ポケモン":"POKEMON","ナイキ":"NIKE",
+    "アンファンリッシュデプリメ":"ENFANTS RICHES DEPRIMES","エンファンリッシュデプリメ":"ENFANTS RICHES DEPRIMES",
+    "ゴヤール":"GOYARD","ヴェルサーチ":"VERSACE","ミュウミュウ":"MIU MIU","ロクシタン":"L'OCCITANE",
+    "サンローランパリ":"SAINT LAURENT","クリスチャンディオール":"Christian Dior","クロエ":"Chloe",
+    "ジミーチュウ":"JIMMY CHOO","バレンシアガキッズ":"BALENCIAGA","メゾンキツネ":"MAISON KITSUNE",
+    "アディダス":"adidas","プーマ":"PUMA","リーバイス":"Levi's","カーハート":"Carhartt",
+    "チャンピオン":"Champion","ラルフローレン":"Ralph Lauren","トミーヒルフィガー":"TOMMY HILFIGER",
+    "ラコステ":"LACOSTE","モスキーノ":"MOSCHINO","ケンゾー":"KENZO","エルメネジルドゼニア":"Ermenegildo Zegna",
+    "ジャンポールゴルチエ":"Jean Paul GAULTIER","イッセイミヤケメン":"ISSEY MIYAKE MEN",
+    "ホワイトマウンテニアリング":"White Mountaineering","サカイ":"sacai","トーガ":"TOGA",
+    "ミハラヤスヒロ":"MIHARA YASUHIRO","タカヒロミヤシタ":"TAKAHIROMIYASHITA","ソロイスト":"TheSoloist",
+    "ナンバーナイン":"NUMBER (N)INE","ジュンヤワタナベマン":"JUNYA WATANABE MAN",
+    "ダブルタップス":"WTAPS","ダブルタップス":"WTAPS","ヒューマンメイド":"HUMAN MADE",
+    "エヴィス":"EVISU","ヴィジョンストリートウェア":"VISION STREET WEAR","シュプリームxナイキ":"SUPREME × NIKE",
+    "ヴェトモン":"VETEMENTS","ミスターコンプリートリー":"MR.COMPLETELY","セントマイケル":"SAINT MICHAEL",
+    "リーボック":"Reebok","コンバース":"CONVERSE","ヴァンズ":"VANS","オニツカタイガー":"Onitsuka Tiger",
+    "アシックス":"ASICS","サロモン":"SALOMON","ホカオネオネ":"HOKA ONE ONE","メゾンミハラヤスヒロ":"Maison MIHARA YASUHIRO"
+  };
+
+async function fetchRakutenAPI(hinban){
+  if(!getRakutenAppId()||!getRakutenAccessKey()||!hinban)return null;
+  for(const ver of RAKUTEN_VERSIONS){
+    try{
+      const resp=await fetch(rakutenSearchUrl(hinban,ver),{signal:AbortSignal.timeout(6000)});
+      if(!resp.ok){console.log("Rakuten API",ver,"HTTP",resp.status);continue;}
+      const j=await resp.json();
+      if(!j.Items||!j.Items.length)return null; // 接続成功・該当なし
+      const it=j.Items[0].Item||j.Items[0];
+      return {name:it.itemName||"", caption:it.itemCaption||"", price:Number(it.itemPrice)||0, url:it.itemUrl||""};
+    }catch(e){console.log("Rakuten API",ver,"error",e.message);}
+  }
+  return null;
+}
+
+async function fetchRakuten(url){
+  const proxies=[
+    u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+    u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u),
+    u=>"https://corsproxy.io/?url="+encodeURIComponent(u),
+    u=>"https://proxy.cors.sh/"+u,
+    u=>"https://cors-anywhere.herokuapp.com/"+u,
+    u=>"https://api.cors.lol/?url="+encodeURIComponent(u),
+    u=>"https://test.cors.workers.dev/?"+u
+  ];
+  let html2="";
+  for(const mk of proxies){
+    try{
+      const resp=await fetch(mk(url),{signal:AbortSignal.timeout(4000)});
+      if(resp&&resp.ok){const t=await resp.text();if(t&&t.length>500){html2=t;break;}}
+    }catch(e){console.log("proxy fail:",e.message);}
+  }
+  if(!html2)return{ok:false};
+  return parseRakutenHtml(html2);
+}
+
+// 楽天ページ(HTML)から ブランド/サイズ/ランク/価格 を抽出する。
+// 公式API経由の場合も、商品名を og:title 形式に包んでこの関数に通す。
+function parseRakutenHtml(html2){
+
+  const out={ok:true,brand:"",size:"",rank:"",price:0};
+
+  // Gather title from multiple sources (og:title is usually cleanest)
+  let title="";
+  const ogT=html2.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+  if(ogT)title=ogT[1];
+  if(!title){const tM=html2.match(/<title[^>]*>([^<]+)<\/title>/i);if(tM)title=tM[1];}
+  title=title.replace(/【楽天市場】/g,"").replace(/｜.*$/,"").trim();
+  console.log("Rakuten title:",title);
+
+  // Also grab full product name area for pattern matching (title + description)
+  let searchText=title;
+  const descM=html2.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  if(descM)searchText+=" "+descM[1];
+
+  // RANK: RINKAN uses "#rinkan*X" format
+  const rkM=html2.match(/#rinkan\*([NSABCD])/i)||searchText.match(/#rinkan\*([NSABCD])/i)||searchText.match(/rinkan[*＊]?\s*([NSABCD])\b/i);
+  if(rkM)out.rank=rkM[1].toUpperCase();
+
+  // SIZE: "サイズ:XX" format
+  const szM=searchText.match(/サイズ[:：]\s*([A-Za-z0-9.\/]+)/);
+  if(szM&&szM[1].length<=6)out.size=szM[1];
+
+  // BRAND (English): RINKAN title starts with "カタカナ英語ブランド Englishブランド ..."
+  // Use known-brand dictionary for clean names
+  const brandMap=BRAND_MAP;
+  // Match leading katakana brand — longest match first (so ボッテガヴェネタ beats ボッテガ)
+  const sortedJp=Object.keys(brandMap).sort((a,b)=>b.length-a.length);
+  for(const jp of sortedJp){
+    if(title.startsWith(jp)){out.brand=brandMap[jp];break;}
+  }
+  // If dictionary hit, still verify against the title's own English (RINKAN always
+  // prints "カタカナ English" — the English there is authoritative for spelling/multi-word)
+  {
+    const afterJp=title.match(/^[\u3040-\u30FF\u4E00-\u9FFF・ー]+[\s　]+(.+)/);
+    if(afterJp){
+      const words=afterJp[1].split(/[\s　]+/);
+      const brandWords=[];
+      let allCapsRun=0;
+      for(const w of words){
+        if(/[\u3040-\u30FF\u4E00-\u9FFF]/.test(w))break;   // hit Japanese → brand ended
+        if(/サイズ|size/i.test(w))break;
+        if(/\d/.test(w))break;                             // model codes contain digits
+        if(!/^[A-Za-z][A-Za-z'&.\-]*$/.test(w)&&w!=="&"&&w!=="des"&&w!=="by")break;
+        // Detect model-code run: short ALL-CAPS tokens (PT, TNY, CRSF...) appearing after
+        // we already have a brand word. Two such in a row = model codes, stop.
+        const isShortCaps=/^[A-Z]{2,4}$/.test(w);
+        if(brandWords.length>=1&&isShortCaps){allCapsRun++;if(allCapsRun>=1)break;}
+        else allCapsRun=0;
+        brandWords.push(w);
+        if(brandWords.length>=4)break;                     // brands rarely exceed 4 words
+      }
+      if(brandWords.length){
+        const titleBrand=brandWords.join(" ");
+        if(!out.brand || titleBrand.split(" ").length>out.brand.split(" ").length){
+          out.brand=titleBrand;
+        }
+      }
+    }
+  }
+  // Structured-data brand as another fallback
+  if(!out.brand){
+    const sdBrand=html2.match(/itemprop=["']brand["'][^>]*>[\s\S]{0,120}?itemprop=["']name["'][^>]*content=["']([^"']+)["']/i)
+      ||html2.match(/"brand"\s*:\s*{[^}]*"name"\s*:\s*"([^"]+)"/i)
+      ||html2.match(/"brand"\s*:\s*"([^"]+)"/i);
+    if(sdBrand)out.brand=sdBrand[1].trim();
+  }
+  // Absolute last resort: first English phrase
+  if(!out.brand){
+    const eng=title.match(/[A-Z][A-Za-z'&.\-]+(?:\s+[A-Z][A-Za-z'&.\-]+)?/);
+    if(eng)out.brand=eng[0];
+  }
+
+  // PRICE: try JSON-LD first, then patterns
+  try{
+    const lds=[...html2.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for(const m of lds){
+      let data;try{data=JSON.parse(m[1].trim());}catch(e){continue;}
+      const arr=Array.isArray(data)?data:[data];
+      for(const d of arr){
+        const off=d.offers?(Array.isArray(d.offers)?d.offers[0]:d.offers):null;
+        if(off&&off.price){const p=Number(String(off.price).replace(/[^\d]/g,""));if(p>=100)out.price=p;}
+      }
+    }
+  }catch(e){}
+  if(!out.price){
+    const pats=[/itemprice["'\s:]*(\d[\d,]{3,})/i,/税込[^\d]{0,6}(\d[\d,]{3,})/,/"price"\s*:\s*"?(\d[\d,]{3,})/i,/(\d{2,3},\d{3})\s*円/];
+    for(const pt of pats){const m=html2.match(pt);if(m){const p=Number(m[1].replace(/,/g,""));if(p>=1000&&p<100000000){out.price=p;break;}}}
+  }
+
+  return out;
+}
+
+
+function drawStory(){
+  const W=1080,H=1920;
+  cx.clearRect(0,0,W,H);
+  drawSinglePanel(cx,W,H,{
+    img:photoImg,offX:photoOffX,offY:photoOffY,zoom:photoZoom,
+    brand:document.getElementById("sBrand").value.trim(),
+    size:document.getElementById("sSize").value.trim(),
+    rank:document.getElementById("sRank").value.trim(),
+    price:document.getElementById("sPrice").value.replace(/[^\d]/g,""),
+    tag:(function(){const t=document.getElementById("tagShow");
+      return (t&&!t.checked)?"":document.getElementById("sTag").value.trim();})(),
+    tagColor:tagColor
+  },TEMPLATE,textScale,true);
+}
+
+// Draw one full-frame story panel (used for single mode and as base for collage cells).
+function drawSinglePanel(ctx,W,H,data,tpl,scale,fullFrame){
+  const T=TEMPLATES[tpl]||TEMPLATES.classic;
+  const serif="'Hiragino Mincho ProN','Yu Mincho',serif";
+  const wt=T.weight||500;
+  // 白背景で置くときは、文字を黒系にして影やグラデーションも切る
+  const LIGHT=((typeof PHOTO_FIT!=="undefined")?PHOTO_FIT:"cover")==="contain";
+  const INK=LIGHT?"#17171b":"#fff";
+  const INK_SUB=LIGHT?"rgba(0,0,0,.62)":"rgba(255,255,255,.88)";
+  // photo
+  if(data.img){
+    // 「埋める」＝画面いっぱい（撮影写真向き）
+    // 「全体を入れる」＝商品が切れない（白背景の商品画像向き）
+    const fit=(typeof PHOTO_FIT!=="undefined")?PHOTO_FIT:"cover";
+    const base=(fit==="contain")
+      ? Math.min(W/data.img.width,(H*(FIT_AREA||0.62))/data.img.height)
+      : Math.max(W/data.img.width,H/data.img.height);
+    const s=base*(data.zoom||1);
+    const w=data.img.width*s,h=data.img.height*s;
+    const maxDX=Math.max(0,(w-W)/2), maxDY=Math.max(0,(h-H)/2);
+    const dx=(W-w)/2 + (data.offX||0)*maxDX;
+    let dy=(H-h)/2 + (data.offY||0)*maxDY;
+    if(fit==="contain"){
+      // 文字が入る下側を空けて、写真は少し上寄りの中央に置く
+      // 文字が下に入るぶんだけ中心を上げ、どの商品でも同じ位置に揃える
+      dy=(H*(FIT_TOP||0.42))-h/2 + (data.offY||0)*Math.max(40,H*0.12);
+    }
+    const fx=PHOTO_FX;
+    if(fit==="contain"){
+      // 商品画像は白背景で統一する（隅の色を拾うと商品の色が背景になってしまう）
+      ctx.save();ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);ctx.restore();
+    }
+    if(fx==="blur"){
+      // 背景をぼかして敷き、その上に元の写真を重ねる
+      if(HAS_FILTER){
+        ctx.save();ctx.filter="blur("+Math.round(W*0.03)+"px) brightness(0.9)";
+        const bs=Math.max(W/data.img.width,H/data.img.height)*1.15;
+        const bw=data.img.width*bs,bh=data.img.height*bs;
+        ctx.drawImage(data.img,(W-bw)/2,(H-bh)/2,bw,bh);
+        ctx.restore();
+      }else{
+        blurDraw(ctx,data.img,w,h,W,H);
+        ctx.save();ctx.fillStyle="rgba(0,0,0,.12)";ctx.fillRect(0,0,W,H);ctx.restore();
+      }
+      ctx.drawImage(data.img,dx,dy,w,h);
+    }else if(fx==="cutout"){
+      // "product on solid background" look: solid bg + soft radial reveal of the photo center.
+      ctx.fillStyle=CUTOUT_BG;ctx.fillRect(0,0,W,H);
+      ctx.save();
+      const rad=ctx.createRadialGradient(W/2,H*0.42,W*0.18,W/2,H*0.42,W*0.62);
+      rad.addColorStop(0,"rgba(0,0,0,1)");rad.addColorStop(0.72,"rgba(0,0,0,1)");rad.addColorStop(1,"rgba(0,0,0,0)");
+      // draw photo, then mask edges to blend into the bg color
+      const off=document.createElement("canvas");off.width=W;off.height=H;const oc=off.getContext("2d");
+      oc.drawImage(data.img,dx,dy,w,h);
+      oc.globalCompositeOperation="destination-in";
+      oc.fillStyle=rad;oc.fillRect(0,0,W,H);
+      ctx.drawImage(off,0,0);
+      ctx.restore();
+    }else{
+      ctx.drawImage(data.img,dx,dy,w,h);
+      if(fx==="spotlight"){
+        const rad=ctx.createRadialGradient(W/2,H*0.4,W*0.25,W/2,H*0.5,W*0.75);
+        rad.addColorStop(0,"rgba(0,0,0,0)");rad.addColorStop(1,"rgba(0,0,0,.55)");
+        ctx.fillStyle=rad;ctx.fillRect(0,0,W,H);
+      }
+    }
+    // 明るさ・色の調整を画素単位で適用する（文字やグラデより前に行う）
+    applyAdjustments(ctx,W,H);
+  }else{
+    ctx.fillStyle="#1d1d1f";ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#aeaeb2";ctx.font=`500 ${Math.round(36*(W/1080))}px sans-serif`;ctx.textAlign="center";
+    ctx.fillText("写真を選択",W/2,H/2);ctx.textAlign="left";
+  }
+  // gradients
+  if(T.gradTop&&!LIGHT){const g1=ctx.createLinearGradient(0,0,0,500);g1.addColorStop(0,"rgba(0,0,0,.45)");g1.addColorStop(1,"rgba(0,0,0,0)");ctx.fillStyle=g1;ctx.fillRect(0,0,W,500);}
+  if(T.gradBottom&&!LIGHT){const gh=T.strongBottom?720:560;const g2=ctx.createLinearGradient(0,H-gh,0,H);g2.addColorStop(0,"rgba(0,0,0,0)");g2.addColorStop(1,T.strongBottom?"rgba(0,0,0,.72)":"rgba(0,0,0,.5)");ctx.fillStyle=g2;ctx.fillRect(0,H-gh,W,gh);}
+
+  const MARGIN=70, MAXW=W-MARGIN*2;
+  const sc=scale||1;
+  const alignC=(T.align==="center");
+  ctx.textAlign=alignC?"center":"left";
+  const ax=alignC?W/2:MARGIN;
+  // 白背景のときは黒文字・影なし、それ以外は従来の白文字・影つき
+  const inkOn=()=>{
+    ctx.fillStyle=INK;
+    ctx.shadowColor=LIGHT?"rgba(0,0,0,0)":"rgba(0,0,0,.5)";
+    ctx.shadowBlur=LIGHT?0:16;
+  };
+  inkOn();
+
+  function fit(text,base,min){let s=base*sc;const mn=min*sc;while(s>mn){ctx.font=`${wt} ${s}px ${serif}`;if(ctx.measureText(text).width<=MAXW)break;s-=2;}return s;}
+  function wrap(text,size){ctx.font=`${wt} ${size}px ${serif}`;if(ctx.measureText(text).width<=MAXW)return[text];const words=text.split(" ");if(words.length<2)return[text];let best=null;for(let i=1;i<words.length;i++){const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");const w=Math.max(ctx.measureText(a).width,ctx.measureText(b).width);if(!best||w<best.w)best={a,b,w};}return[best.a,best.b];}
+
+  let y=typeof T.topY==="function"?T.topY(H):T.topY;
+  // 買取速報モードでは上部にバッジを描き、本文はその下から始める（重なり防止）
+  if(STORY_KIND==="buy"){
+    const bh=Math.round(64*sc), bw=Math.round(300*sc);
+    const bx=alignC?(W-bw)/2:MARGIN;
+    const by=y-Math.round(64*sc); // バッジの上端
+    ctx.save();ctx.shadowBlur=0;
+    ctx.fillStyle="#d4af37";
+    ctx.beginPath();
+    const r=bh/2;
+    ctx.moveTo(bx+r,by);ctx.lineTo(bx+bw-r,by);ctx.arcTo(bx+bw,by,bx+bw,by+r,r);
+    ctx.lineTo(bx+bw,by+bh-r);ctx.arcTo(bx+bw,by+bh,bx+bw-r,by+bh,r);
+    ctx.lineTo(bx+r,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-r,r);
+    ctx.lineTo(bx,by+r);ctx.arcTo(bx,by,bx+r,by,r);
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle="#1a1a1a";
+    ctx.font=`700 ${Math.round(34*sc)}px ${serif}`;
+    const label="買取速報";
+    const tw=ctx.measureText(label).width;
+    ctx.fillText(label,bx+(bw-tw)/2,by+bh/2+Math.round(12*sc));
+    ctx.restore();
+    inkOn();
+    // 本文の開始位置をバッジの下へ（ブランド名の文字高さぶん確保）
+    y = by + bh + Math.round(T.brandBase*sc) + Math.round(16*sc);
+  }
+  if(T.plate && (data.brand||data.price) && !LIGHT){ // minimal: subtle plate behind text
+    ctx.save();ctx.shadowBlur=0;ctx.fillStyle="rgba(0,0,0,.28)";
+    ctx.fillRect(0,y-90,W,300);ctx.restore();inkOn();
+  }
+  if(data.brand){
+    let bs=fit(data.brand,T.brandBase,52);
+    ctx.font=`${wt} ${bs}px ${serif}`;
+    if(ctx.measureText(data.brand).width>MAXW){
+      const lines=wrap(data.brand,bs);
+      bs=Math.min(bs,fit(lines.reduce((a,b)=>a.length>=b.length?a:b),T.brandBase,40));
+      ctx.font=`${wt} ${bs}px ${serif}`;
+      for(const ln of lines){ctx.fillText(ln,ax,y);y+=bs+12;}
+    }else{ctx.fillText(data.brand,ax,y);y+=bs+14;}
+  }
+  if(data.size){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("size:"+data.size,ax,y);y+=74*sc;}
+  if(data.rank){ctx.font=`${wt} ${T.infoSize*sc}px ${serif}`;ctx.fillText("RANK:"+data.rank,ax,y);}
+  const buyCost=(STORY_KIND==="buy"&&window._buyCost)?Number(window._buyCost):0;
+  // 買取金額・注意書き・販売価格は、行の高さを積み上げて配置する。
+  // 個別に座標を決めると文字同士が重なるため、必ずまとめて計算する。
+  {
+    const both = !!(buyCost && data.price);
+    const lines=[];
+    if(buyCost){
+      const ctxt="買取金額 ¥"+buyCost.toLocaleString("ja-JP");
+      // 両方載せるときは少し小さくして収める
+      const cs=fit(ctxt, both?Math.round(T.priceSize*0.78):T.priceSize, 40);
+      lines.push({t:ctxt,size:cs,color:LIGHT?"#9a7400":"#d4af37",weight:wt});
+      const noteEl=document.getElementById("buyNote");
+      const note=(noteEl&&noteEl.value.trim())?noteEl.value.trim():"※状態・付属品・時期により金額は変動します";
+      const ns=Math.max(20,Math.round((both?23:26)*sc));
+      lines.push({t:note,size:ns,color:LIGHT?"rgba(0,0,0,.6)":"rgba(255,255,255,.85)",weight:400,gapAfter:0.5});
+    }
+    // ローン訴求（C案）：価格 → ↓ 最大42回 無金利なら → 月々◯◯ の流れで見せる
+    const loan = (STORY_KIND!=="buy") && loanActive(data.price);
+    const cut = (STORY_KIND!=="buy") && cutActive();
+    if(cut){
+      // 値下げ前の価格。取り消し線を引いて「下がった」ことを見せる
+      const otxt="¥"+cutOldPrice().toLocaleString("ja-JP");
+      const os=fit(otxt, Math.round(T.priceSize*0.52), 26);
+      lines.push({t:otxt,size:os,color:LIGHT?"rgba(0,0,0,.45)":"rgba(255,255,255,.62)",weight:400,strike:true,gapAfter:0.06});
+    }
+    if(data.price){
+      const shownPrice=cut?cutNewPrice():Number(data.price);
+      const ptxt="¥"+shownPrice.toLocaleString("ja-JP")+"-(tax in)";
+      const base=both?Math.round(T.priceSize*0.78):(loan?Math.round(T.priceSize*0.86):T.priceSize);
+      const ps=fit(ptxt, base, 38);
+      lines.push({t:ptxt,size:ps,color:cut?(LIGHT?"#d12b36":"#ff5a5a"):INK,weight:wt,gapAfter:loan?0.12:(cut?0.1:0)});
+      if(cut){
+        const off=cutPercent(Number(data.price),cutNewPrice());
+        lines.push({t:off+"% OFF",size:Math.max(26,Math.round(T.priceSize*0.46)),
+                    color:LIGHT?"#d12b36":"#ff5a5a",weight:wt,gapAfter:loan?0.1:0});
+      }
+    }
+    if(loan){
+      const monthly=loanMonthly(data.price);
+      const ls=Math.max(32,Math.round(T.priceSize*0.56));
+      lines.push({t:"↓ 最大"+LOAN_TIMES+"回 無金利なら",size:ls,color:LIGHT?"#9a7400":"#d4af37",weight:wt,gapAfter:0.14});
+      const mtxt="月々 ¥"+monthly.toLocaleString("ja-JP");
+      const ms=fit(mtxt, Math.round(T.priceSize*1.35), 56);
+      lines.push({t:mtxt,size:ms,color:INK,weight:wt,accent:true});
+      lines.push({t:LOAN_TIMES+"回払いの場合",size:Math.max(24,Math.round(T.priceSize*0.36)),color:LIGHT?"rgba(0,0,0,.55)":"rgba(255,255,255,.7)",weight:400,accent:true});
+    }
+    if(lines.length){
+      // 行間は「次の行の文字の高さ」で決める。
+      // 自分の大きさで決めると、次が大きい文字のときに食い込んで重なる。
+      const step=lines.map((l,idx)=>{
+        const next=lines[idx+1];
+        if(!next)return 0;
+        return Math.round(next.size*1.18 + (l.gapAfter||0)*l.size);
+      });
+      // 下部テキストを出さない場合はその分だけ下に寄せて、余白が空かないようにする
+      const tagGap=(data.tag&&data.tag.trim())?0:(T.tagY(H)-T.priceY(H));
+      const baseY=T.priceY(H)+PRICE_DY+tagGap;
+      let y0=baseY;
+      for(let i=0;i<lines.length-1;i++) y0-=step[i];
+      ctx.save();
+      // アクセント（月々の金額）の左に縦線を引く
+      const accIdx=lines.map((l,i)=>l.accent?i:-1).filter(i=>i>=0);
+      if(accIdx.length){
+        let yy=y0, top=null, bottom=null;
+        lines.forEach((l,idx)=>{
+          if(l.accent){
+            if(top===null)top=yy-l.size;
+            bottom=yy+Math.round(l.size*0.16);
+          }
+          yy+=step[idx];
+        });
+        if(top!==null){
+          ctx.fillStyle=LIGHT?"#9a7400":"#d4af37";
+          const bw=Math.max(4,Math.round(6*sc));
+          ctx.fillRect(ax-Math.round(18*sc), top, bw, bottom-top);
+        }
+      }
+      const accPad=accIdx.length?Math.round(0):0;
+      lines.forEach((l,idx)=>{
+        ctx.fillStyle=l.color;
+        ctx.font=`${l.weight} ${l.size}px ${serif}`;
+        ctx.fillText(l.t,ax,y0);
+        if(l.strike){
+          // 取り消し線（文字幅にあわせて中央の高さに引く）
+          const tw=ctx.measureText(l.t).width;
+          const th=Math.max(2,Math.round(l.size*0.07));
+          ctx.save();ctx.shadowBlur=0;ctx.fillStyle=l.color;
+          ctx.fillRect(ax,y0-Math.round(l.size*0.3),tw,th);
+          ctx.restore();
+          ctx.fillStyle=l.color;
+        }
+        y0+=step[idx];
+      });
+      ctx.restore();
+      ctx.fillStyle=INK;
+    }
+  }
+  if(data.tag){
+    ctx.fillStyle=(data.tagColor&&data.tagColor!=="#ffffff"&&data.tagColor!=="#fff")?data.tagColor:INK;
+    const ts=fit(data.tag,70,40);
+    ctx.font=`600 ${ts}px ${serif}`;
+    if(alignC){ctx.fillText(data.tag,W/2,T.tagY(H));}
+    else{const tw=ctx.measureText(data.tag).width;ctx.fillText(data.tag,W-tw-MARGIN,T.tagY(H));}
+  }
+  ctx.shadowBlur=0;ctx.textAlign="left";
+}
+
+["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",drawStory));
+function setRank(r){
+  document.getElementById("sRank").value=r||"";
+  document.querySelectorAll("#rankSeg button").forEach(b=>b.classList.toggle("on",b.dataset.r===r));
+  drawStory();
+}
+document.querySelectorAll("#rankSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const cur=document.getElementById("sRank").value;
+    setRank(cur===b.dataset.r?"":b.dataset.r); // tap again to deselect
+  });
+});
+
+function updateBrandDl(){
+  const brands=[...new Set(storyArchive.map(a=>a.brand).filter(Boolean))].sort();
+  document.getElementById("sBrandDl").innerHTML=brands.map(b=>`<option value="${esc(b)}">`).join("");
+}
+
+// ===== 連続作成：次の商品へ（入力と写真をクリア、アーカイブは残す） =====
+function clearForNext(){
+  ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("sTag").value="📩DMにて割引可能";
+  setRank("");
+  // photo reset
+  photoImg=null;photoOffX=0;photoOffY=0;photoZoom=1;
+  photoQueue=[];pqIndex=0;renderPhotoQueue();
+  batchItems=[];batchIndex=-1;
+  const bl=document.getElementById("batchList");if(bl)bl.style.display="none";
+  const bp=document.getElementById("batchProgress");if(bp)bp.style.display="none";
+  document.getElementById("photoControls").style.display="none";
+  const zs=document.getElementById("zoomSlider");if(zs)zs.value=100;
+  const ts=document.getElementById("textScaleSlider");if(ts)ts.value=100;textScale=1;
+  ADJ=Object.assign({},ADJ_DEF);renderAdj();
+  PRICE_DY=0;
+  {const p=document.getElementById("priceYSlider");if(p){p.value=0;document.getElementById("priceYVal").textContent="0";}}
+  PHOTO_FX="none";document.querySelectorAll("#fxSeg button").forEach(x=>x.classList.toggle("on",x.dataset.fx==="none"));
+  document.getElementById("cutoutBgRow").style.display="none";
+  document.getElementById("photoDrop").innerHTML="📷 タップして選択";
+  // tag scan reset
+  tagQueue=[];window._priceFromTag=false;
+  const tt=document.getElementById("tagThumbs");if(tt)tt.innerHTML="";
+  const tsb=document.getElementById("tagScanBtn");if(tsb)tsb.style.display="none";
+  const tra=document.getElementById("tagRefArea");if(tra)tra.style.display="none";
+  const os=document.getElementById("ocrStatus");if(os){os.style.display="none";os.textContent="";}
+  if(td2)td2.innerHTML='🏷️ 値札を追加<br><span style="font-size:10.5px;color:var(--t3);font-weight:500;">小物は表＋裏を追加してからスキャン</span>';
+  // caption + suggestions reset
+  document.getElementById("captionBox").value="";
+  const co=document.getElementById("cutOn");
+  if(co){co.checked=false;document.getElementById("sNewPrice").value="";
+    document.getElementById("cutRow2").style.display="none";updateCutInfo();}
+  drawStory();
+  // scroll back to top for the next item
+  window.scrollTo({top:0,behavior:"smooth"});
+  const tick=document.getElementById("shareTick");
+  tick.textContent="✅ クリアしました。次の商品をどうぞ";tick.style.opacity="1";
+  setTimeout(()=>tick.style.opacity="0",2500);
+}
+document.getElementById("nextItemBtn").addEventListener("click",()=>{
+  if(BULK.length){
+    let n=-1;
+    for(let k=bulkIndex+1;k<BULK.length;k++){if(!BULK[k].done){n=k;break;}}
+    if(n<0)for(let k=0;k<BULK.length;k++){if(!BULK[k].done){n=k;break;}}
+    if(n>=0)bulkGoto(n); else flashSyncIndicator("未処理の商品はありません");
+    return;
+  }
+  if(batchItems.length){
+    let n=-1;
+    for(let k=batchIndex+1;k<batchItems.length;k++){if(!batchItems[k].done){n=k;break;}}
+    if(n<0)for(let k=0;k<batchItems.length;k++){if(!batchItems[k].done){n=k;break;}}
+    if(n>=0)batchGoto(n); else flashSyncIndicator("未処理の商品はありません");
+    return;
+  }
+  if(photoQueue.length>1){
+    // 一括処理中は、入力だけ消して次の写真へ進む
+    ["sBrand","sSize","sPrice"].forEach(id=>document.getElementById(id).value="");
+    setRank("");
+    if(photoQueue[pqIndex])photoQueue[pqIndex].state=null;
+    if(!pqNext())drawStory();
+    return;
+  }
+  clearForNext();
+});
+
+// ブランド辞書：正式表記 → よみ・関連ハッシュタグ・雰囲気。部分一致で拾う。
+const BRAND_DB=[
+  {k:["chrome hearts","クロムハーツ","クロム"],ja:"クロムハーツ",tags:["#クロムハーツ","#chromehearts","#シルバーアクセサリー"],vibe:"存在感抜群のシルバー"},
+  {k:["supreme","シュプリーム"],ja:"シュプリーム",tags:["#supreme","#シュプリーム","#ストリート"],vibe:"人気のストリート"},
+  {k:["louis vuitton","ルイヴィトン","ヴィトン","lv"],ja:"ルイヴィトン",tags:["#louisvuitton","#ルイヴィトン","#ハイブランド"],vibe:"王道ラグジュアリー"},
+  {k:["gucci","グッチ"],ja:"グッチ",tags:["#gucci","#グッチ","#ハイブランド"],vibe:"華やかなラグジュアリー"},
+  {k:["prada","プラダ"],ja:"プラダ",tags:["#prada","#プラダ","#ハイブランド"],vibe:"洗練モード"},
+  {k:["celine","セリーヌ"],ja:"セリーヌ",tags:["#celine","#セリーヌ","#ハイブランド"],vibe:"上品ミニマル"},
+  {k:["dior","ディオール"],ja:"ディオール",tags:["#dior","#ディオール","#ハイブランド"],vibe:"エレガント"},
+  {k:["balenciaga","バレンシアガ"],ja:"バレンシアガ",tags:["#balenciaga","#バレンシアガ","#モード"],vibe:"エッジの効いたモード"},
+  {k:["saint laurent","サンローラン","ysl"],ja:"サンローラン",tags:["#saintlaurent","#サンローラン","#モード"],vibe:"クールなモード"},
+  {k:["rick owens","リックオウエンス","リック"],ja:"リックオウエンス",tags:["#rickowens","#リックオウエンス","#モード"],vibe:"独創的なダーク"},
+  {k:["vetements","ヴェトモン"],ja:"ヴェトモン",tags:["#vetements","#ヴェトモン","#ストリート"],vibe:"個性派ストリート"},
+  {k:["hermes","エルメス"],ja:"エルメス",tags:["#hermes","#エルメス","#ハイブランド"],vibe:"最高峰のラグジュアリー"},
+  {k:["tiffany","ティファニー"],ja:"ティファニー",tags:["#tiffany","#ティファニー","#ジュエリー"],vibe:"上質なジュエリー"},
+  {k:["goro","ゴローズ"],ja:"ゴローズ",tags:["#ゴローズ","#goros","#シルバーアクセサリー"],vibe:"希少なシルバー"},
+  {k:["acne","アクネ"],ja:"アクネストゥディオズ",tags:["#acnestudios","#アクネストゥディオズ"],vibe:"北欧モード"},
+  {k:["lemaire","ルメール"],ja:"ルメール",tags:["#lemaire","#ルメール"],vibe:"上品リラックス"},
+  {k:["maison margiela","margiela","マルジェラ"],ja:"マルジェラ",tags:["#margiela","#マルジェラ","#モード"],vibe:"アヴァンギャルド"},
+];
+function findBrand(brand){
+  const low=brand.toLowerCase();
+  for(const b of BRAND_DB){ if(b.k.some(kw=>low.includes(kw.toLowerCase()))) return b; }
+  return null;
+}
+// アイテム種別を価格・ブランド・入力から推定（下部テキスト＆ハッシュタグ用）
+const ITEM_HINTS=[
+  {k:["リング","ring","指輪"],cat:"リング",tags:["#リング","#ring"]},
+  {k:["ネックレス","necklace","ペンダント"],cat:"ネックレス",tags:["#ネックレス","#necklace"]},
+  {k:["ブレス","bracelet","バングル"],cat:"ブレスレット",tags:["#ブレスレット","#bracelet"]},
+  {k:["ピアス","earring"],cat:"ピアス",tags:["#ピアス","#earring"]},
+  {k:["バッグ","bag","トート","ボストン"],cat:"バッグ",tags:["#バッグ","#bag"]},
+  {k:["財布","wallet","ウォレット"],cat:"財布",tags:["#財布","#wallet"]},
+  {k:["時計","watch","ウォッチ"],cat:"時計",tags:["#時計","#watch"]},
+  {k:["ジャケット","jacket","ブルゾン"],cat:"ジャケット",tags:["#ジャケット","#jacket"]},
+  {k:["コート","coat"],cat:"コート",tags:["#コート","#coat"]},
+  {k:["パンツ","pants","デニム","jeans"],cat:"パンツ",tags:["#パンツ","#pants"]},
+  {k:["スニーカー","sneaker","シューズ","shoes"],cat:"スニーカー",tags:["#スニーカー","#sneaker"]},
+  {k:["tシャツ","tee","カットソー"],cat:"Tシャツ",tags:["#tシャツ","#tシャツコーデ"]},
+  {k:["ニット","knit","セーター"],cat:"ニット",tags:["#ニット","#knit"]},
+];
+function detectItem(){
+  const hay=(document.getElementById("sBrand").value+" "+document.getElementById("sTag").value).toLowerCase();
+  for(const it of ITEM_HINTS){ if(it.k.some(kw=>hay.includes(kw.toLowerCase()))) return it; }
+  return null;
+}
+
+
+// 買取速報用のキャプション（買取を促す内容）
+function buildBuyCaption(){
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  const en=document.getElementById("capEn").checked;
+  const tone=document.querySelector("#capTone .on")?.dataset.tone||"standard";
+  const bd=findBrand(brand); const it=detectItem();
+  const brandJa=bd?bd.ja:brand;
+  const L=[];
+
+  if(tone==="hype")L.push("💰買取速報💰");
+  else if(tone==="polite")L.push("【買取実績のご紹介】");
+  else L.push("💰買取速報");
+  L.push("");
+  if(brand)L.push(`《${brandJa}》${it?" "+it.cat:""} をお買取りいたしました`);
+  const spec=[];
+  if(size)spec.push(`size ${size}`);
+  if(rank)spec.push(`ランク ${rank}`);
+  if(spec.length)L.push(spec.join(" / "));
+  if(price)L.push(`¥${Number(price).toLocaleString("ja-JP")}-(税込)`);
+  if(window._buyCost){
+    L.push(`買取金額 ¥${Number(window._buyCost).toLocaleString("ja-JP")}`);
+    const nEl=document.getElementById("buyNote");
+    const n=(nEl&&nEl.value.trim())||"※状態・付属品・時期により金額は変動します";
+    L.push(n);
+  }
+  if(tag)L.push(tag);
+  // 値下げ・ローンの訴求もキャプションに載せる
+  if(cutActive()){
+    const o=Number(price), n=cutNewPrice();
+    L.push("");
+    L.push(`🔻 ${o.toLocaleString("ja-JP")}円 → ${n.toLocaleString("ja-JP")}円（${cutPercent(o,n)}%OFF）`);
+  }
+  if(loanActive(price)){
+    L.push("");
+    L.push(`💳 最大${LOAN_TIMES}回払い 無金利｜月々 ¥${loanMonthly(price).toLocaleString("ja-JP")}〜`);
+  }
+  L.push("");
+  if(tone==="polite"){
+    L.push("RINKAN渋谷店では、上記のようなお品を高価買取しております📍");
+    L.push("ご売却をご検討中のお品がございましたら、査定は無料ですのでお気軽にご相談くださいませ📩");
+  }else if(tone==="hype"){
+    L.push("こんなアイテム、ご自宅に眠っていませんか？👀");
+    L.push("査定無料・その場で現金化OK！まずはDMで写真を送るだけ📩💨");
+  }else{
+    L.push("📍RINKAN渋谷店では高価買取実施中");
+    L.push("査定無料です。写真を送っていただければ概算もお出しできます📩");
+  }
+  if(en){
+    L.push("");
+    L.push(`We buy ${brand||"luxury items"} at RINKAN Shibuya. Free appraisal — DM us photos for a quote 📩`);
+  }
+  L.push("");
+  let tags=["#買取","#高価買取","#買取強化中","#RINKAN","#リンカン","#渋谷","#ブランド買取","#査定無料"];
+  if(bd)tags=[...bd.tags,...tags];
+  else if(brand)tags.unshift("#"+brand.replace(/\s+/g,""));
+  if(it)tags=[...it.tags,...tags];
+  L.push([...new Set(tags)].join(" "));
+  return L.join("\n");
+}
+
+function buildCaption(){
+  if(STORY_KIND==="buy")return buildBuyCaption();
+  const brand=document.getElementById("sBrand").value.trim();
+  const size=document.getElementById("sSize").value.trim();
+  const rank=document.getElementById("sRank").value.trim();
+  const price=document.getElementById("sPrice").value.replace(/[^\d]/g,"");
+  const tag=document.getElementById("sTag").value.trim();
+  const en=document.getElementById("capEn").checked;
+  const tone=document.querySelector("#capTone .on")?.dataset.tone||"standard";
+  const bd=findBrand(brand); const it=detectItem();
+  const lines=[];
+
+  // 冒頭（トーンで変える）
+  const brandJa=bd?bd.ja:brand;
+  if(tone==="hype"){
+    lines.push(`🔥入荷情報🔥`);
+    if(brand)lines.push(`《${brandJa}》${it?" "+it.cat:""}`);
+  }else if(tone==="polite"){
+    if(brand)lines.push(`本日ご紹介するのは【${brandJa}】${it?"の"+it.cat:""}です。`);
+  }else{ // standard
+    if(brand)lines.push(`【${brandJa}】${it?" "+it.cat:""}`);
+  }
+
+  // スペック
+  const spec=[];
+  if(size)spec.push(`size ${size}`);
+  if(rank)spec.push(`ランク ${rank}`);
+  if(spec.length)lines.push(spec.join(" / "));
+  if(price)lines.push(`¥${Number(price).toLocaleString("ja-JP")}-(税込)`);
+
+  // 一言（ブランド雰囲気）
+  if(tone!=="polite" && bd)lines.push(`▶︎ ${bd.vibe}な一品✨`);
+  if(tag)lines.push(tag);
+
+  lines.push("");
+  if(tone==="polite"){
+    lines.push("RINKAN渋谷店にて販売しております📍");
+    lines.push("ご不明点やご希望があれば、お気軽にコメント・DMくださいませ📩");
+  }else if(tone==="hype"){
+    lines.push("気になる方はお早めに！📍RINKAN渋谷店");
+    lines.push("在庫確認・お取り置きはDMまで📩💨");
+  }else{
+    lines.push("📍RINKAN渋谷店にて販売中");
+    lines.push("気になる商品はお気軽にDM・コメントください📩");
+  }
+
+  if(en){
+    lines.push("");
+    const enName=brand||"this item";
+    lines.push(`Now available at RINKAN Shibuya — ${enName}${it?" ("+it.cat+")":""}. DM us for details & worldwide shipping 📩📦`);
+  }
+
+  lines.push("");
+  // ハッシュタグ：ブランド＋アイテム＋定番
+  let tags=["#RINKAN","#リンカン","#渋谷","#古着","#ブランド古着","#used","#vintage"];
+  if(bd)tags=[...bd.tags,...tags];
+  else if(brand)tags.unshift("#"+brand.replace(/\s+/g,""));
+  if(it)tags=[...it.tags,...tags];
+  tags=[...new Set(tags)];
+  lines.push(tags.join(" "));
+  return lines.join("\n");
+}
+function regenCaption(){document.getElementById("captionBox").value=buildCaption();}
+document.getElementById("genCaptionBtn").addEventListener("click",regenCaption);
+document.getElementById("capEn").addEventListener("change",regenCaption);
+document.querySelectorAll("#capTone button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#capTone button").forEach(x=>x.classList.toggle("on",x===b));
+    regenCaption();
+  });
+});
+document.getElementById("copyCaptionBtn").addEventListener("click",async()=>{
+  const box=document.getElementById("captionBox");
+  if(!box.value)regenCaption();
+  try{
+    await navigator.clipboard.writeText(box.value);
+  }catch(e){
+    box.removeAttribute("readonly");box.select();document.execCommand("copy");box.setAttribute("readonly","");
+  }
+  const t=document.getElementById("capTick");t.textContent="✓ コピーしました";t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);
+});
+// auto-refresh caption when key fields change
+["sBrand","sSize","sPrice","sTag"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
+  if(document.getElementById("captionBox").value)regenCaption();
+}));
+
+
+
+
+// share (1-tap save on iOS) - now saves FULL image in archive
+document.getElementById("shareBtn").addEventListener("click",async()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const fname=`story_${brand}_${Date.now()}.png`;
+  try{
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const file=new File([blob],fname,{type:"image/png"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:fname});
+      archiveStory(brand);
+      tick("✓ 共有しました");
+      pqMarkDoneAndNext();
+    }else{
+      const a=document.createElement("a");a.download=fname;a.href=cv.toDataURL("image/png");a.click();
+      archiveStory(brand);tick("✓ ダウンロードしました");
+      pqMarkDoneAndNext();
+    }
+  }catch(e){
+    if(e.name!=="AbortError")console.error(e);
+    if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
+      const ok=await retryTaintedPhoto();
+      alert(ok
+        ? "画像を読み込み直しました。もう一度「保存・共有」を押してください。"
+        : "この商品画像は保存できませんでした。\n\n別の画像を選ぶか、「撮影写真」に切り替えてください。");
+    }
+  }
+});
+// 保存できた写真を「済」にして、次の未処理の写真へ自動で進む
+function pqMarkDoneAndNext(){
+  if(BULK.length){ bulkMarkDoneAndNext(); return; }
+  if(batchItems.length){ batchMarkDoneAndNext(); return; }
+  if(photoQueue.length<2)return;
+  if(photoQueue[pqIndex]){
+    photoQueue[pqIndex].done=true;
+    photoQueue[pqIndex].state=pqCurrentState();
+  }
+  renderPhotoQueue();
+  setTimeout(()=>pqNext(),400);
+}
+document.getElementById("dlBtn").addEventListener("click",()=>{
+  drawStory();
+  const brand=document.getElementById("sBrand").value.trim()||"story";
+  const a=document.createElement("a");a.download=`story_${brand}_${Date.now()}.png`;a.href=cv.toDataURL("image/png");a.click();
+  archiveStory(brand);
+  pqMarkDoneAndNext();
+});
+function tick(msg){const t=document.getElementById("shareTick");t.textContent=msg;t.style.opacity="1";setTimeout(()=>t.style.opacity="0",2500);}
+
+function archiveStory(brand){
+  const thumb=document.createElement("canvas");
+  thumb.width=180;thumb.height=320;
+  thumb.getContext("2d").drawImage(cv,0,0,180,320);
+  // Save full image (compressed JPEG) so it can be viewed/re-shared later
+  const full=cv.toDataURL("image/jpeg",0.75);
+  storyArchive.unshift({brand,date:today(),thumb:thumb.toDataURL("image/jpeg",0.6),full});
+  if(storyArchive.length>40)storyArchive=storyArchive.slice(0,40);
+  try{localStorage.setItem("story-archive-v2",JSON.stringify(storyArchive));}catch(e){
+    // storage full - trim and retry
+    storyArchive=storyArchive.slice(0,20);
+    try{localStorage.setItem("story-archive-v2",JSON.stringify(storyArchive));}catch(e2){}
+  }
+  renderArchive();updateBrandDl();
+}
+function renderArchive(){
+  const el=document.getElementById("archiveList");
+  if(!storyArchive.length){el.innerHTML='<div class="empty">まだ作成した画像はありません</div>';return;}
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:12px;">'+
+    storyArchive.map((a,i)=>`<div class="arch-item" onclick="openViewer(${i})">
+      <img src="${a.thumb}">
+      <div style="font-size:10px;color:var(--t3);margin-top:5px;font-weight:500;">${esc(a.brand)}<br>${a.date}</div>
+    </div>`).join("")+'</div>';
+}
+
+// Full-size viewer — materializes with blur+scale, dismisses along the same path
+let viewerIdx=-1;
+window.openViewer=function(i){
+  viewerIdx=i;
+  const a=storyArchive[i];
+  const m=document.getElementById("viewerModal"),im=document.getElementById("viewerImg");
+  im.src=a.full||a.thumb;
+  m.style.display="flex";
+  im.style.transform="scale(.88)";im.style.opacity="0";
+  requestAnimationFrame(()=>{m.classList.add("show");im.style.transform="scale(1)";im.style.opacity="1";});
+};
+window.closeViewer=function(e){
+  if(e&&e.target.id!=="viewerModal"&&e.target.id!=="viewerClose")return;
+  dismissViewer();
+};
+function dismissViewer(){
+  const m=document.getElementById("viewerModal"),im=document.getElementById("viewerImg");
+  m.classList.remove("show");
+  im.style.transform="scale(.88)";im.style.opacity="0";
+  setTimeout(()=>{m.style.display="none";},320);
+}
+document.getElementById("viewerClose").addEventListener("click",dismissViewer);
+document.getElementById("viewerShare").addEventListener("click",async()=>{
+  const a=storyArchive[viewerIdx];if(!a)return;
+  try{
+    const blob=await(await fetch(a.full||a.thumb)).blob();
+    const file=new File([blob],`story_${a.brand}_${a.date}.jpg`,{type:"image/jpeg"});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file]});
+    }else{
+      const dl=document.createElement("a");dl.download=file.name;dl.href=a.full||a.thumb;dl.click();
+    }
+  }catch(e){
+    if(e.name!=="AbortError")console.error(e);
+    if(/tainted|insecure|SecurityError/i.test(String(e&&(e.name+e.message)))){
+      const ok=await retryTaintedPhoto();
+      alert(ok
+        ? "画像を読み込み直しました。もう一度「保存・共有」を押してください。"
+        : "この商品画像は保存できませんでした。\n\n別の画像を選ぶか、「撮影写真」に切り替えてください。");
+    }
+  }
+});
+
+updateBrandDl();renderArchive();renderAdj();drawStory();syncQuickBar();updateApiBadge();updateLoanInfo();updateCutInfo();
+  if(!getRakutenAppId()||!getRakutenAccessKey())loadRakutenKeysShared();
+  // 前回読み込んだ在庫表があれば、そのまま使えるようにする
+  loadStockCache().then(ok=>{
+    if(!ok)return;
+    let at="";try{at=localStorage.getItem(STOCK_KEY+":at")||"";}catch(e){}
+    const d=at?new Date(at):null;
+    document.getElementById("stockInfo").innerHTML=
+      `<span style="color:var(--green);font-weight:700;">✓ 在庫表 ${STOCK.length.toLocaleString()}件を読み込み済み</span>`
+      +(d?`<span class="muted">（${d.getMonth()+1}/${d.getDate()} 取り込み）</span>`:"")
+      +`<br><span class="muted">新しい在庫表に差し替えるときは、右上から読み込み直してください。</span>`;
+    setupStockFilter();
+  });
+  // ピッキングツールから品番を渡された場合は、そのまま情報を引いて入力する
+  (async()=>{
+    try{
+      const sp=new URLSearchParams(location.search);
+      // まとめて作成（売価修正から受け取った場合）
+      const ref=sp.get("bulkref");
+      if(ref){
+        const list=await fetchBulkRef(ref);
+        if(list&&list.length){ await startBulk(list); return; }
+        alert("受け取ったデータが見つかりませんでした。ピッキングツールからもう一度実行してください。");
+      }
+      const bulk=bulkParam();
+      if(bulk&&bulk.length){ await startBulk(bulk); return; }
+      const hb=(sp.get("hinban")||"").trim();
+      if(!hb)return;
+      window._lastHinban=hb;
+      const st=document.getElementById("ocrStatus");
+      if(st){st.style.display="block";st.style.color="var(--blue)";st.textContent="🔍 "+hb+" の情報を取得中...";}
+      const info=await rakutenLookup(hb,"https://item.rakuten.co.jp/gsc-rinkan/"+hb);
+      const filled=[];
+      if(info&&info.ok){
+        if(info.brand){document.getElementById("sBrand").value=info.brand;filled.push("ブランド");}
+        if(info.size){document.getElementById("sSize").value=info.size;filled.push("サイズ");}
+        if(info.rank){setRank(info.rank);filled.push("ランク");}
+      }
+      // 値下げ後の価格が渡されていればそれを優先する
+      const pq=Number((sp.get("price")||"").replace(/[^\d]/g,""))||0;
+      const price=pq||(info&&info.ok?info.price:0);
+      if(price){document.getElementById("sPrice").value=String(price);filled.push(pq?"価格(値下げ後)":"価格");}
+      // ピッキングから来た場合も、オンラインの商品画像を候補として出す
+      if(info&&info.ok&&info.pics&&info.pics.length){
+        showNetPics(info.pics);
+        filled.push("商品画像"+info.pics.length+"枚");
+      }
+      // 値下げ前の価格が渡されていれば、値下げ表示を自動で入れる
+      const oq=Number((sp.get("old")||"").replace(/[^\d]/g,""))||0;
+      if(oq&&price&&oq>price){
+        // 元の価格を「価格」に、値下げ後を専用欄に入れる
+        document.getElementById("sPrice").value=String(oq);
+        document.getElementById("sNewPrice").value=String(price);
+        document.getElementById("cutOn").checked=true;
+        document.getElementById("cutRow2").style.display="block";
+        updateCutInfo();
+        filled.push("値下げ表示");
+      }
+      if(st){
+        st.innerHTML=filled.length
+          ?'✓ '+filled.join("・")+'を入力しました<br><span style="font-size:12px;color:var(--t2);">商品写真を選んでください。</span>'
+          :'⚠ '+esc(hb)+' の情報を取得できませんでした。手入力してください。';
+        st.style.color=filled.length?"var(--green)":"var(--orange)";
+      }
+      updateLoanInfo();drawStory();
+    }catch(e){console.log("hinban param error",e);}
+  })();
+// Warm up the OCR engine in the background so the first scan is instant (no 2-4s worker load).
+setTimeout(()=>{ getOcrWorker().catch(()=>{}); }, 800);
+// 買取履歴もバックグラウンドで先読み（買取速報モードを即使えるように）
+setTimeout(()=>{
+  const cache=readKaitoriCache();
+  if(cache&&cache.items.length)_kaitori=cache.items; // 即使える状態にしておく
+}, 300);
+
+/* ===== バージョン表示 & 更新チェック ===== */
+(function(){
+  const b=document.createElement("div");
+  b.id="verBadge";
+  b.textContent=APP_VERSION;
+  b.title="タップで最新版に更新";
+  b.addEventListener("click",()=>{
+    // キャッシュを回避して強制的に読み直す
+    const u=new URL(location.href);
+    u.searchParams.set("v",Date.now());
+    location.replace(u.toString());
+  });
+  document.body.appendChild(b);
+})();
+</script>
+</body>
+</html>
