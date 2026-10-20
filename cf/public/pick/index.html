@@ -724,31 +724,32 @@ function applyShared(p){
 // 端末ごとに入力させると全員分の設定が必要になるため、共有DBに置いて
 // 誰か一人が入れれば全員が使える状態にする。
 // 取得したキーは端末にも控えておき、通信できない時でも使えるようにする。
-const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
+// 楽天APIキーの共有。保存先はD1（非公開・Accessの内側）なので、
+// 公開リポジトリに置いていた頃と違って安全に共有できる。
+const RK_SHARE_TOOL="rk-keys";
 let rkLoaded=false;
 async function loadRakutenKeysShared(){
   if(rkLoaded)return;
   rkLoaded=true;
   try{
-    const p=await shareGet(RK_SHARE_TOOL);
-    const kk=p&&p.rkKeys;
-    // 既にこの端末でキーが設定されている場合は上書きしない。
-    // 誤ったキーが共有されると、動いている端末まで壊れてしまうため。
-    if(kk&&kk.appId&&kk.accessKey&&!(rkAppId()&&rkAccessKey())){
-      try{
-        localStorage.setItem(RK_APPID_KEY,kk.appId);
-        localStorage.setItem(RK_KEY_KEY,kk.accessKey);
-      }catch(e){}
+    const kk=await shareGet(RK_SHARE_TOOL);
+    if(kk&&kk.appId&&kk.accessKey){
+      // 共有されている値を正とする。端末に途中で切れた鍵が残っていても直る。
+      if(rkAppId()!==kk.appId||rkAccessKey()!==kk.accessKey){
+        try{
+          localStorage.setItem(RK_APPID_KEY,kk.appId);
+          localStorage.setItem(RK_KEY_KEY,kk.accessKey);
+        }catch(e){}
+      }
       updateImgStatus();
     }
   }catch(e){}
 }
-// 既存の共有先（撤収リスト）の中にキーを入れる。
-// リストを共有し直してもキーが消えないよう、書き込み時は必ず引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
-  // 共有ファイルは公開リポジトリにあるため、キーをここに書かない。
-  // キーは各端末のlocalStorageにのみ保存する（呼び出し側で保存済み）。
-  return {ok:true,localOnly:true};
+  try{
+    await sharePut(RK_SHARE_TOOL,{appId,accessKey,at:new Date().toISOString(),by:myName()});
+    return {ok:true};
+  }catch(e){ return {ok:false,err:(e&&e.message)||"通信失敗"}; }
 }
 
 /* ========= 状態 ========= */

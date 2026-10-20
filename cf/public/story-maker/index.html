@@ -2642,11 +2642,11 @@ async function sharePutS(tool,payload){
 
 /* ========= 楽天APIキーの共有 ========= */
 // 端末ごとに入力させないよう共有DBに置き、誰か一人が設定すれば全員が使えるようにする。
-const RK_SHARE_TOOL="pick-list";  // 新規の保存先は許可されていないため、既存の共有先に相乗りする
+// 楽天APIキーの共有。保存先はD1（非公開・Accessの内側）。
+const RK_SHARE_TOOL="rk-keys";
 async function loadRakutenKeysShared(){
   try{
-    const p=await shareGetS(RK_SHARE_TOOL);
-    const kk=p&&p.rkKeys;
+    const kk=await shareGetS(RK_SHARE_TOOL);
     if(kk&&kk.appId&&kk.accessKey){
       try{
         localStorage.setItem(RAKUTEN_APPID_KEY,kk.appId);
@@ -2656,11 +2656,11 @@ async function loadRakutenKeysShared(){
     }
   }catch(e){}
 }
-// 既存の共有先の中にキーを入れる。他の内容は消さないよう引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
-  // 共有ファイルは公開リポジトリにあるため、キーをここに書かない。
-  // キーは各端末のlocalStorageにのみ保存する（呼び出し側で保存済み）。
-  return {ok:true,localOnly:true};
+  try{
+    await sharePutS(RK_SHARE_TOOL,{appId,accessKey,at:new Date().toISOString()});
+    return {ok:true};
+  }catch(e){ return {ok:false,err:(e&&e.message)||"通信失敗"}; }
 }
 const RAKUTEN_APPID_KEY="rakuten-appid";
 const RAKUTEN_KEY_KEY="rakuten-accesskey";
