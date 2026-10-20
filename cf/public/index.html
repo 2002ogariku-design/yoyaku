@@ -145,12 +145,7 @@ tr:last-child td{border-bottom:none;}
   <div class="mb">
     <h3>名前を選択</h3>
     <select id="nameSel"></select>
-    <div style="margin-top:14px;">
-      <div style="font-size:12px;font-weight:700;color:#666;margin-bottom:6px;">共有アクセスキー</div>
-      <input type="text" id="keyInput" placeholder="キーを貼り付け" autocomplete="off"
-        style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);font-size:15px;font-family:var(--font);">
-      <div id="keyState" style="font-size:11.5px;color:#888;margin-top:5px;"></div>
-    </div>
+    <div id="loginState" style="font-size:11.5px;color:#1f7a4d;margin-top:12px;"></div>
     <div class="acts">
       <button class="cancel" id="nameCancel">キャンセル</button>
       <button class="ok" id="nameOk">決定</button>
@@ -380,12 +375,9 @@ function openName(force){
   document.getElementById("nameSel").innerHTML=STAFF.map(n=>`<option>${n}</option>`).join("");
   const c=getName();if(c&&STAFF.includes(c))document.getElementById("nameSel").value=c;
   document.getElementById("nameCancel").style.display=force?"none":"";
-  // キーの状態を見せる（入れ替えもできるようにする）
-  let cur="";try{cur=localStorage.getItem(TK)||"";}catch(e){}
-  const ki=document.getElementById("keyInput"), ks=document.getElementById("keyState");
-  if(ki){ ki.value=""; ki.placeholder=cur?"設定済み（変更する場合のみ入力）":"キーを貼り付け"; }
-  if(ks)ks.textContent=cur?"✓ キーは設定済みです":"⚠ キーが未設定です。入力しないと保存できません。";
-  if(ks)ks.style.color=cur?"#1f7a4d":"#b5303a";
+  // 鍵は不要になった。代わりに誰でログインしているかを出す。
+  const ls=document.getElementById("loginState");
+  if(ls)ls.textContent=ME?("✓ "+ME+" でログイン中"):"";
   document.getElementById("nameOv").style.display="flex";
 }
 function closeName(){document.getElementById("nameOv").style.display="none";}
@@ -396,9 +388,6 @@ function ensureName(force){
     const b=document.getElementById("nameOk");
     const h=()=>{
       setName(document.getElementById("nameSel").value);
-      const ki=document.getElementById("keyInput");
-      const kv=ki?String(ki.value||"").trim():"";
-      if(kv){ try{localStorage.setItem(TK,kv)}catch(e){} }
       updBadge();closeName();b.removeEventListener("click",h);r(getName());
     };
     b.addEventListener("click",h);
