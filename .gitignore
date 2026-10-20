@@ -12,3 +12,6 @@ node_modules/
 *.log
 .DS_Store
 index_bak.html
+
+# Access有効化までの仮の蓋（鍵を含むのでコミットしない）
+cf/functions/_middleware.js
