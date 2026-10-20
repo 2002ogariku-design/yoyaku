@@ -372,7 +372,10 @@
       <div class="sub" id="syncIndicator" style="color:var(--ok);opacity:0;transition:opacity .4s;font-size:11px;"></div>
     </div>
     <div class="stat-row" id="statRow"></div>
-    <button id="staffNameBadge" class="tb" style="align-self:flex-start;">👤 名前を設定</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-start;">
+      <button id="staffNameBadge" class="tb">👤 名前を設定</button>
+      <button id="shareKeyBtn" class="tb" title="共有アクセスキーの確認・入れ直し">🔑 共有キー</button>
+    </div>
   </header>
 
   <div class="section-toggle" id="fileToggle">
@@ -509,7 +512,7 @@
 </div>
 
 <script>
-const APP_VERSION="v2026.09.02.1600";
+const APP_VERSION="v2026.10.20.1130";
 
 const STORAGE_WORKBOOK = "tk-workbook-b64";
 const STORAGE_FILENAME = "tk-filename";
@@ -625,54 +628,122 @@ function excelDateToYMD(v){
   return m ? m[0] : s;
 }
 
-// ===== Supabase config (password-protected shared storage) =====
-const SB_URL = "https://laystqwmucuuvqtztloy.supabase.co";
-const SB_KEY = "sb_publishable_dDQs2-ZeLfh5hGauc9YMsg_dWyBqbV5";
-const SB_PW_KEY = "rinkan-app-pw";
-const TOOL_EDITS = "hold-edits";   // per-item 確認/備考/本部指示 blob
-const TOOL_WB = "hold-wb";         // shared workbook (base64)
+// ===== 共有保存（GitHubのファイル。Supabaseが落ちたため移行） =====
+// 保存先: shibuya-tk/hold-data.json … 確認/備考/本部指示などの編集内容（小さい・頻繁に書く）
+//         shibuya-tk/hold-wb.json   … 共有ファイル本体(base64)（重いので別ファイル）
+const GH_OWNER="2002ogariku-design",GH_REPO="yoyaku";
+const TOOL_EDITS = "hold-edits";
+const TOOL_WB    = "hold-wb";
+const GH_FILES={"hold-edits":"shibuya-tk/hold-data.json","hold-wb":"shibuya-tk/hold-wb.json"};
+function ghApi(path){return "https://api.github.com/repos/"+GH_OWNER+"/"+GH_REPO+"/contents/"+path;}
+// タスク集計・ピッキングツールと同じ保存先。どれか1つでキーを入れれば全部で使える。
+const GH_TK="tk-gh-token";
 let sharedWbVersion = 0;
+const ghSha={};   // path -> sha（undefined=未取得 / null=ファイル無し）
 
-// Ask for the shared password once (kept only for this browser session).
-function sanitizePw(s){
-  if(!s)return "";
-  let t=String(s).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-  t=t.replace(/\u3000/g," ").trim().replace(/[^\x20-\x7E]/g,"");
+function peekKey(){ try{ return String(localStorage.getItem(GH_TK)||"").trim(); }catch(e){ return ""; } }
+// 旧「共有パスワード」から名前だけ引き継いだ共有アクセスキーの取得
+function getAppPw(){
+  let t=peekKey();
+  if(!t){
+    t=String(window.prompt("共有アクセスキーを入力してください\n（タスク集計ツールと同じキーです）")||"").trim();
+    if(t){ try{ localStorage.setItem(GH_TK,t); }catch(e){} }
+  }
   return t;
 }
-function getAppPw(){
-  let p; try{ p = sessionStorage.getItem(SB_PW_KEY); }catch(e){}
-  if(!p){
-    p = window.prompt("共有パスワードを入力してください（他のツールと同じパスワードです）");
-    if(p){ p = p.trim(); try{ sessionStorage.setItem(SB_PW_KEY, p); }catch(e){} }
+function clearAppPw(){ try{ localStorage.removeItem(GH_TK); }catch(e){} }
+function ghHeaders(t){ return {"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json","Content-Type":"application/json"}; }
+function sbHeaders(){ return ghHeaders(getAppPw()); }
+
+function utf8ToB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64ToUtf8(b64){ return decodeURIComponent(escape(atob(String(b64).replace(/\n/g,"")))); }
+
+// 店内は電波が不安定なので何度か試す
+async function ghRetry(url,opt,tries){
+  tries=tries||3; let last=null;
+  for(let i=0;i<tries;i++){
+    try{ return await fetch(url,opt); }
+    catch(e){ last=e; await new Promise(r=>setTimeout(r,600*(i+1))); }
   }
-  return p || "";
+  throw last||new Error("通信できませんでした");
 }
-function clearAppPw(){ try{ sessionStorage.removeItem(SB_PW_KEY); }catch(e){} }
-function sbHeaders(){
-  return {"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"x-app-password":sanitizePw(getAppPw()),"Content-Type":"application/json"};
-}
-// Read one tool blob's payload from Supabase; returns parsed object or null.
-async function sbGetPayload(tool){
-  const res = await fetch(SB_URL+"/rest/v1/app_data?tool=eq."+tool+"&select=payload", {headers:sbHeaders()});
-  if(res.status === 401 || res.status === 403){
+
+// 共有ファイル1つを丸ごと読む。まだ無ければ null
+async function ghReadFile(path){
+  const t=getAppPw();
+  if(!t){ showError("共有アクセスキーが未設定です。右上の「🔑 共有キー」から入力してください。"); throw new Error("PW"); }
+  const api=ghApi(path);
+  let r;
+  try{ r=await ghRetry(api+"?ts="+Date.now(),{headers:ghHeaders(t)}); }
+  catch(e){ throw new Error("通信できませんでした。電波の良い場所でもう一度お試しください"); }
+  // 401＝キーが通らない。保存したままだと何度やっても同じなので捨てて、入れ直せるようにする
+  if(r.status===401){
     clearAppPw();
-    showError("共有パスワードが正しくありません。ページを再読み込みして、もう一度入力してください。");
+    showError("共有アクセスキーが拒否されました（401）。期限切れの可能性があります。右上の「🔑 共有キー」から入れ直してください。");
     throw new Error("PW");
   }
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  const rows = await res.json();
-  return rows.length ? rows[0].payload : null;
+  if(r.status===403){
+    showError("このキーには権限がありません（403）。右上の「🔑 共有キー」から入れ直してください。");
+    throw new Error("PW");
+  }
+  if(r.status===404){ ghSha[path]=null; return null; }   // まだ無い＝初回
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d=await r.json(); ghSha[path]=d.sha;
+  let txt="";
+  if(d.content) txt=b64ToUtf8(d.content);
+  else{
+    // 1MBを超えるとcontentが空で返るので raw で取り直す
+    const raw=await ghRetry(api+"?ts="+Date.now(),{headers:Object.assign(ghHeaders(t),{"Accept":"application/vnd.github.raw"})});
+    if(!raw.ok) throw new Error("HTTP "+raw.status);
+    txt=await raw.text();
+  }
+  try{ return JSON.parse(txt||"null"); }catch(e){ return null; }
 }
-// Upsert one tool blob's payload into Supabase.
-async function sbSetPayload(tool, payload){
-  const res = await fetch(SB_URL+"/rest/v1/app_data?on_conflict=tool", {
-    method:"POST",
-    headers:Object.assign(sbHeaders(), {"Prefer":"resolution=merge-duplicates,return=minimal"}),
-    body:JSON.stringify({tool, payload, updated_at:new Date().toISOString()})
-  });
-  if(res.status === 401 || res.status === 403){ clearAppPw(); throw new Error("共有パスワードが正しくありません。再読み込みして入力し直してください。"); }
-  if(!res.ok){ const t=await res.text().catch(()=> ""); throw new Error("保存に失敗（HTTP "+res.status+"）"+t.slice(0,120)); }
+
+// 共有ファイル1つを丸ごと書く（409＝ほぼ同時に誰かが保存した。取り直して再試行）
+async function ghWriteFile(path,obj,label){
+  const t=getAppPw(); if(!t) throw new Error("共有アクセスキーが未設定です");
+  const api=ghApi(path);
+  let lastErr=null;
+  for(let a=0;a<4;a++){
+    if(ghSha[path]===undefined){
+      try{ await ghReadFile(path); }catch(e){ if(e.message==="PW") throw e; }
+    }
+    const body={message:(label||"hold")+" "+new Date().toISOString(),content:utf8ToB64(JSON.stringify(obj))};
+    if(ghSha[path]) body.sha=ghSha[path];
+    let r;
+    try{ r=await ghRetry(api,{method:"PUT",headers:ghHeaders(t),body:JSON.stringify(body)}); }
+    catch(e){ throw new Error("通信できませんでした。入力内容は残してあります"); }
+    if(r.ok){ try{ ghSha[path]=(await r.json()).content.sha; }catch(e){} return; }
+    if(r.status===409&&a<3){ ghSha[path]=undefined; await new Promise(x=>setTimeout(x,400+a*500)); continue; }
+    if(r.status===401){ clearAppPw(); throw new Error("共有アクセスキーが拒否されました（401）。右上の「🔑 共有キー」から入れ直してください"); }
+    let m=""; try{ m=(await r.clone().json()).message||""; }catch(e){}
+    if(r.status===403) throw new Error("書き込み権限がありません（403）"+(m?"："+m:""));
+    lastErr=new Error("保存失敗 "+r.status+(m?"："+m:""));
+    break;
+  }
+  throw lastErr||new Error("保存に失敗しました（混み合っています）");
+}
+
+// 呼び出し側は旧Supabase版のままで動くように、名前を残して中身だけ差し替え
+async function sbGetPayload(tool){ return await ghReadFile(GH_FILES[tool]||GH_FILES[TOOL_EDITS]); }
+async function sbSetPayload(tool, payload){ await ghWriteFile(GH_FILES[tool]||GH_FILES[TOOL_EDITS], payload, tool); }
+
+// キーが通るかどうかだけを確かめる（キー自体と、ファイルの読み取りを別々に見る）
+async function testKey(t){
+  const lines=["キーの長さ："+t.length+"文字（"+t.slice(0,7)+"…"+t.slice(-4)+"）"];
+  let r;
+  try{ r=await fetch("https://api.github.com/user?ts="+Date.now(),{headers:ghHeaders(t)}); }
+  catch(e){ return {ok:false,msg:lines.join("\n")+"\n✕ 通信できませんでした："+e.message}; }
+  if(r.status===401) return {ok:false,msg:lines.join("\n")+"\n✕ キーが拒否されました（401）。\n期限切れか、貼り付けが崩れています。新しいキーを作り直してください。"};
+  lines.push("① キー自体：OK（"+r.status+"）");
+  try{
+    const r2=await fetch(ghApi(GH_FILES[TOOL_EDITS])+"?ts="+Date.now(),{headers:ghHeaders(t)});
+    if(r2.status===404) lines.push("② 共有ファイル：まだ無し（正常。最初の共有で作られます）");
+    else if(r2.ok) lines.push("② 共有ファイルの読み取り：OK");
+    else return {ok:false,msg:lines.join("\n")+"\n✕ リポジトリを読めません（"+r2.status+"）。キーの権限を確認してください。"};
+  }catch(e){ return {ok:false,msg:lines.join("\n")+"\n✕ 通信できませんでした："+e.message}; }
+  return {ok:true,msg:lines.join("\n")+"\n✓ 使えます。"};
 }
 
 async function fetchSharedWorkbook(){
@@ -689,9 +760,6 @@ async function saveSharedWorkbook(b64, filename){
   return version;
 }
 
-function utf8ToB64(str){ return btoa(unescape(encodeURIComponent(str))); }
-function b64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,"")))); }
-
 const localStore = {
   get(key){
     try{ const v = localStorage.getItem(key); return v == null ? null : {value:v}; }
@@ -705,16 +773,14 @@ const localStore = {
   }
 };
 
-// Shared storage backed by Supabase (password-gated). The edits blob is stored as a
-// JSON string in the TOOL_EDITS payload. Interface matches the old GitHub store.
+// 編集内容の共有保存。中身は {json:"<編集内容の文字列>"}。インターフェースは従来どおり。
 const sharedStore = {
   async get(key){
     try{
       const payload = await sbGetPayload(TOOL_EDITS);
       if(payload == null) return null;
-      // payload is stored as {json: "<stringified edits>"}
       return {value: (payload && payload.json != null) ? payload.json : JSON.stringify(payload)};
-    }catch(e){ if(e.message!=="PW") console.error("supabase get failed", e); return null; }
+    }catch(e){ if(e.message!=="PW") console.error("shared get failed", e); return null; }
   },
   async set(key, value){
     await sbSetPayload(TOOL_EDITS, {json: value});
@@ -2034,18 +2100,20 @@ document.getElementById("nameModalSaveBtn").addEventListener("click", ()=>{
   }
 })();
 
-// Confirms we can reach Supabase and that the password is accepted. Shows a clear,
+// 共有アクセスキーが通るかを確認する。失敗パターンごとに出す文言を分ける。
 // actionable message for the two common failure modes.
 async function checkSharedConnection(){
   try{
-    const res = await fetch(SB_URL+"/rest/v1/app_data?select=tool&limit=1", {headers:sbHeaders()});
+    const t=peekKey();
+    if(!t){ showError("⚠️ 共有アクセスキーが未設定です。右上の「🔑 共有キー」から入力してください。"); return false; }
+    const res = await fetch(ghApi(GH_FILES[TOOL_EDITS])+"?ts="+Date.now(), {headers:ghHeaders(t)});
     if(res.status === 401 || res.status === 403){
       clearAppPw();
-      showError("⚠️ 共有パスワードが正しくないか、共有データベースの設定が未完了です。正しいパスワードを入れても弾かれる場合は、担当者にSupabaseのパスワードRLS設定を確認してもらってください。");
+      showError("⚠️ 共有アクセスキーが拒否されました。期限切れの可能性があります。右上の「🔑 共有キー」から入れ直してください。");
       return false;
     }
-    if(!res.ok){
-      showError("⚠️ 共有データベースに接続できませんでした（HTTP "+res.status+"）。ネットワークを確認してください。");
+    if(res.status !== 404 && !res.ok){
+      showError("⚠️ 共有データに接続できませんでした（HTTP "+res.status+"）。ネットワークを確認してください。");
       return false;
     }
     return true;
@@ -2054,6 +2122,30 @@ async function checkSharedConnection(){
     return false;
   }
 }
+
+/* ===== 共有キーの確認・入れ直し ===== */
+document.getElementById("shareKeyBtn").addEventListener("click", async ()=>{
+  const cur=peekKey();
+  const raw=prompt(
+    (cur ? "いま設定されているキー："+cur.slice(0,7)+"…"+cur.slice(-4)+"（"+cur.length+"文字）\n\n"
+         : "キーはまだ設定されていません。\n\n")
+    +"共有アクセスキーを貼り付けてください。\n（タスク集計・ピッキングツールと同じキーです）\n\n空のままOKを押すと、今のキーを消します。",
+    "");
+  if(raw===null) return;                      // キャンセル
+  const t=String(raw).trim();
+  const btn=document.getElementById("shareKeyBtn");
+  if(!t){ clearAppPw(); alert("キーを消しました。次に共有するときに入力を求められます。"); return; }
+  btn.textContent="確認中..."; btn.disabled=true;
+  const chk=await testKey(t);
+  btn.textContent="🔑 共有キー"; btn.disabled=false;
+  if(chk.ok){
+    try{ localStorage.setItem(GH_TK,t); }catch(e){}
+    alert(chk.msg+"\n\n保存しました。画面を更新します。");
+    location.reload();
+  }else{
+    alert(chk.msg+"\n\n保存しませんでした。");
+  }
+});
 
 /* ===== バージョン表示 & 更新チェック ===== */
 (function(){
