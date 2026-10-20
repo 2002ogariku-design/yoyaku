@@ -285,7 +285,7 @@ select:focus,input:focus{outline:none;border-color:var(--blue);background:#fff;}
 </div>
 
 <script>
-const APP_VERSION="v2026.10.18.1410";
+const APP_VERSION="v2026.10.20.1430";
 
 /* ========= 設定 ========= */
 // 楽天の検索URL。{KEY} に品番の末尾7桁が入る。
@@ -788,14 +788,9 @@ async function loadRakutenKeysShared(){
 // 既存の共有先（撤収リスト）の中にキーを入れる。
 // リストを共有し直してもキーが消えないよう、書き込み時は必ず引き継ぐ。
 async function saveRakutenKeysShared(appId,accessKey){
-  try{
-    await sharePut(RK_SHARE_TOOL,cur=>{
-      const p=cur||{};
-      p.rkKeys={appId,accessKey,at:new Date().toISOString(),by:myName()};
-      return p;
-    });
-    return {ok:true};
-  }catch(e){return {ok:false,err:(e&&e.message)||"通信失敗"};}
+  // 共有ファイルは公開リポジトリにあるため、キーをここに書かない。
+  // キーは各端末のlocalStorageにのみ保存する（呼び出し側で保存済み）。
+  return {ok:true,localOnly:true};
 }
 
 /* ========= 状態 ========= */
