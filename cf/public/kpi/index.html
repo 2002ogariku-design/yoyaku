@@ -146,6 +146,16 @@ tr:last-child td{border-bottom:none;}
     <h3>名前を選択</h3>
     <select id="nameSel"></select>
     <div id="loginState" style="font-size:11.5px;color:#1f7a4d;margin-top:12px;"></div>
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;font-weight:700;color:#666;margin-bottom:6px;">スタッフの追加・削除</div>
+      <div id="staffList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="staffNew" placeholder="名前を入力" autocomplete="off"
+          style="flex:1;min-width:0;padding:11px;border-radius:10px;border:1px solid var(--line);font-size:15px;font-family:var(--font);">
+        <button id="staffAdd" style="flex:0 0 auto;padding:11px 16px;border-radius:10px;border:0;background:#007aff;color:#fff;font-size:14px;font-weight:700;font-family:var(--font);">追加</button>
+      </div>
+      <div id="staffState" style="font-size:11.5px;color:#888;margin-top:5px;">追加・削除はすぐに全員へ共有されます。</div>
+    </div>
     <div class="acts">
       <button class="cancel" id="nameCancel">キャンセル</button>
       <button class="ok" id="nameOk">決定</button>
@@ -294,7 +304,7 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-const APP_VERSION="cf-v2026.10.20.1600";
+const APP_VERSION="cf-v2026.10.20.1915";
 // 起動時に名簿とログイン中の人をサーバーから取る（失敗しても既定値で動く）
 async function bootServerInfo(){
   try{ const r=await fetch(`${API}/staff?store=${STORE}`); if(r.ok){const a=await r.json(); if(Array.isArray(a)&&a.length)STAFF=a;} }catch(e){}
@@ -378,8 +388,68 @@ function openName(force){
   // 鍵は不要になった。代わりに誰でログインしているかを出す。
   const ls=document.getElementById("loginState");
   if(ls)ls.textContent=ME?("✓ "+ME+" でログイン中"):"";
+  renderStaffList();
   document.getElementById("nameOv").style.display="flex";
+  // 裏で最新の名簿に更新する
+  loadStaff().then(()=>{refreshNameSel();renderStaffList();}).catch(()=>{});
 }
+function esc(x){return String(x==null?"":x).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function refreshNameSel(){
+  const sel=document.getElementById("nameSel");if(!sel)return;
+  const cur=sel.value||getName();
+  sel.innerHTML=STAFF.map(n=>`<option>${esc(n)}</option>`).join("");
+  if(cur&&STAFF.includes(cur))sel.value=cur;
+}
+async function loadStaff(){
+  const r=await fetch(`${API}/staff?store=${STORE}&ts=${Date.now()}`);
+  if(r.ok){ const a=await r.json(); if(Array.isArray(a))STAFF=a; }
+}
+async function apiSaveStaff(){
+  const r=await fetch(`${API}/staff?store=${STORE}`,{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(STAFF)});
+  if(!r.ok) throw new Error("名簿の保存に失敗 "+r.status);
+}
+function renderStaffList(){
+  const el=document.getElementById("staffList");if(!el)return;
+  el.innerHTML=STAFF.length
+    ?STAFF.map(n=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px;background:var(--card2,#f5f5f7);">${esc(n)}<button data-rm="${esc(n)}" style="border:0;background:none;color:#b5303a;font-size:14px;line-height:1;padding:0 2px;cursor:pointer;font-family:var(--font);">✕</button></span>`).join("")
+    :'<span style="font-size:12px;color:#b5303a;">まだ誰も登録されていません。下の欄から追加してください。</span>';
+  el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{
+    const nm=b.getAttribute("data-rm");
+    if(!confirm(`「${nm}」を削除しますか？\n※この人が入力した過去の記録は残ります`))return;
+    staffSave(()=>{const i=STAFF.indexOf(nm);if(i>=0)STAFF.splice(i,1);});
+  });
+}
+// 追加・削除は「最新を取り直す → 変更を当てる → 保存」の順。
+// 他の人が同時にいじっていても消し合わないようにするため。
+async function staffSave(mutate){
+  const st=document.getElementById("staffState");
+  const show=(m,c)=>{if(st){st.textContent=m;st.style.color=c||"#888";}};
+  show("保存中...");
+  try{
+    await loadStaff();
+    mutate();
+    await apiSaveStaff();
+    show("✓ 保存しました（全員に共有されます）","#1f7a4d");
+  }catch(e){ show("保存できませんでした："+e.message,"#b5303a"); }
+  refreshNameSel();renderStaffList();
+}
+(function bindStaffAdd(){
+  const add=()=>{
+    const inp=document.getElementById("staffNew");
+    const nm=String(inp.value||"").trim();
+    if(!nm)return;
+    if(STAFF.includes(nm)){
+      const st=document.getElementById("staffState");
+      if(st){st.textContent="その名前はすでに登録されています。";st.style.color="#b5303a";}
+      return;
+    }
+    inp.value="";
+    staffSave(()=>{if(!STAFF.includes(nm))STAFF.push(nm);});
+  };
+  document.getElementById("staffAdd").addEventListener("click",add);
+  document.getElementById("staffNew").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();add();}});
+})();
 function closeName(){document.getElementById("nameOv").style.display="none";}
 function ensureName(force){
   return new Promise(r=>{

@@ -327,7 +327,7 @@ const APP_VERSION="cf-v2026.10.20.1830";
 const API="/api", STORE="shibuya";
 const TK="tk-gh-token",SK="tk-staffname";
 let ME=null;
-const STAFF=["福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江","小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介","佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝","北林倭","吉野あんり"];
+let STAFF=[];  // サーバー（/api/staff）から取得する
 const CC=["#007aff","#ff2d55","#af52de","#34c759","#ff9500","#ff3b30","#5ac8fa","#ffcc00"];
 Chart.defaults.color="#aeaeb2";Chart.defaults.borderColor="#e8e8ed";
 
@@ -952,6 +952,8 @@ function setInsightPeriodDefault(){
 document.getElementById("iAuto").addEventListener("click",setInsightPeriodDefault);
 
 (async function(){
+  try{ const r=await fetch(`${API}/staff?store=${STORE}`); if(r.ok){const a=await r.json(); if(Array.isArray(a))STAFF=a;} }catch(e){}
+  try{ const r=await fetch(`${API}/me`); if(r.ok)ME=(await r.json()).email||null; }catch(e){}
   document.getElementById("dayLabel").textContent=new Date().toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"});
   setInsightPeriodDefault();document.getElementById("pDt").value=today();
   updBadge();await ensureName(true);

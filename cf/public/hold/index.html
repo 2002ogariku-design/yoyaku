@@ -540,11 +540,7 @@ function isMeigi(it){
 const STORAGE_STAFFNAME = "tk-staffname";
 const STORAGE_LAST_STAFF_FILTER = "tk-last-staff-filter";
 
-const STAFF_ROSTER = [
-  "福原涼太","安齋亮","齋藤蒼一郎","井上凱","芹澤澄人","山本李江",
-  "小笠原陸斗","永井悠真","石沢拓哉","髙久和也","田口鈴之介",
-  "佐竹海誓","宮下和大","石井朝陽","大塚栞南","村山勇輝"
-];
+let STAFF_ROSTER = [];  // サーバー（/api/staff）から取得する
 
 function getStaffName(){
   try{ return localStorage.getItem(STORAGE_STAFFNAME) || ""; }catch(e){ return ""; }
@@ -2035,6 +2031,7 @@ document.getElementById("nameModalSaveBtn").addEventListener("click", ()=>{
 // actionable message for the two common failure modes.
 async function checkSharedConnection(){
   try{
+    try{ const rs=await fetch(`${API}/staff?store=${STORE}`); if(rs.ok){const a=await rs.json(); if(Array.isArray(a))STAFF_ROSTER=a;} }catch(e){}
     const r=await fetch(`${API}/me`);
     if(r.ok){ ME=(await r.json()).email||null; }
     return true;
