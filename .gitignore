@@ -1,0 +1,14 @@
+# 認証情報・設定ファイルは絶対にコミットしない
+.project-config.json
+.env
+.env.*
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# 作業ファイル
+node_modules/
+*.log
+.DS_Store
+index_bak.html
